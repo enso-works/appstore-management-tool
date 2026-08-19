@@ -108,6 +108,8 @@ export const projectConfigSchema = z.strictObject({
       fields: z.array(z.enum(METADATA_FIELDS)).default([...METADATA_FIELDS]),
     })
     .prefault({}),
+  /** Named override presets applied to screens from the editor ("apply preset"). */
+  presets: z.record(z.string().min(1), z.record(z.string(), z.unknown())).prefault({}),
   fastlane: z
     .strictObject({
       enabled: z.boolean().default(true),

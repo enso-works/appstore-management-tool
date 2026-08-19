@@ -49,6 +49,20 @@
               "type": "string"
             }
           },
+          "panorama": {
+            "type": "object",
+            "properties": {
+              "slices": {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 3
+              }
+            },
+            "required": [
+              "slices"
+            ],
+            "additionalProperties": false
+          },
           "overrides": {
             "default": {},
             "type": "object",

@@ -4,7 +4,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadProject } from "../lib/config";
 import { contentFileFor } from "../lib/content";
 import { previewHtml } from "../lib/render/preview";
-import { etagOf, HttpError, projectSnapshot, saveContent, saveManifest } from "../lib/server/projects";
+import {
+  duplicateScreen,
+  etagOf,
+  HttpError,
+  projectSnapshot,
+  saveContent,
+  saveManifest,
+  savePresets,
+} from "../lib/server/projects";
 import { readJson, tempFixture } from "./helpers";
 
 describe("editor server helpers", () => {
@@ -109,5 +117,37 @@ describe("editor server helpers", () => {
     );
     expect(r.job.sourceExists).toBe(false);
     expect(r.html).toContain("data:image/svg+xml");
+  });
+});
+
+describe("duplicate and presets", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+  const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+
+  it("duplicates a screen with the next free order and every locale's copy", () => {
+    const p = load();
+    const r = duplicateScreen(p, "home", "home-copy");
+    expect(r.manifestEtag).toMatch(/^[0-9a-f]{64}$/);
+    const manifest = readJson<{ screens: { id: string; order: number }[] }>(p.paths.manifest);
+    const copy = manifest.screens.find((s) => s.id === "home-copy")!;
+    expect(copy.order).toBe(3);
+    for (const l of ["en-US", "ar-SA"]) {
+      const c = readJson<{ screens: Record<string, { headline: string }> }>(contentFileFor(p, l));
+      expect(c.screens["home-copy"].headline).toBe(c.screens.home.headline);
+    }
+    expect(() => duplicateScreen(p, "home", "home-copy")).toThrow(/already exists/);
+    expect(() => duplicateScreen(p, "nope", "x")).toThrow(/No screen/);
+    expect(() => duplicateScreen(p, "home", "Bad Id")).toThrow(/lowercase/);
+  });
+
+  it("saves presets into the config with etag checking and schema validation", () => {
+    const p = load();
+    const r = savePresets(p, { cream: { background: "#F4F0E7", deviceTilt: -10 } }, etagOf(p.configPath));
+    expect(r.etag).not.toBe("missing");
+    const cfg = loadProject(p.configPath).config;
+    expect(cfg.presets.cream).toEqual({ background: "#F4F0E7", deviceTilt: -10 });
+    expect(() => savePresets(p, {}, "stale")).toThrow(HttpError);
   });
 });

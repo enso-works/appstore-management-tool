@@ -299,6 +299,21 @@
       },
       "additionalProperties": false
     },
+    "presets": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": {
+          "type": "string"
+        },
+        "additionalProperties": {}
+      }
+    },
     "fastlane": {
       "default": {},
       "type": "object",

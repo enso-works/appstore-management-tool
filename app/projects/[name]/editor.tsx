@@ -28,6 +28,7 @@ interface Snapshot {
   templates: TemplateDescriptor[];
   targets: TargetProfile[];
   fonts: { stack: { family: string; source: string }[]; missing: string[] };
+  configEtag: string;
 }
 
 type Fields = Record<string, string | null>;
@@ -1030,7 +1031,51 @@ export default function Editor({ name }: { name: string }) {
                   );
                 })}
 
-                <div className={styles.sectionTitle}>Style overrides</div>
+                <div className={styles.sectionTitle}>
+                  Style overrides
+                  <span className={styles.spacer} />
+                  <select
+                    className={styles.select}
+                    value=""
+                    title="apply a named preset from store-shots.config.json"
+                    onChange={(e) => {
+                      const p = snap.config.presets?.[e.target.value];
+                      if (p && screen) updateScreen({ overrides: { ...p } });
+                    }}
+                  >
+                    <option value="">apply preset…</option>
+                    {Object.keys(snap.config.presets ?? {}).map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className={styles.btnSmall}
+                    title="save the current overrides as a named preset in store-shots.config.json"
+                    onClick={async () => {
+                      if (!screen) return;
+                      const nameP = prompt("Preset name:");
+                      if (!nameP) return;
+                      const presets = { ...(snap.config.presets ?? {}), [nameP]: screen.overrides };
+                      const res = await fetch(`/api/projects/${encodeURIComponent(name)}/presets`, {
+                        method: "PUT",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ presets, ifMatch: snap.configEtag }),
+                      });
+                      const body = await res.json();
+                      if (!res.ok) {
+                        setStatus(`Preset save failed: ${body.error}`);
+                        return;
+                      }
+                      setSnap((sn) => (sn ? { ...sn, config: { ...sn.config, presets }, configEtag: body.etag } : sn));
+                      setStatus(`Preset "${nameP}" saved`);
+                      setTimeout(() => setStatus(""), 2000);
+                    }}
+                  >
+                    save preset
+                  </button>
+                </div>
                 {(template?.overrideKeys ?? []).map((key) => {
                   const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
                   const v = screen.overrides[key];
@@ -1084,6 +1129,38 @@ export default function Editor({ name }: { name: string }) {
                   );
                 })}
                 <div className={styles.dangerRow}>
+                  <button
+                    className={styles.btn}
+                    onClick={async () => {
+                      if (!screen) return;
+                      const newId = prompt("New screen id:", `${screen.id}-copy`);
+                      if (!newId) return;
+                      if (isDirty) {
+                        setStatus("Save your edits before duplicating");
+                        return;
+                      }
+                      const res = await fetch(`/api/projects/${encodeURIComponent(name)}/duplicate`, {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({
+                          sourceId: screen.id,
+                          newId,
+                          ifMatch: { manifest: etags.manifest, content: etags.content },
+                        }),
+                      });
+                      const body = await res.json();
+                      if (!res.ok) {
+                        setStatus(`Duplicate failed: ${body.error}`);
+                        return;
+                      }
+                      await load();
+                      setScreenId(newId);
+                      setStatus(`Duplicated as ${newId}`);
+                      setTimeout(() => setStatus(""), 2000);
+                    }}
+                  >
+                    Duplicate screen
+                  </button>{" "}
                   <button className={styles.btnDanger} onClick={removeScreen}>
                     Remove screen
                   </button>

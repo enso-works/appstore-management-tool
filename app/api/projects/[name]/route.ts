@@ -1,5 +1,5 @@
 import { handle, json } from "@/lib/server/http";
-import { projectSnapshot, requireProject } from "@/lib/server/projects";
+import { etagOf, projectSnapshot, requireProject } from "@/lib/server/projects";
 import { validateProject } from "@/lib/validate";
 import { readinessReport } from "@/lib/readiness";
 import { templateModules } from "@/templates";
@@ -35,6 +35,7 @@ export async function GET(_req: Request, ctx: Ctx) {
         missing,
         available: listFonts(project),
       },
+      configEtag: etagOf(project.configPath),
     });
   });
 }

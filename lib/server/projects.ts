@@ -5,7 +5,14 @@ import { type Project } from "../config";
 import { contentFileFor, loadContent, loadManifest } from "../content";
 import { fileExists } from "../paths";
 import { discoverProjects } from "../registry";
-import { formatZodError, localeContentSchema, manifestSchema, type LocaleContent, type Manifest } from "../schema";
+import {
+  formatZodError,
+  localeContentSchema,
+  manifestSchema,
+  projectConfigSchema,
+  type LocaleContent,
+  type Manifest,
+} from "../schema";
 
 /** Look a project up by its workspace-relative directory name (e.g. "breathe"). */
 export function findProject(name: string): Project | undefined {
@@ -120,4 +127,72 @@ export function projectSnapshot(project: Project) {
     contentEtags,
     loadIssues: [...manifestIssues.items, ...contentIssues.items],
   };
+}
+
+/** Update only the `presets` block of store-shots.config.json (etag-checked, atomic). */
+export function savePresets(
+  project: Project,
+  presets: Record<string, Record<string, unknown>>,
+  ifMatch?: string,
+): SaveResult {
+  const file = project.configPath;
+  const current = etagOf(file);
+  if (ifMatch !== undefined && ifMatch !== current) {
+    throw new HttpError(409, "store-shots.config.json changed on disk since it was loaded; reload before saving");
+  }
+  const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown>;
+  raw.presets = presets;
+  const parsed = projectConfigSchema.safeParse(raw);
+  if (!parsed.success) throw new HttpError(422, "Invalid presets", formatZodError(parsed.error));
+  return { etag: writeJsonAtomic(file, raw) };
+}
+
+/**
+ * Duplicate a screen: new id, next free order, same template/source/overrides,
+ * and the copy of every locale that has content for it. One atomic pass over
+ * the manifest + content files (etag-checked like the other saves).
+ */
+export function duplicateScreen(
+  project: Project,
+  sourceId: string,
+  newId: string,
+  ifMatch: { manifest?: string; content?: Record<string, string> } = {},
+): { manifestEtag: string; contentEtags: Record<string, string> } {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(newId)) throw new HttpError(422, "new id must be lowercase letters, digits, dashes");
+  const manifestRaw = JSON.parse(fs.readFileSync(project.paths.manifest, "utf8")) as {
+    screens: Record<string, unknown>[];
+  };
+  const screens = manifestRaw.screens as ({ id: string; order: number; panorama?: { slices: number } } & Record<
+    string,
+    unknown
+  >)[];
+  const src = screens.find((s) => s.id === sourceId);
+  if (!src) throw new HttpError(404, `No screen "${sourceId}"`);
+  if (screens.some((s) => s.id === newId)) throw new HttpError(409, `Screen "${newId}" already exists`);
+  if (ifMatch.manifest !== undefined && ifMatch.manifest !== etagOf(project.paths.manifest)) {
+    throw new HttpError(409, "manifest.json changed on disk since it was loaded; reload before saving");
+  }
+  const maxOrder = Math.max(0, ...screens.map((s) => s.order + ((s.panorama?.slices ?? 1) - 1)));
+  const copy = structuredClone(src);
+  copy.id = newId;
+  copy.order = maxOrder + 1;
+  screens.push(copy);
+  const manifestEtag = writeJsonAtomic(project.paths.manifest, manifestRaw);
+
+  const contentEtags: Record<string, string> = {};
+  for (const locale of project.config.locales) {
+    const file = contentFileFor(project, locale);
+    if (!fileExists(file)) continue;
+    if (ifMatch.content?.[locale] !== undefined && ifMatch.content[locale] !== etagOf(file)) {
+      throw new HttpError(409, `${locale}.json changed on disk since it was loaded; reload before saving`);
+    }
+    const raw = JSON.parse(fs.readFileSync(file, "utf8")) as { screens?: Record<string, unknown> };
+    if (raw.screens && raw.screens[sourceId] !== undefined && raw.screens[newId] === undefined) {
+      raw.screens[newId] = structuredClone(raw.screens[sourceId]);
+      contentEtags[locale] = writeJsonAtomic(file, raw);
+    } else {
+      contentEtags[locale] = etagOf(file);
+    }
+  }
+  return { manifestEtag, contentEtags };
 }
