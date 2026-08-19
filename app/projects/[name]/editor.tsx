@@ -538,6 +538,7 @@ export default function Editor({ name }: { name: string }) {
           skipped: 0,
           unchanged: 0,
           aborted: true,
+          changes: { changed: [], added: [], removed: [] },
           issues: [{ level: "error", code: "ui", message: (err as Error).message }],
           jobs: [],
           filesWritten: [],
@@ -1093,6 +1094,27 @@ export default function Editor({ name }: { name: string }) {
         </>
       )}
       <footer className={`${styles.log} ${showLog ? styles.logOpen : ""}`}>
+        <button
+          className={styles.sheetBtn}
+          title="write contact sheets of the generated screenshots into store/generated/sheets/"
+          onClick={async () => {
+            const res = await fetch(`/api/projects/${encodeURIComponent(name)}/sheet`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            });
+            const body = await res.json();
+            setStatus(
+              res.ok
+                ? body.sheets.length
+                  ? `Sheets: ${body.sheets.map((x: { file: string }) => x.file).join(", ")}`
+                  : "Nothing generated yet"
+                : `Sheet failed: ${body.error}`,
+            );
+          }}
+        >
+          Contact sheets
+        </button>
         <button className={styles.logToggle} onClick={() => setShowLog((v) => !v)}>
           {gen.running
             ? "Generating…"
@@ -1104,6 +1126,18 @@ export default function Editor({ name }: { name: string }) {
         {showLog && (
           <pre className={styles.logBody}>
             {gen.summary?.aborted && "ABORTED — nothing written\n"}
+            {gen.summary &&
+              (gen.summary.changes.changed.length ||
+              gen.summary.changes.added.length ||
+              gen.summary.changes.removed.length
+                ? `changes vs previous run: ${gen.summary.changes.changed.length} changed, ${gen.summary.changes.added.length} new, ${gen.summary.changes.removed.length} removed\n` +
+                  [
+                    ...gen.summary.changes.changed.map((f) => `  ~ ${f}`),
+                    ...gen.summary.changes.added.map((f) => `  + ${f}`),
+                    ...gen.summary.changes.removed.map((f) => `  - ${f}`),
+                  ].join("\n") +
+                  "\n\n"
+                : "")}
             {(gen.summary?.log ?? []).join("\n")}
             {gen.summary &&
               gen.summary.issues.length > 0 &&

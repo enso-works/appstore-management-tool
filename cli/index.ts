@@ -15,6 +15,7 @@ import { listMetadataLocales, readMetadataLocale } from "../lib/metadata";
 import { METADATA_FIELDS } from "../lib/schema";
 import { LANE_KEYS, preflightLane, runLane, type LaneKey } from "../lib/fastlane";
 import { captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
+import { writeContactSheets } from "../lib/sheet";
 
 const program = new Command();
 
@@ -249,6 +250,15 @@ function printSummary(s: GenerationSummary, dryRun: boolean) {
     printIssues(problems);
   }
   console.log("");
+  if (s.changes && (s.changes.changed.length || s.changes.added.length || s.changes.removed.length)) {
+    console.log(
+      `changes vs previous run: ${s.changes.changed.length} changed, ${s.changes.added.length} new, ${s.changes.removed.length} removed`,
+    );
+    for (const f of s.changes.changed) console.log(`  ~ ${f}`);
+    for (const f of s.changes.added) console.log(`  + ${f}`);
+    for (const f of s.changes.removed) console.log(`  - ${f}`);
+    console.log("");
+  }
   if (s.aborted)
     console.log(`ABORTED: nothing written (${s.issues.filter((i) => i.level === "error").length} error(s))`);
   console.log(
@@ -456,6 +466,32 @@ program
       }
     },
   );
+
+program
+  .command("sheet")
+  .description(
+    "Write contact sheets (one PNG per locale x target) of the generated screenshots into store/generated/sheets/",
+  )
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--locale <list>", "only these locales")
+  .option("--target <list>", "only these target ids")
+  .option("--width <px>", "thumbnail width (default 330)")
+  .option("--light", "light background")
+  .action(async (opts: { project?: string; locale?: string; target?: string; width?: string; light?: boolean }) => {
+    const project = openProject(opts.project);
+    const results = await writeContactSheets(project, {
+      locales: splitList(opts.locale),
+      targets: splitList(opts.target),
+      thumbWidth: opts.width ? Number(opts.width) : undefined,
+      theme: opts.light ? "light" : "dark",
+    });
+    if (!results.length) {
+      console.log("Nothing generated yet (no .store-shots-manifest.json entries). Run `store-shots generate` first.");
+      process.exit(1);
+    }
+    for (const r of results)
+      console.log(`${displayRelative(project.root, r.file)}  (${r.locale}, ${r.target}, ${r.count} screenshots)`);
+  });
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));

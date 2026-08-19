@@ -227,6 +227,35 @@ describe("review regressions (phases 2-8)", () => {
   }, 60_000);
 });
 
+describe("contact sheets and change summary", () => {
+  it("reports changed/added/removed files and writes a sheet per locale x target", async () => {
+    const fx = tempFixture();
+    try {
+      const p = loadProject(path.join(fx.root, "store-shots.config.json"));
+      const first = await generateProject(p, { renderer });
+      expect(first.changes.added).toHaveLength(8);
+      editJson(path.join(fx.root, "store/content/en-US.json"), (c) => (c.screens.home.headline = "Changed"));
+      const second = await generateProject(loadProject(path.join(fx.root, "store-shots.config.json")), { renderer });
+      expect(second.changes.changed.sort()).toEqual([
+        "fastlane/screenshots/en-US/01_home_IPAD_PRO_129.png",
+        "fastlane/screenshots/en-US/01_home_IPHONE_69.png",
+      ]);
+      expect(second.changes.added).toEqual([]);
+      const { writeContactSheets } = await import("../lib/sheet");
+      const sheets = await writeContactSheets(loadProject(path.join(fx.root, "store-shots.config.json")));
+      expect(sheets.map((s) => `${s.locale}/${s.target}/${s.count}`).sort()).toEqual([
+        "ar-SA/ipad-13-2064x2752/2",
+        "ar-SA/iphone-6.9-1320x2868/2",
+        "en-US/ipad-13-2064x2752/2",
+        "en-US/iphone-6.9-1320x2868/2",
+      ]);
+      expect(fs.existsSync(path.join(fx.root, "store/generated/sheets/en-US_IPHONE_69.png"))).toBe(true);
+    } finally {
+      fx.cleanup();
+    }
+  }, 90_000);
+});
+
 describe("panorama screens", () => {
   it("renders one wide artwork and slices it into consecutive exact-size files", async () => {
     const fx = tempFixture();

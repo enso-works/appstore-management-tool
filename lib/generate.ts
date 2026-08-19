@@ -52,6 +52,8 @@ export interface GenerationSummary {
   issues: Issue[];
   jobs: JobResult[];
   filesWritten: string[];
+  /** Compared with the previous generated manifest: files whose bytes changed, new files, files no longer produced. */
+  changes: { changed: string[]; added: string[]; removed: string[] };
   durationMs: number;
 }
 
@@ -88,6 +90,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
     issues: issues.items,
     jobs: [],
     filesWritten: [],
+    changes: { changed: [], added: [], removed: [] },
     durationMs: 0,
   };
 
@@ -150,8 +153,10 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
   }
 
   let previous: GeneratedManifest | undefined;
+  let originalPrevious: GeneratedManifest | undefined;
   try {
     previous = readGeneratedManifest(project);
+    originalPrevious = previous;
   } catch (err) {
     issues.warn(
       "manifest.generated-unreadable",
@@ -370,6 +375,15 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
   }
 
   files.sort((a, b) => a.path.localeCompare(b.path));
+  {
+    const before = new Map((originalPrevious?.files ?? []).map((f) => [f.path, f.sha256]));
+    const after = new Map(files.map((f) => [f.path, f.sha256]));
+    for (const [p, sha] of after) {
+      if (!before.has(p)) summary.changes.added.push(p);
+      else if (before.get(p) !== sha) summary.changes.changed.push(p);
+    }
+    for (const p of before.keys()) if (!after.has(p)) summary.changes.removed.push(p);
+  }
   writeGeneratedManifest(project, {
     version: 1,
     generatedAt: (opts.now ?? (() => new Date()))().toISOString(),
