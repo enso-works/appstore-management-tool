@@ -513,6 +513,11 @@
   will-change: transform;
 }
 
+.worldRow {
+  display: flex;
+  align-items: flex-start;
+}
+
 .frameWrap {
   position: relative;
   flex: none;
@@ -587,4 +592,10 @@
   transform: translate(-50%, -50%);
   color: var(--muted);
   z-index: 1;
+}
+
+.country {
+  width: 44px;
+  padding: 2px 6px;
+  margin-left: 4px;
 }

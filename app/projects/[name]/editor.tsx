@@ -12,6 +12,7 @@ import type { ReadinessReport } from "@/lib/readiness";
 import type { GenerationSummary } from "@/lib/generate";
 import StorePanel from "./store-panel";
 import PreviewCanvas, { type CanvasItem } from "./preview-canvas";
+import { liveImageUrl } from "@/lib/live";
 import styles from "./editor.module.css";
 
 interface Snapshot {
@@ -124,6 +125,15 @@ export default function Editor({ name }: { name: string }) {
   const [canvasMode, setCanvasMode] = useState<"single" | "strip" | "locales">("single");
   const [storeLook, setStoreLook] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
+  const [showLive, setShowLive] = useState(false);
+  const [liveCountry, setLiveCountry] = useState("us");
+  const [live, setLive] = useState<{
+    iphone: string[];
+    ipad: string[];
+    version?: string;
+    trackName?: string;
+    error?: string;
+  } | null>(null);
   /** Grid modes (strip / locales): artwork HTML per item id, keyed by a cache key of its inputs. */
   const [gridHtml, setGridHtml] = useState<Record<string, { key: string; html: string; sourceExists?: boolean }>>({});
   /** In-page check results per job key (<target>/<locale>/<screen>). */
@@ -346,6 +356,37 @@ export default function Editor({ name }: { name: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasMode, snap, name, targetId, gridInputsKey]);
+
+  // Live listing (public iTunes lookup) for side-by-side comparison in grid modes.
+  useEffect(() => {
+    if (!showLive || !snap) return;
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(name)}/live?country=${encodeURIComponent(liveCountry)}`,
+          { signal: controller.signal, cache: "no-store" },
+        );
+        const body = await res.json();
+        if (!res.ok) setLive({ iphone: [], ipad: [], error: body.error });
+        else if (!body.live)
+          setLive({ iphone: [], ipad: [], error: `not found on the ${liveCountry.toUpperCase()} App Store` });
+        else
+          setLive({
+            iphone: body.live.iphone,
+            ipad: body.live.ipad,
+            version: body.live.version,
+            trackName: body.live.trackName,
+          });
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setLive({ iphone: [], ipad: [], error: (err as Error).message });
+      }
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      controller.abort();
+    };
+  }, [showLive, liveCountry, name, snap]);
 
   // ---- editing -----------------------------------------------------------
   function setField(field: string, value: string | null) {
@@ -597,6 +638,14 @@ export default function Editor({ name }: { name: string }) {
             statusText: st.text,
           };
         });
+  const liveImages =
+    showLive && live && target
+      ? (target.family === "ipad" ? live.ipad : live.iphone).map((u) => liveImageUrl(u, target.width, target.height))
+      : [];
+  const belowRow =
+    showLive && target && canvasMode === "strip"
+      ? { label: live?.error ? `live: ${live.error}` : `live v${live?.version ?? "?"}`, images: liveImages }
+      : undefined;
   const canvasSelectedId = canvasMode === "locales" ? locale : screenId;
   const onCanvasSelect = (id: string) => (canvasMode === "locales" ? setLocale(id) : setScreenId(id));
 
@@ -664,6 +713,23 @@ export default function Editor({ name }: { name: string }) {
             <label className={styles.check} title="App Store look: dark page, rounded corners, store spacing">
               <input type="checkbox" checked={storeLook} onChange={(e) => setStoreLook(e.target.checked)} /> store look
             </label>
+            {canvasMode === "strip" && (
+              <label
+                className={styles.check}
+                title="Show what is live on the App Store under the strip (public lookup by bundle id)"
+              >
+                <input type="checkbox" checked={showLive} onChange={(e) => setShowLive(e.target.checked)} /> live
+                {showLive && (
+                  <input
+                    className={`${styles.input} ${styles.country}`}
+                    value={liveCountry}
+                    maxLength={2}
+                    onChange={(e) => setLiveCountry(e.target.value.toLowerCase())}
+                    title="storefront country code"
+                  />
+                )}
+              </label>
+            )}
           </>
         )}
         <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className={styles.select}>
@@ -796,6 +862,7 @@ export default function Editor({ name }: { name: string }) {
                 mode={canvasMode}
                 storeLook={storeLook}
                 interactive
+                belowRow={belowRow}
                 footer={
                   <>
                     <span>

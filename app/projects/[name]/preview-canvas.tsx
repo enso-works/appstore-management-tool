@@ -30,6 +30,8 @@ export interface PreviewCanvasProps {
   footer?: React.ReactNode;
   /** Single mode: let the iframe receive pointer events (drag the phone); pan messages come back via postMessage. */
   interactive?: boolean;
+  /** Optional second row under the frames (e.g. the live App Store listing) — images rendered at target height. */
+  belowRow?: { label: string; images: string[] };
 }
 
 type Zoom = "fit" | number;
@@ -53,6 +55,7 @@ export default function PreviewCanvas({
   storeLook,
   footer,
   interactive = false,
+  belowRow,
 }: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -69,8 +72,10 @@ export default function PreviewCanvas({
   const gap = Math.round(target.width * (storeLook ? 0.06 : 0.04));
   const radius = storeLook ? Math.round(target.width * 0.045) : 0;
   const pad = Math.round(target.width * 0.06);
-  const contentW = frames.length * target.width + Math.max(0, frames.length - 1) * gap + (storeLook ? 2 * pad : 0);
-  const contentH = target.height + (storeLook ? 2 * pad : 0);
+  const cols = Math.max(frames.length, belowRow ? belowRow.images.length : 0);
+  const rowGap = Math.round(target.width * 0.12);
+  const contentW = cols * target.width + Math.max(0, cols - 1) * gap + (storeLook ? 2 * pad : 0);
+  const contentH = target.height + (storeLook ? 2 * pad : 0) + (belowRow ? rowGap + target.height : 0);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -92,7 +97,7 @@ export default function PreviewCanvas({
   const scale = zoom === "fit" ? fitScale : zoom;
 
   // Reset to fit when the layout (mode/target/count) changes (derived-state reset during render).
-  const layoutKey = `${mode}/${target.id}/${frames.length}/${storeLook}`;
+  const layoutKey = `${mode}/${target.id}/${frames.length}/${storeLook}/${belowRow ? belowRow.images.length : 0}`;
   const [lastLayoutKey, setLastLayoutKey] = useState(layoutKey);
   if (layoutKey !== lastLayoutKey) {
     setLastLayoutKey(layoutKey);
@@ -226,42 +231,76 @@ export default function PreviewCanvas({
           transform: `translate(${baseX + pan.x}px, ${baseY + pan.y}px) scale(${scale})`,
           transformOrigin: "0 0",
           padding: storeLook ? pad : 0,
-          gap,
+          gap: rowGap,
+          flexDirection: "column",
           background: storeLook ? "#1c1c1e" : "transparent",
           borderRadius: storeLook ? Math.round(target.width * 0.02) : 0,
         }}
       >
-        {frames.map(({ item, slice, key }) => {
-          const slices = item.slices ?? 1;
-          const artW = target.width * slices;
-          return (
-            <div
-              key={key}
-              data-frame-id={item.id}
-              className={`${styles.frameWrap} ${item.id === selectedId && mode !== "single" ? styles.frameSelected : ""}`}
-              style={{ width: target.width, height: target.height, borderRadius: radius }}
-            >
-              {item.html ? (
-                <iframe
-                  title={`${item.id} ${slice + 1}/${slices}`}
-                  srcDoc={item.html}
-                  sandbox="allow-scripts allow-same-origin"
-                  style={{
-                    width: artW,
-                    height: target.height,
-                    marginLeft: -slice * target.width,
-                    border: 0,
-                    background: "#000",
-                    pointerEvents: interactive && mode === "single" ? "auto" : "none",
-                    display: "block",
-                  }}
+        <div className={styles.worldRow} style={{ gap }}>
+          {frames.map(({ item, slice, key }) => {
+            const slices = item.slices ?? 1;
+            const artW = target.width * slices;
+            return (
+              <div
+                key={key}
+                data-frame-id={item.id}
+                className={`${styles.frameWrap} ${item.id === selectedId && mode !== "single" ? styles.frameSelected : ""}`}
+                style={{ width: target.width, height: target.height, borderRadius: radius }}
+              >
+                {item.html ? (
+                  <iframe
+                    title={`${item.id} ${slice + 1}/${slices}`}
+                    srcDoc={item.html}
+                    sandbox="allow-scripts allow-same-origin"
+                    style={{
+                      width: artW,
+                      height: target.height,
+                      marginLeft: -slice * target.width,
+                      border: 0,
+                      background: "#000",
+                      pointerEvents: interactive && mode === "single" ? "auto" : "none",
+                      display: "block",
+                    }}
+                  />
+                ) : (
+                  <div className={styles.framePlaceholder} style={{ fontSize: Math.round(target.width * 0.05) }}>
+                    rendering…
+                  </div>
+                )}
+                {mode !== "single" && (
+                  <div
+                    className={styles.frameLabel}
+                    style={{
+                      fontSize: Math.round(target.width * 0.045),
+                      bottom: Math.round(target.width * 0.02),
+                      left: Math.round(target.width * 0.02),
+                    }}
+                  >
+                    <span className={`${styles.dot} ${styles[item.status ?? "ok"]}`} />{" "}
+                    {item.label ?? `${String(item.order + slice).padStart(2, "0")} ${item.id}`}
+                    {slices > 1 ? ` (${slice + 1}/${slices})` : ""}
+                    {item.statusText && slice === 0 ? <span className={styles.muted}> — {item.statusText}</span> : null}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {belowRow && (
+          <div className={styles.worldRow} style={{ gap }}>
+            {belowRow.images.map((src, i) => (
+              <div
+                key={src}
+                className={styles.frameWrap}
+                style={{ width: target.width, height: target.height, borderRadius: radius }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={src}
+                  alt=""
+                  style={{ width: target.width, height: target.height, objectFit: "cover", display: "block" }}
                 />
-              ) : (
-                <div className={styles.framePlaceholder} style={{ fontSize: Math.round(target.width * 0.05) }}>
-                  rendering…
-                </div>
-              )}
-              {mode !== "single" && (
                 <div
                   className={styles.frameLabel}
                   style={{
@@ -270,15 +309,12 @@ export default function PreviewCanvas({
                     left: Math.round(target.width * 0.02),
                   }}
                 >
-                  <span className={`${styles.dot} ${styles[item.status ?? "ok"]}`} />{" "}
-                  {item.label ?? `${String(item.order + slice).padStart(2, "0")} ${item.id}`}
-                  {slices > 1 ? ` (${slice + 1}/${slices})` : ""}
-                  {item.statusText && slice === 0 ? <span className={styles.muted}> — {item.statusText}</span> : null}
+                  {belowRow.label} {String(i + 1).padStart(2, "0")}
                 </div>
-              )}
-            </div>
-          );
-        })}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className={styles.zoomBar} onPointerDown={(e) => e.stopPropagation()}>
