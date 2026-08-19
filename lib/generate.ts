@@ -4,7 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { readAppJson, type Project } from "./config";
 import { resolveFontStack, sha256File } from "./fonts";
-import { cleanGenerated, readGeneratedManifest, writeGeneratedManifest } from "./generated-manifest";
+import { readGeneratedManifest, writeGeneratedManifest } from "./generated-manifest";
 import { IssueList, type Issue } from "./issues";
 import { displayRelative } from "./paths";
 import { ExportRenderer, inspectPng } from "./render/export";
@@ -18,8 +18,10 @@ export interface GenerateOptions {
   filter?: PlanFilter;
   /** Any error or warning anywhere blocks all output (plan §13.4). */
   strict?: boolean;
-  /** Skip deleting previously generated files first (default: config.output.cleanBeforeRender). */
+  /** Skip deleting stale previously generated files (default: config.output.cleanBeforeRender). */
   noClean?: boolean;
+  /** Re-render jobs whose inputs have not changed since the last run. */
+  force?: boolean;
   /** Print the plan and exit without rendering. */
   dryRun?: boolean;
   log?: (line: string) => void;
@@ -28,7 +30,7 @@ export interface GenerateOptions {
   now?: () => Date;
 }
 
-export type JobStatus = "rendered" | "failed" | "skipped";
+export type JobStatus = "rendered" | "failed" | "skipped" | "unchanged";
 
 export interface JobResult {
   key: string;
@@ -44,6 +46,8 @@ export interface GenerationSummary {
   rendered: number;
   failed: number;
   skipped: number;
+  /** Jobs whose inputs matched the previous run; output kept as is (plan §20). */
+  unchanged: number;
   aborted: boolean;
   issues: Issue[];
   jobs: JobResult[];
@@ -79,6 +83,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
     rendered: 0,
     failed: 0,
     skipped: 0,
+    unchanged: 0,
     aborted: false,
     issues: issues.items,
     jobs: [],
@@ -136,19 +141,35 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
     return summary;
   }
 
-  // Clean only tool-owned files from the previous run (never the whole directory).
-  if (!opts.noClean && project.config.output.cleanBeforeRender && !opts.filter) {
-    const cleaned = cleanGenerated(project, { keepManifest: true });
-    if (cleaned.deleted.length) log(`cleaned ${cleaned.deleted.length} previously generated file(s)`);
+  let previous: GeneratedManifest | undefined;
+  try {
+    previous = readGeneratedManifest(project);
+  } catch (err) {
+    issues.warn(
+      "manifest.generated-unreadable",
+      `Ignoring unreadable ${relOutput(project, plan[0] ?? ({ outputPath: project.paths.outputScreenshots } as RenderJob)).split("/")[0]}/.store-shots-manifest.json: ${(err as Error).message}`,
+    );
   }
-  const previous = opts.filter ? readGeneratedManifest(project) : undefined;
+  const plannedPaths = new Set(plan.map((j) => relOutput(project, j)));
+  // Stale = recorded by the previous run but no longer planned (screen removed, locale dropped...).
+  // Only deleted on a full run; a filtered run must not touch jobs outside the filter.
+  if (!opts.noClean && project.config.output.cleanBeforeRender && !opts.filter && previous) {
+    const stale = previous.files.filter((f) => !plannedPaths.has(f.path));
+    for (const f of stale) {
+      const abs = path.join(project.paths.outputScreenshots, f.path);
+      if (fs.existsSync(abs)) fs.rmSync(abs);
+    }
+    if (stale.length) log(`removed ${stale.length} stale file(s) from the previous run`);
+    previous = { ...previous, files: previous.files.filter((f) => plannedPaths.has(f.path)) };
+  }
 
   const renderer = opts.renderer ?? new ExportRenderer();
   const workDir = path.join(project.paths.generated, "export");
   const appVersion = safeAppVersion(project);
   const toolVersion = readToolVersion();
-  const files: GeneratedManifest["files"] =
-    previous?.files.filter((f) => !plan.some((j) => relOutput(project, j) === f.path)) ?? [];
+  // Entries for jobs outside this run's plan are carried over untouched.
+  const files: GeneratedManifest["files"] = previous?.files.filter((f) => !plannedPaths.has(f.path)) ?? [];
+  const fontHashes = fontStack.flatMap((f) => f.files.map((x) => x.sha256));
 
   try {
     await renderer.start();
@@ -162,8 +183,24 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
         log(`SKIP ${job.key}: ${blocking[0].message}`);
         continue;
       }
+      const content = validation.content.get(job.locale)!;
+      const rel = relOutput(project, job);
+      const hash = inputsHash(project, job, content.screens[job.screen.id] ?? {}, toolVersion, fontHashes);
+      const prevEntry = previous?.files.find((f) => f.path === rel);
+      if (
+        !opts.force &&
+        prevEntry &&
+        prevEntry.inputsSha256 === hash &&
+        fs.existsSync(job.outputPath) &&
+        sha256File(job.outputPath) === prevEntry.sha256
+      ) {
+        files.push(prevEntry);
+        summary.unchanged++;
+        summary.jobs.push({ key: job.key, status: "unchanged", output: rel, issues: [], durationMs: 0 });
+        log(`SAME ${job.key} (inputs unchanged)`);
+        continue;
+      }
       try {
-        const content = validation.content.get(job.locale)!;
         const { html } = renderArtworkHtml(project, job, content, {
           sourceImage: pathToFileURL(job.sourcePath).href,
           fontUrl: (p) => pathToFileURL(p).href,
@@ -251,13 +288,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
               locale: job.locale,
               screen: job.screen.id,
               sha256: sha256File(job.outputPath),
-              inputsSha256: inputsHash(
-                project,
-                job,
-                content.screens[job.screen.id] ?? {},
-                toolVersion,
-                fontStack.flatMap((f) => f.files.map((x) => x.sha256)),
-              ),
+              inputsSha256: hash,
             });
             summary.filesWritten.push(displayRelative(project.root, job.outputPath));
           }
@@ -291,7 +322,10 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
     appVersion,
     files,
   });
-  summary.issues = [...relevant, ...summary.jobs.flatMap((j) => (j.status === "skipped" ? [] : j.issues))];
+  summary.issues = [
+    ...relevant,
+    ...summary.jobs.flatMap((j) => (j.status === "skipped" || j.status === "unchanged" ? [] : j.issues)),
+  ];
   summary.durationMs = Date.now() - started;
   return summary;
 }

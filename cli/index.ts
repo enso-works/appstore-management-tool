@@ -14,6 +14,7 @@ import { addGoogleFont, appFontsDir, checkFont, listFonts, resolveFont } from ".
 import { listMetadataLocales, readMetadataLocale } from "../lib/metadata";
 import { METADATA_FIELDS } from "../lib/schema";
 import { LANE_KEYS, preflightLane, runLane, type LaneKey } from "../lib/fastlane";
+import { captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
 
 const program = new Command();
 
@@ -197,7 +198,8 @@ program
   .option("--screen <list>", "only these screen ids")
   .option("--target <list>", "only these target ids")
   .option("--strict", "any error or warning blocks all output")
-  .option("--no-clean", "do not delete previously generated files first")
+  .option("--no-clean", "do not delete stale previously generated files")
+  .option("--force", "re-render even when inputs are unchanged since the last run")
   .option("--dry-run", "print the render plan and exit")
   .option("--json", "machine-readable summary")
   .action(
@@ -208,6 +210,7 @@ program
       target?: string;
       strict?: boolean;
       clean: boolean;
+      force?: boolean;
       dryRun?: boolean;
       json?: boolean;
     }) => {
@@ -222,6 +225,7 @@ program
         filter,
         strict: opts.strict,
         noClean: !opts.clean,
+        force: opts.force,
         dryRun: opts.dryRun,
         log: opts.json ? undefined : (line) => console.log(line),
       });
@@ -248,7 +252,7 @@ function printSummary(s: GenerationSummary, dryRun: boolean) {
   if (s.aborted)
     console.log(`ABORTED: nothing written (${s.issues.filter((i) => i.level === "error").length} error(s))`);
   console.log(
-    `${s.project}: ${s.planned} planned, ${s.rendered} rendered, ${s.failed} failed, ${s.skipped} skipped, ${s.filesWritten.length} file(s) written in ${(s.durationMs / 1000).toFixed(1)} s`,
+    `${s.project}: ${s.planned} planned, ${s.rendered} rendered, ${s.unchanged} unchanged, ${s.failed} failed, ${s.skipped} skipped, ${s.filesWritten.length} file(s) written in ${(s.durationMs / 1000).toFixed(1)} s`,
   );
 }
 
@@ -399,6 +403,57 @@ program
       process.exit(1);
     }
   });
+
+program
+  .command("capture")
+  .description("Screenshot a booted simulator into store/raw/<device>/<locale>/ with the name the manifest expects")
+  .option("--screen <id>", "screen id from store/manifest.json (required unless --list)")
+  .option("--device <device>", "raw-capture device folder (iphone | ipad)", "iphone")
+  .option("--locale <locale>", "locale folder (default: the project's default locale)")
+  .option("--udid <udid>", "simulator UDID when more than one of that family is booted")
+  .option("--clean-status-bar", "set 9:41, full battery and signal before capturing")
+  .option("--force", "overwrite an existing capture")
+  .option("--list", "list booted simulators and exit")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .action(
+    (opts: {
+      screen: string;
+      device: string;
+      locale?: string;
+      udid?: string;
+      cleanStatusBar?: boolean;
+      list?: boolean;
+      project?: string;
+    }) => {
+      if (opts.list) {
+        const sims = listBootedSimulators();
+        if (!sims.length) console.log("No booted simulators.");
+        for (const s of sims) console.log(`${s.udid}  ${s.family.padEnd(6)} ${s.name} (${s.runtime})`);
+        return;
+      }
+      const project = openProject(opts.project);
+      const locale = opts.locale ?? project.config.defaultLocale;
+      try {
+        const r = captureScreen(project, {
+          device: opts.device,
+          locale,
+          screenId: opts.screen,
+          udid: opts.udid,
+          cleanStatusBar: opts.cleanStatusBar,
+        });
+        console.log(`captured ${displayRelative(project.root, r.file)}  (${r.width}x${r.height}, ${r.simulator.name})`);
+        if (r.aspectWarning) console.log(`WARN  ${r.aspectWarning}`);
+        if (locale !== project.config.defaultLocale) {
+          console.log(
+            `\nTo capture other locales, switch the simulator language first:\n  ${localeSwitchHint(r.simulator.udid, locale).join("\n  ")}`,
+          );
+        }
+      } catch (err) {
+        console.error((err as Error).message);
+        process.exit(1);
+      }
+    },
+  );
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));

@@ -369,6 +369,7 @@ export default function Editor({ name }: { name: string }) {
           rendered: 0,
           failed: 0,
           skipped: 0,
+          unchanged: 0,
           aborted: true,
           issues: [{ level: "error", code: "ui", message: (err as Error).message }],
           jobs: [],
@@ -751,7 +752,7 @@ export default function Editor({ name }: { name: string }) {
           {gen.running
             ? "Generating…"
             : gen.summary
-              ? `Last run: ${gen.summary.rendered} rendered, ${gen.summary.failed} failed, ${gen.summary.skipped} skipped, ${gen.summary.filesWritten.length} file(s) in ${(gen.summary.durationMs / 1000).toFixed(1)} s`
+              ? `Last run: ${gen.summary.rendered} rendered, ${gen.summary.unchanged} unchanged, ${gen.summary.failed} failed, ${gen.summary.skipped} skipped, ${gen.summary.filesWritten.length} file(s) in ${(gen.summary.durationMs / 1000).toFixed(1)} s`
               : "Generation log"}
           <span className={styles.muted}> {showLog ? "▾" : "▸"}</span>
         </button>

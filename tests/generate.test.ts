@@ -65,11 +65,46 @@ describe("generate on the fixture", () => {
   it("filters render a subset and keep the rest of the manifest", async () => {
     const p = load();
     await generateProject(p, { renderer });
-    const s = await generateProject(p, { renderer, filter: { locales: ["ar-SA"], screens: ["home"] } });
+    let s = await generateProject(p, { renderer, filter: { locales: ["ar-SA"], screens: ["home"] } });
     expect(s.planned).toBe(2);
+    expect(s.unchanged).toBe(2); // inputs identical -> nothing re-rendered
+    expect(readGeneratedManifest(p)!.files).toHaveLength(8);
+    s = await generateProject(p, { renderer, filter: { locales: ["ar-SA"], screens: ["home"] }, force: true });
     expect(s.rendered).toBe(2);
     expect(readGeneratedManifest(p)!.files).toHaveLength(8);
   }, 60_000);
+
+  it("is incremental: unchanged inputs are skipped, edited ones re-render, removed screens are cleaned up", async () => {
+    const p = load();
+    const first = await generateProject(p, { renderer });
+    expect(first.rendered).toBe(8);
+    const second = await generateProject(p, { renderer });
+    expect(second.rendered).toBe(0);
+    expect(second.unchanged).toBe(8);
+    expect(second.filesWritten).toHaveLength(0);
+    // Edit one locale's headline: only that screen re-renders (2 targets).
+    editJson(path.join(fx.root, "store/content/ar-SA.json"), (c) => (c.screens.home.headline = "عنوان جديد"));
+    const third = await generateProject(load(), { renderer });
+    expect(third.rendered).toBe(2);
+    expect(third.unchanged).toBe(6);
+    // Remove a screen: its previous outputs disappear, manifest shrinks.
+    editJson(
+      path.join(fx.root, "store/manifest.json"),
+      (m) => (m.screens = m.screens.filter((s: { id: string }) => s.id !== "planning")),
+    );
+    editJson(
+      path.join(fx.root, "store-shots.config.json"),
+      (c) => (c.validation = { screensPerTarget: { min: 1, max: 10 } }),
+    );
+    const fourth = await generateProject(load(), { renderer });
+    expect(fourth.planned).toBe(4);
+    expect(fs.existsSync(out("en-US/02_planning_IPHONE_69.png"))).toBe(false);
+    expect(readGeneratedManifest(load())!.files).toHaveLength(4);
+    // Foreign files are never touched.
+    fs.writeFileSync(out("en-US/handmade.png"), "x");
+    await generateProject(load(), { renderer });
+    expect(fs.existsSync(out("en-US/handmade.png"))).toBe(true);
+  }, 90_000);
 
   it("does not abort a filtered run because of errors outside the filter", async () => {
     fs.rmSync(path.join(fx.root, "store/raw/ipad/ar-SA/01-home.png"));
