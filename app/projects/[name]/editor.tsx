@@ -394,9 +394,10 @@ export default function Editor({ name }: { name: string }) {
   }
 
   const previewProblems: string[] = [];
+  const previewWarnings: string[] = [];
   if (previewInfo.checks) {
     for (const o of previewInfo.checks.overflow) previewProblems.push(`"${o.id}" overflows even at the minimum size`);
-    for (const id of previewInfo.checks.textOverlapsDevice) previewProblems.push(`"${id}" overlaps the device`);
+    for (const id of previewInfo.checks.textOverlapsDevice) previewWarnings.push(`"${id}" overlaps the device`);
     if (previewInfo.checks.missingImages.length) previewProblems.push("raw capture did not load");
     if (previewInfo.checks.fontsFailed.length)
       previewProblems.push(`font failed: ${previewInfo.checks.fontsFailed.join(", ")}`);
@@ -559,6 +560,12 @@ export default function Editor({ name }: { name: string }) {
               {previewInfo.error && <span className={styles.error}> {previewInfo.error}</span>}
               {previewProblems.map((p) => (
                 <span key={p} className={styles.error}>
+                  {" "}
+                  {p}
+                </span>
+              ))}
+              {previewWarnings.map((p) => (
+                <span key={p} className={styles.warn}>
                   {" "}
                   {p}
                 </span>

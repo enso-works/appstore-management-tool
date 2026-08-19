@@ -43,12 +43,15 @@ npx store-shots projects                          # apps in the workspace that h
 npx store-shots init      --project ../../breathe # scaffold store/ + config (never overwrites)
 npx store-shots validate  --project ../../breathe [--dry-run] [--json]
 npx store-shots readiness --project ../../breathe [--json]
-npx store-shots generate  --project ../../breathe [--locale en-US] [--screen home] [--target iphone-6.9-1320x2868] [--strict] [--dry-run] [--json]
+npx store-shots generate  --project ../../breathe [--locale en-US] [--screen home] [--target iphone-6.9-1320x2868] [--strict] [--force] [--dry-run] [--json]
+                                                  # incremental: unchanged jobs are skipped; --force re-renders
 npx store-shots clean     --project ../../breathe # delete only files listed in .store-shots-manifest.json
 npx store-shots fonts add "Space Grotesk" --project ../../breathe   # download once from Google Fonts into store/assets/fonts/
 npx store-shots fonts list|check --project ../../breathe
 npx store-shots metadata validate|show --locale de-DE --project ../../breathe
 npx store-shots lane validate|metadata|screenshots --project ../../breathe [--yes] [--override "<reason>"] [--dry-run]
+npx store-shots capture --screen home --device iphone [--locale de-DE] [--clean-status-bar] [--force] --project ../../breathe
+npx store-shots capture --list                    # booted simulators
 npm run dev                                       # UI at http://localhost:3000
 ```
 
@@ -70,6 +73,8 @@ npm run format
 npm run schemas     # regenerate schema/*.schema.json from lib/schema.ts
 npm run fixtures    # regenerate fixtures/demo-app
 ```
+
+More: `docs/templates.md` (writing a template), `docs/troubleshooting.md`, `docs/store-tool-plan.md` (plan + phase status).
 
 ## Layout
 
@@ -95,7 +100,8 @@ lib/
   render/html.tsx render a template to a self-contained HTML document (fonts + image via file:// or /api URLs)
   render/checks.ts in-page checks (fonts loaded, images decoded, text overflow, text/device overlap)
   render/export.ts Playwright Chromium worker + Sharp flatten/inspect
-  fastlane.ts     lane allowlist, preflight (readiness gate), spawn with streamed output; never build/submit
+  fastlane.ts     lane allowlist, preflight (readiness gate, lane exists), spawn with streamed output; never build/submit
+  capture.ts      xcrun simctl screenshot into store/raw/<device>/<locale>/ (never overwrites without --force)
   server/         project lookup, atomic JSON saves with etags, HTTP error mapping
   templates/registry.ts  thin adapter over ../templates
 templates/        React templates: types, shared pieces (artwork root, device shell, text block, stack layout, patterns), hero-top, split-caption, full-bleed-card
