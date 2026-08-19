@@ -5,7 +5,7 @@ import { listMetadataLocales, readMetadataLocale } from "./metadata";
 import { dirExists, displayRelative, fileExists, resolveWithin } from "./paths";
 import { isPngFile, readPngInfo, type PngInfo } from "./png";
 import { METADATA_FIELDS } from "./schema";
-import { getTarget } from "./targets";
+import { getTarget, outputDirFor } from "./targets";
 
 export type CheckStatus = "pass" | "warn" | "fail" | "skip";
 
@@ -215,7 +215,6 @@ function scanScreenshots(project: Project): ScreenshotSet[] {
   const sets: ScreenshotSet[] = [];
   const targets = project.config.targets.map((id) => getTarget(id)!).filter(Boolean);
   for (const locale of project.config.locales) {
-    const dir = path.join(project.paths.outputScreenshots, locale);
     const set: ScreenshotSet = {
       locale,
       byTarget: new Map(targets.map((t) => [t.id, []])),
@@ -224,21 +223,29 @@ function scanScreenshots(project: Project): ScreenshotSet[] {
       broken: [],
     };
     sets.push(set);
-    if (!dirExists(dir)) continue;
-    for (const name of fs.readdirSync(dir).sort()) {
-      if (name.startsWith(".") || !/\.(png|jpe?g)$/i.test(name)) continue;
-      const { info, error } = safePng(path.join(dir, name));
-      if (!info) {
-        (error === "not a PNG" ? set.unmatched : set.broken).push(`${name} (${error})`);
-        continue;
+    // Targets may share an output directory (all iOS targets do); scan each directory once.
+    const dirs = new Map<string, typeof targets>();
+    for (const t of targets) {
+      const dir = outputDirFor(t, locale, project.paths);
+      dirs.set(dir, [...(dirs.get(dir) ?? []), t]);
+    }
+    for (const [dir, dirTargets] of dirs) {
+      if (!dirExists(dir)) continue;
+      for (const name of fs.readdirSync(dir).sort()) {
+        if (name.startsWith(".") || !/\.(png|jpe?g)$/i.test(name)) continue;
+        const { info, error } = safePng(path.join(dir, name));
+        if (!info) {
+          (error === "not a PNG" ? set.unmatched : set.broken).push(`${name} (${error})`);
+          continue;
+        }
+        const match = dirTargets.find((t) => t.width === info.width && t.height === info.height);
+        if (!match) {
+          set.unmatched.push(`${name} (${info.width}x${info.height} matches no configured target)`);
+          continue;
+        }
+        set.byTarget.get(match.id)!.push(name);
+        if (info.hasAlpha && project.config.validation.failOnAlpha) set.alpha.push(`${name} has an alpha channel`);
       }
-      const match = targets.find((t) => t.width === info.width && t.height === info.height);
-      if (!match) {
-        set.unmatched.push(`${name} (${info.width}x${info.height} matches no configured target)`);
-        continue;
-      }
-      set.byTarget.get(match.id)!.push(name);
-      if (info.hasAlpha && project.config.validation.failOnAlpha) set.alpha.push(`${name} has an alpha channel`);
     }
   }
   return sets;

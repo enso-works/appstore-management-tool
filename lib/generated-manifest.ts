@@ -33,16 +33,16 @@ export interface CleanResult {
 }
 
 /**
- * Delete only the files the previous generation recorded (plan §11). Never
- * touches anything else under fastlane/screenshots, never removes directories.
+ * Delete only the files the previous generation recorded (plan §11); paths are
+ * app-root-relative. Never touches anything else, never removes directories.
  */
 export function cleanGenerated(project: Project, { keepManifest = false } = {}): CleanResult {
   const manifest = readGeneratedManifest(project);
   const result: CleanResult = { deleted: [], missing: [], manifestRemoved: false };
   if (!manifest) return result;
   for (const f of manifest.files) {
-    const abs = path.join(project.paths.outputScreenshots, f.path);
-    const rel = path.relative(project.paths.outputScreenshots, abs);
+    const abs = path.join(project.root, f.path);
+    const rel = path.relative(project.root, abs);
     if (rel.startsWith("..") || path.isAbsolute(rel)) continue; // never follow an escaping entry
     if (fileExists(abs)) {
       fs.rmSync(abs);

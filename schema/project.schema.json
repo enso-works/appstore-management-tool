@@ -54,6 +54,11 @@
           "type": "string",
           "minLength": 1
         },
+        "outputPlay": {
+          "default": "fastlane/metadata/android",
+          "type": "string",
+          "minLength": 1
+        },
         "metadata": {
           "default": "fastlane/metadata",
           "type": "string",
@@ -74,7 +79,8 @@
         "type": "string",
         "enum": [
           "iphone-6.9-1320x2868",
-          "ipad-13-2064x2752"
+          "ipad-13-2064x2752",
+          "play-phone-1080x1920"
         ]
       }
     },

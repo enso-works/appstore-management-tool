@@ -157,6 +157,49 @@ describe("generate on the fixture", () => {
   }, 60_000);
 });
 
+describe("Google Play target", () => {
+  it("renders 9:16 PNGs into the supply layout with Play locale names, readiness counts them, clean removes them", async () => {
+    const fx = tempFixture();
+    try {
+      editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+        c.targets = ["play-phone-1080x1920"];
+        c.sourceDevices = { "play-phone-1080x1920": "iphone" };
+        c.locales = ["en-US", "da"];
+      });
+      fs.mkdirSync(path.join(fx.root, "store/raw/iphone/da"), { recursive: true });
+      fs.copyFileSync(
+        path.join(fx.root, "store/raw/iphone/en-US/01-home.png"),
+        path.join(fx.root, "store/raw/iphone/da/01-home.png"),
+      );
+      fs.writeFileSync(
+        path.join(fx.root, "store/content/da.json"),
+        JSON.stringify({
+          locale: "da",
+          screens: { home: { headline: "Planlæg alt ét sted" }, planning: { headline: "Fra plan til fremskridt" } },
+        }),
+      );
+      fs.mkdirSync(path.join(fx.root, "fastlane/metadata/da"), { recursive: true });
+      const p = loadProject(path.join(fx.root, "store-shots.config.json"));
+      const s = await generateProject(p, { renderer });
+      expect(s.failed).toBe(0);
+      expect(s.rendered).toBe(4);
+      const en = path.join(fx.root, "fastlane/metadata/android/en-US/images/phoneScreenshots/01_home_PLAY_PHONE.png");
+      const da = path.join(fx.root, "fastlane/metadata/android/da-DK/images/phoneScreenshots/01_home_PLAY_PHONE.png");
+      expect(readPngInfo(en)).toMatchObject({ width: 1080, height: 1920, hasAlpha: false });
+      expect(fs.existsSync(da)).toBe(true);
+      const { readinessReport } = await import("../lib/readiness");
+      const r = readinessReport(loadProject(path.join(fx.root, "store-shots.config.json")));
+      expect(r.checks.find((c) => c.id === "screenshots")?.status).toBe("pass");
+      const manifest = readGeneratedManifest(p)!;
+      expect(manifest.files[0].path.startsWith("fastlane/metadata/android/")).toBe(true);
+      cleanGenerated(p);
+      expect(fs.existsSync(en)).toBe(false);
+    } finally {
+      fx.cleanup();
+    }
+  }, 60_000);
+});
+
 describe("glyph coverage", () => {
   it("fails validation for characters no local font covers and suggests a family", async () => {
     const fx = tempFixture();

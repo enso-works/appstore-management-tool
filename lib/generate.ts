@@ -147,7 +147,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
   } catch (err) {
     issues.warn(
       "manifest.generated-unreadable",
-      `Ignoring unreadable ${relOutput(project, plan[0] ?? ({ outputPath: project.paths.outputScreenshots } as RenderJob)).split("/")[0]}/.store-shots-manifest.json: ${(err as Error).message}`,
+      `Ignoring unreadable ${project.config.paths.outputScreenshots}/.store-shots-manifest.json: ${(err as Error).message}`,
     );
   }
   const plannedPaths = new Set(plan.map((j) => relOutput(project, j)));
@@ -156,7 +156,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
   if (!opts.noClean && project.config.output.cleanBeforeRender && !opts.filter && previous) {
     const stale = previous.files.filter((f) => !plannedPaths.has(f.path));
     for (const f of stale) {
-      const abs = path.join(project.paths.outputScreenshots, f.path);
+      const abs = path.join(project.root, f.path);
       if (fs.existsSync(abs)) fs.rmSync(abs);
     }
     if (stale.length) log(`removed ${stale.length} stale file(s) from the previous run`);
@@ -330,8 +330,9 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
   return summary;
 }
 
+/** Output path relative to the app root (what the generated manifest records). */
 function relOutput(project: Project, job: RenderJob): string {
-  return path.relative(project.paths.outputScreenshots, job.outputPath).split(path.sep).join("/");
+  return path.relative(project.root, job.outputPath).split(path.sep).join("/");
 }
 
 function safeAppVersion(project: Project): string | undefined {

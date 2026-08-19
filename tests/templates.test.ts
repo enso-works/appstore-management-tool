@@ -27,7 +27,7 @@ describe("template contracts", () => {
     describe(mod.descriptor.id, () => {
       it("declares fields and targets", () => {
         expect(mod.descriptor.requiredFields).toContain("headline");
-        expect(mod.descriptor.families).toEqual(["iphone", "ipad"]);
+        expect(mod.descriptor.families).toEqual(["iphone", "ipad", "phone"]);
         expect(mod.overridesSchema.safeParse({}).success).toBe(true);
         expect(mod.overridesSchema.safeParse({ nope: 1 }).success).toBe(false);
       });

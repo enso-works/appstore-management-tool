@@ -21,7 +21,7 @@ export const descriptor = {
   name: "Full Bleed Card",
   requiredFields: ["headline"],
   optionalFields: ["caption"],
-  families: ["iphone", "ipad"] as ("iphone" | "ipad")[],
+  families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
   orientations: ["portrait"] as "portrait"[],
   overrideKeys: [...COMMON_OVERRIDE_KEYS, "cardPosition", "cardColor"],
 };

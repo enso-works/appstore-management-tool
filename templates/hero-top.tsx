@@ -25,7 +25,7 @@ export const descriptor = {
   name: "Hero Top",
   requiredFields: ["headline"],
   optionalFields: ["eyebrow", "caption"],
-  families: ["iphone", "ipad"] as ("iphone" | "ipad")[],
+  families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
   orientations: ["portrait"] as "portrait"[],
   overrideKeys: COMMON_OVERRIDE_KEYS,
 };

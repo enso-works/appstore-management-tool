@@ -83,7 +83,7 @@ app/              Next.js UI: project list, /projects/<name> editor (live previe
 cli/index.ts      commander CLI
 lib/
   schema.ts       Zod schemas: project config, manifest, locale content, generated manifest, fonts lock
-  targets.ts      device profile registry (iPhone 6.9" 1320x2868, iPad 13" 2064x2752)
+  targets.ts      device profile registry (iPhone 6.9" 1320x2868, iPad 13" 2064x2752, Play phone 1080x1920) + per-platform output dirs + Play locale map
   locales.ts      App Store Connect locale codes, RTL table, app-language -> store-locale map
   config.ts       config discovery (walk up / --project), loading, root-bound path resolution
   registry.ts     workspace scan for apps with a config
@@ -120,7 +120,8 @@ tests/            vitest
 <app>/store/raw/<device>/<locale>/<order>-<id>.png   raw simulator captures
 <app>/store/assets/{fonts,logos,backgrounds}/
 <app>/fastlane/metadata/<locale>/*.txt              read by readiness, edited in Phase 5
-<app>/fastlane/screenshots/<locale>/                 output (Phase 2+)
+<app>/fastlane/screenshots/<locale>/                 iOS output (deliver)
+<app>/fastlane/metadata/android/<locale>/images/phoneScreenshots/   Play output (supply), when play-phone-1080x1920 is in targets
 ```
 
 The tool never reads credential files (`*.p8`, `asc_api_key.json`) — readiness only checks

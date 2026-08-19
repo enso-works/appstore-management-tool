@@ -43,9 +43,19 @@ export const targetProfiles = {
     height: 2752,
     fileToken: "IPAD_PRO_129",
   },
-  // Phase 8 (Google Play):
-  // "play-phone-1080x1920": { ... family: "phone" ... },
-  // "play-feature-1024x500": { ... family: "feature-graphic" ... },
+  // Google Play phone screenshots: 9:16, >= 1080 px, max/min side ratio <= 2:1.
+  // Output goes to fastlane/metadata/android/<locale>/images/phoneScreenshots/ (supply layout).
+  "play-phone-1080x1920": {
+    id: "play-phone-1080x1920",
+    platform: "android",
+    family: "phone",
+    displayClass: "phone",
+    orientation: "portrait",
+    width: 1080,
+    height: 1920,
+    fileToken: "PLAY_PHONE",
+  },
+  // Later: "play-feature-1024x500" (feature graphic, landscape, its own template).
 } as const satisfies Record<string, TargetProfile>;
 
 export type TargetId = keyof typeof targetProfiles;
@@ -65,3 +75,52 @@ export function isTargetId(id: string): id is TargetId {
  * 2026-08-19). Projects may narrow this via validation.screensPerTarget.
  */
 export const APPLE_SCREENSHOTS_PER_SET = { min: 1, max: 10 } as const;
+
+/** Where `deliver` / `supply` expect screenshots for a target's platform. */
+export function outputDirFor(
+  target: TargetProfile,
+  locale: string,
+  paths: { outputScreenshots: string; outputPlay: string },
+): string {
+  if (target.platform === "android") {
+    const kind =
+      target.family === "tablet" ? "tenInchScreenshots" : target.family === "feature-graphic" ? "" : "phoneScreenshots";
+    return kind
+      ? `${paths.outputPlay}/${playLocaleFor(locale)}/images/${kind}`
+      : `${paths.outputPlay}/${playLocaleFor(locale)}/images`;
+  }
+  return `${paths.outputScreenshots}/${locale}`;
+}
+
+/** App Store locale -> Google Play locale where they differ (supply directory names). */
+const PLAY_LOCALES: Record<string, string> = {
+  da: "da-DK",
+  fi: "fi-FI",
+  he: "iw-IL",
+  id: "id",
+  ja: "ja-JP",
+  ko: "ko-KR",
+  no: "no-NO",
+  sv: "sv-SE",
+  th: "th",
+  tr: "tr-TR",
+  vi: "vi",
+  cs: "cs-CZ",
+  el: "el-GR",
+  hu: "hu-HU",
+  pl: "pl-PL",
+  ro: "ro",
+  ru: "ru-RU",
+  sk: "sk",
+  uk: "uk",
+  hr: "hr",
+  ms: "ms",
+  ca: "ca",
+  hi: "hi-IN",
+  "zh-Hans": "zh-CN",
+  "zh-Hant": "zh-TW",
+};
+
+export function playLocaleFor(locale: string): string {
+  return PLAY_LOCALES[locale] ?? locale;
+}

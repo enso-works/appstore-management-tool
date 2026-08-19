@@ -298,7 +298,9 @@ export function stackLayout(
 
   const scale = overrides.screenshotScale ?? defaults.scale;
   const devW = Math.round(W * scale);
-  const devH = Math.round(devW / (target.width / target.height));
+  // Phone shells keep a phone aspect even on a 9:16 Play canvas; tablets use the canvas aspect.
+  const devAspect = target.family === "ipad" || target.family === "tablet" ? target.width / target.height : 1320 / 2868;
+  const devH = Math.round(devW / devAspect);
   let devLeft: number;
   let devTop: number;
   if (narrow) {

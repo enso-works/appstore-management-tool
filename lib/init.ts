@@ -4,7 +4,7 @@ import { CONFIG_FILENAME, loadProject, readJsonFile, validateConfigSemantics } f
 import { APP_LANGUAGE_TO_STORE_LOCALES, type AppStoreLocale } from "./locales";
 import { dirExists, displayRelative, fileExists } from "./paths";
 import { formatZodError, projectConfigSchema, type ProjectConfigInput } from "./schema";
-import { targetIds } from "./targets";
+import { getTarget, targetIds } from "./targets";
 
 export interface InitOptions {
   /** Absolute app root. */
@@ -43,7 +43,8 @@ export function initProject(opts: InitOptions): InitResult {
     bundleId,
     defaultLocale,
     locales,
-    targets: [...targetIds],
+    // iOS targets by default; Google Play (play-phone-1080x1920) is opt-in per app.
+    targets: targetIds.filter((t) => getTarget(t)?.platform === "ios"),
     brand: { font: { family: "Inter", source: "google", weights: [400, 600, 700] } },
   };
 

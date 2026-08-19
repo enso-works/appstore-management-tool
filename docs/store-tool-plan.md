@@ -1,6 +1,6 @@
 # Store Tool — Screenshot Generation and Store Management Plan
 
-Status: revision 2, approved 2026-08-19; Phases 1-7 complete (Braele iPad/locales pending captures and copy); Phase 8 (Google Play) pending
+Status: revision 2, approved 2026-08-19; Phases 1-8 complete (Braele iPad/locales pending captures and copy; Play feature graphic + Play text metadata open)
 Working name: **store-shots** (directory name; a rename is an open decision, see 3.2)
 Last verified against the workspace: 2026-08-19
 Executor: Claude Code, phase by phase, with human approval between phases
@@ -626,4 +626,4 @@ Recheck Apple and fastlane docs when bumping the device registry or the fastlane
 - [x] Phase 5 — store management (2026-08-19: Store tab with readiness dashboard, metadata editor with limits/keyword hygiene/etag conflicts/explicit locale creation, fastlane runner with allowlist, confirmation, readiness gate and streamed log; CLI `metadata validate|show`, `lane <key> [--yes] [--override]`)
 - [x] Phase 6 — remaining templates + Braele pilot (2026-08-19: split-caption and full-bleed-card; free phone positioning (scale, X/Y offset, tilt), text column width/side/offset, headline font (Google Fonts), background images and built-in patterns, text colour; Braele en-US iPhone set recreated in its existing store style; Deliverfile + init for invoicer and mycv. Still open for Braele: iPad captures, the six other locales' copy, `deliver` smoke test)
 - [x] Phase 7 — hardening (2026-08-19: incremental rendering by input checksum with stale-file cleanup and `--force`, `capture` helper with clean status bar and overwrite guard, lane-exists preflight, template authoring + troubleshooting docs; CI JSON via `--json` on validate/generate/readiness)
-- [ ] Phase 8 — Google Play (post-v1)
+- [x] Phase 8 — Google Play, first cut (2026-08-19: `play-phone-1080x1920` target (opt-in per app via config.targets + sourceDevices), output into `fastlane/metadata/android/<play-locale>/images/phoneScreenshots/` (supply layout), App Store -> Play locale mapping (da -> da-DK ...), readiness scans per-platform dirs, generated manifest paths are app-root-relative. Not yet: feature graphic template, Play text metadata (title 30 / short 80 / full 4000) in the Store tab, `supply` lane wiring)

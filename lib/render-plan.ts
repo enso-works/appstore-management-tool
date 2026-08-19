@@ -1,7 +1,7 @@
 import path from "node:path";
 import { sourceDeviceFor, type Project } from "./config";
 import type { Manifest, ScreenDefinition } from "./schema";
-import { getTarget, type TargetProfile } from "./targets";
+import { getTarget, outputDirFor, type TargetProfile } from "./targets";
 import { displayRelative, PathEscapeError, resolveWithin } from "./paths";
 
 export interface RenderJob {
@@ -76,8 +76,7 @@ export function buildJob(
     sourceDevice: device,
     sourcePath: path.join(project.paths.raw, device, sourceLocale, file),
     outputPath: path.join(
-      project.paths.outputScreenshots,
-      locale,
+      outputDirFor(target, locale, project.paths),
       outputFileName(screen, target, project.config.output.format),
     ),
   };

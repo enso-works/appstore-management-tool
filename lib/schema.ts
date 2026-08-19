@@ -61,6 +61,8 @@ export const projectConfigSchema = z.strictObject({
       raw: relativePath.default("store/raw"),
       assets: relativePath.default("store/assets"),
       outputScreenshots: relativePath.default("fastlane/screenshots"),
+      /** Google Play (`supply`) metadata root; screenshots go under <locale>/images/phoneScreenshots/. */
+      outputPlay: relativePath.default("fastlane/metadata/android"),
       metadata: relativePath.default("fastlane/metadata"),
       generated: relativePath.default("store/generated"),
     })

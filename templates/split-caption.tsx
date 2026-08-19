@@ -16,7 +16,7 @@ export const descriptor = {
   name: "Split Caption",
   requiredFields: ["headline"],
   optionalFields: ["eyebrow", "caption"],
-  families: ["iphone", "ipad"] as ("iphone" | "ipad")[],
+  families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
   orientations: ["portrait"] as "portrait"[],
   overrideKeys: COMMON_OVERRIDE_KEYS,
 };
