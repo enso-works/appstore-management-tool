@@ -18,10 +18,15 @@
       "id": "planning",
       "order": 2,
       "enabled": true,
-      "template": "split-caption",
+      "template": "hero-top",
       "source": {
         "filePattern": "{order}-{id}.png",
         "localized": false
+      },
+      "overrides": {
+        "background": "#0F766E",
+        "shell": "light",
+        "textAlign": "start"
       }
     }
   ]

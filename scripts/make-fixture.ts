@@ -81,8 +81,9 @@ write(
           id: "planning",
           order: 2,
           enabled: true,
-          template: "split-caption",
+          template: "hero-top",
           source: { filePattern: "{order}-{id}.png", localized: false },
+          overrides: { background: "#0F766E", shell: "light", textAlign: "start" },
         },
       ],
     },
@@ -188,6 +189,7 @@ const metadata: Record<string, Record<string, string>> = {
 for (const [locale, fields] of Object.entries(metadata)) {
   for (const [field, value] of Object.entries(fields)) write(`fastlane/metadata/${locale}/${field}.txt`, value);
 }
-write("fastlane/screenshots/.gitkeep", "");
+// Output dir exists but is never committed with content: tests and manual runs write here.
+write("fastlane/screenshots/.gitignore", "*\n!.gitignore\n");
 
 console.log(`fixture written to ${root}`);

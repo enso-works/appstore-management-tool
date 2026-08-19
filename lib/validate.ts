@@ -8,6 +8,8 @@ import { buildRenderPlan, type RenderJob } from "./render-plan";
 import type { LocaleContent, Manifest } from "./schema";
 import { getTarget } from "./targets";
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
+import { getTemplateModule } from "../templates";
+import { formatZodError } from "./schema";
 
 export interface ValidationResult {
   issues: IssueList;
@@ -120,9 +122,11 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
           );
         }
       }
-      for (const k of Object.keys(screen.overrides)) {
-        if (!template.overrideKeys.includes(k)) {
-          issues.warn("manifest.unknown-override", `Template "${template.id}" does not know override "${k}"`, {
+      const mod = getTemplateModule(template.id);
+      const parsedOverrides = mod?.overridesSchema.safeParse(screen.overrides);
+      if (parsedOverrides && !parsedOverrides.success) {
+        for (const m of formatZodError(parsedOverrides.error)) {
+          issues.error("manifest.override-invalid", `Screen "${screen.id}" overrides: ${m}`, {
             key,
             file,
             hint: `allowed: ${template.overrideKeys.join(", ")}`,

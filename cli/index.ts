@@ -8,6 +8,9 @@ import { defaultWorkspaceRoot, discoverProjects } from "../lib/registry";
 import { describeJob } from "../lib/render-plan";
 import { validateProject } from "../lib/validate";
 import { displayRelative } from "../lib/paths";
+import { generateProject, type GenerationSummary } from "../lib/generate";
+import { cleanGenerated } from "../lib/generated-manifest";
+import { addGoogleFont, appFontsDir, checkFont, listFonts, resolveFont } from "../lib/fonts";
 
 const program = new Command();
 
@@ -172,6 +175,141 @@ function printReadiness(report: ReadinessReport) {
   }
   console.log(`\nOverall: ${mark[report.status]}`);
 }
+
+function splitList(v: string | undefined): string[] | undefined {
+  const list = v
+    ?.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list && list.length ? list : undefined;
+}
+
+program
+  .command("generate")
+  .description(
+    "Render every planned screenshot into fastlane/screenshots/<locale>/ (needs raw captures and a local font)",
+  )
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--locale <list>", "only these locales (comma-separated)")
+  .option("--screen <list>", "only these screen ids")
+  .option("--target <list>", "only these target ids")
+  .option("--strict", "any error or warning blocks all output")
+  .option("--no-clean", "do not delete previously generated files first")
+  .option("--dry-run", "print the render plan and exit")
+  .option("--json", "machine-readable summary")
+  .action(
+    async (opts: {
+      project?: string;
+      locale?: string;
+      screen?: string;
+      target?: string;
+      strict?: boolean;
+      clean: boolean;
+      dryRun?: boolean;
+      json?: boolean;
+    }) => {
+      const project = openProject(opts.project);
+      const filterAll = {
+        locales: splitList(opts.locale),
+        screens: splitList(opts.screen),
+        targets: splitList(opts.target),
+      };
+      const filter = filterAll.locales || filterAll.screens || filterAll.targets ? filterAll : undefined;
+      const summary = await generateProject(project, {
+        filter,
+        strict: opts.strict,
+        noClean: !opts.clean,
+        dryRun: opts.dryRun,
+        log: opts.json ? undefined : (line) => console.log(line),
+      });
+      if (opts.json) {
+        console.log(JSON.stringify(summary, null, 2));
+      } else {
+        printSummary(summary, !!opts.dryRun);
+      }
+      process.exit(summary.aborted || summary.failed > 0 ? 1 : 0);
+    },
+  );
+
+function printSummary(s: GenerationSummary, dryRun: boolean) {
+  if (dryRun) {
+    console.log(`Render plan for ${s.project} (${s.planned} job(s)):`);
+    for (const j of s.jobs) console.log("  " + j.key);
+  }
+  const problems = s.issues.filter((i) => i.level !== "info");
+  if (problems.length) {
+    console.log("");
+    printIssues(problems);
+  }
+  console.log("");
+  if (s.aborted)
+    console.log(`ABORTED: nothing written (${s.issues.filter((i) => i.level === "error").length} error(s))`);
+  console.log(
+    `${s.project}: ${s.planned} planned, ${s.rendered} rendered, ${s.failed} failed, ${s.skipped} skipped, ${s.filesWritten.length} file(s) written in ${(s.durationMs / 1000).toFixed(1)} s`,
+  );
+}
+
+program
+  .command("clean")
+  .description("Delete only the screenshots recorded in .store-shots-manifest.json")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .action((opts: { project?: string }) => {
+    const project = openProject(opts.project);
+    const r = cleanGenerated(project);
+    for (const f of r.deleted) console.log(`deleted  ${f}`);
+    for (const f of r.missing) console.log(`missing  ${f} (already gone)`);
+    console.log(r.manifestRemoved ? "manifest removed" : "nothing to clean");
+  });
+
+const fonts = program.command("fonts").description("Manage local font files (downloaded once from Google Fonts)");
+
+fonts
+  .command("add <family>")
+  .description('Download a Google Fonts family into the app: fonts add "Space Grotesk"')
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--weights <list>", "comma-separated weights (default: from config brand.font.weights)")
+  .action(async (family: string, opts: { project?: string; weights?: string }) => {
+    const project = openProject(opts.project);
+    const weights = splitList(opts.weights)?.map(Number) ?? project.config.brand.font.weights;
+    const r = await addGoogleFont({ family, weights, destDir: appFontsDir(project) });
+    for (const f of r.files)
+      console.log(`added  ${displayRelative(project.root, path.join(r.dir, "..", f.path))}  (${f.weight} ${f.style})`);
+    console.log(
+      `\n"${r.family}" is now available locally. Set brand.font.family to "${r.family}" in store-shots.config.json if it is not already.`,
+    );
+  });
+
+fonts
+  .command("list")
+  .description("List fonts available to this app (app-local and bundled)")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .action((opts: { project?: string }) => {
+    const project = openProject(opts.project);
+    const { app, bundled } = listFonts(project);
+    console.log("app (store/assets/fonts):");
+    for (const f of app) console.log(`  ${f.family}  weights ${f.files.map((x) => x.weight).join(",")}`);
+    if (!app.length) console.log("  (none)");
+    console.log("bundled with the tool:");
+    for (const f of bundled) console.log(`  ${f.family}  weights ${f.files.map((x) => x.weight).join(",")}`);
+  });
+
+fonts
+  .command("check")
+  .description("Verify the configured brand font is available locally and intact")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .action((opts: { project?: string }) => {
+    const project = openProject(opts.project);
+    const family = project.config.brand.font.family;
+    const font = resolveFont(project, family);
+    if (!font) {
+      console.error(`"${family}" is not available. Run: store-shots fonts add "${family}"`);
+      process.exit(1);
+    }
+    const problems = checkFont(font);
+    console.log(`"${family}" resolved from ${font.source} (${font.dir}); ${font.files.length} file(s)`);
+    for (const p of problems) console.log(`  PROBLEM ${p}`);
+    process.exit(problems.length ? 1 : 0);
+  });
 
 program.parseAsync(process.argv).catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));

@@ -1,6 +1,6 @@
 # Store Tool — Screenshot Generation and Store Management Plan
 
-Status: revision 2, approved 2026-08-19; Phase 1 complete, Phase 2 pending approval
+Status: revision 2, approved 2026-08-19; Phases 1-2 complete, Phases 3-4 in progress (approved together)
 Working name: **store-shots** (directory name; a rename is an open decision, see 3.2)
 Last verified against the workspace: 2026-08-19
 Executor: Claude Code, phase by phase, with human approval between phases
@@ -23,14 +23,14 @@ Verified 2026-08-19 in `/Users/enso/PrivateProjects/outloud-expo`.
 
 ### 2.1 Apps
 
-| Directory | App | Bundle id | Expo | Git | fastlane | Store locales | Screenshots today |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `breathe/` | Braele | `com.bavrk.braele` | 56.0.20 | yes, remote `enso-works/braele` | full: Appfile, Deliverfile, Fastfile, ASC key present | en-US, de-DE, es-ES, es-MX, fr-FR, nl-NL, da | 5 × 1320×2868 en-US only (uploaded); raw 1206×2622 captures in `store/screenshots/raw-ios/`; iPad + Play images in `store/screenshots/` |
-| `invoicer/` | Invoit | `com.bavrk.invoicer` | 56.0.12 | yes, no remote | Appfile, Fastfile, ASC key present, no Deliverfile | en-US | none |
-| `mycv/` | MyCV | `com.bavrk.mycv` | 56.0.12 | yes, no remote | Appfile, Fastfile, no keys | en-US | none |
-| `bed-time-stories/` | bed-time-stories | `com.ensob.bed-time-stories` | 56.0.12 | yes, no remote | none | none | none |
-| `outloud/` | Mindsaid | `com.bavrk.mindsaid` | 54.0.32 | yes, remote `enso-works/mindsaid` | none | none | none |
-| `starter-template/` | placeholder | `com.bavrk.__APP_SLUG__` | 56.0.12 | **no** | Appfile, Deliverfile, Fastfile, CREDENTIALS.md | en-US | none |
+| Directory           | App              | Bundle id                    | Expo    | Git                               | fastlane                                              | Store locales                                | Screenshots today                                                                                                                       |
+| ------------------- | ---------------- | ---------------------------- | ------- | --------------------------------- | ----------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `breathe/`          | Braele           | `com.bavrk.braele`           | 56.0.20 | yes, remote `enso-works/braele`   | full: Appfile, Deliverfile, Fastfile, ASC key present | en-US, de-DE, es-ES, es-MX, fr-FR, nl-NL, da | 5 × 1320×2868 en-US only (uploaded); raw 1206×2622 captures in `store/screenshots/raw-ios/`; iPad + Play images in `store/screenshots/` |
+| `invoicer/`         | Invoit           | `com.bavrk.invoicer`         | 56.0.12 | yes, no remote                    | Appfile, Fastfile, ASC key present, no Deliverfile    | en-US                                        | none                                                                                                                                    |
+| `mycv/`             | MyCV             | `com.bavrk.mycv`             | 56.0.12 | yes, no remote                    | Appfile, Fastfile, no keys                            | en-US                                        | none                                                                                                                                    |
+| `bed-time-stories/` | bed-time-stories | `com.ensob.bed-time-stories` | 56.0.12 | yes, no remote                    | none                                                  | none                                         | none                                                                                                                                    |
+| `outloud/`          | Mindsaid         | `com.bavrk.mindsaid`         | 54.0.32 | yes, remote `enso-works/mindsaid` | none                                                  | none                                         | none                                                                                                                                    |
+| `starter-template/` | placeholder      | `com.bavrk.__APP_SLUG__`     | 56.0.12 | **no**                            | Appfile, Deliverfile, Fastfile, CREDENTIALS.md        | en-US                                        | none                                                                                                                                    |
 
 Every app is portrait-only and has `ios.supportsTablet: true`. Apple requires iPad screenshots when the binary supports iPad, so **the iPad 13" target is mandatory, not optional**.
 
@@ -56,27 +56,27 @@ Every app is portrait-only and has `ios.supportsTablet: true`. Apple requires iP
 
 ### 3.1 Resolved by discovery
 
-| Question (rev. 1 §26) | Answer |
-| --- | --- |
+| Question (rev. 1 §26)               | Answer                                                                                                         |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | Which repository contains the tool? | `tools/store-shots/` is its own git repo; `starter-template/` is its own; the workspace root is a plain folder |
-| Package manager / Node | npm, Node 22 (add `.nvmrc`) |
-| Existing `snapshot` output tree | None. Raw captures come from `xcrun simctl`; tool provides `capture` helper |
-| v1 locales | en-US, de-DE, es-ES, es-MX, fr-FR, nl-NL, da |
-| iPad / landscape | iPad yes (mandatory), landscape no |
-| Canonical iPhone 6.9" output | 1320×2868 |
-| Write Fastlane metadata in v1? | Yes — metadata management is half the scope now. Writes are explicit and diffed |
-| Device shells | Neutral CSS shell (rounded rect + thin bezel) in v1; no Apple hardware art |
-| Pilot app | Braele (`breathe/`) |
+| Package manager / Node              | npm, Node 22 (add `.nvmrc`)                                                                                    |
+| Existing `snapshot` output tree     | None. Raw captures come from `xcrun simctl`; tool provides `capture` helper                                    |
+| v1 locales                          | en-US, de-DE, es-ES, es-MX, fr-FR, nl-NL, da                                                                   |
+| iPad / landscape                    | iPad yes (mandatory), landscape no                                                                             |
+| Canonical iPhone 6.9" output        | 1320×2868                                                                                                      |
+| Write Fastlane metadata in v1?      | Yes — metadata management is half the scope now. Writes are explicit and diffed                                |
+| Device shells                       | Neutral CSS shell (rounded rect + thin bezel) in v1; no Apple hardware art                                     |
+| Pilot app                           | Braele (`breathe/`)                                                                                            |
 
 ### 3.2 Still open (defaults apply if not answered)
 
-| Decision | Default if unanswered |
-| --- | --- |
-| Workspace repo and the app repos: ignore, submodule, or absorb? (section 6.1) | **Decided 2026-08-19:** no workspace repo; tool and template are each their own repo, apps keep theirs |
-| Tool name | Keep `store-shots` as the directory/package name |
-| Brand fonts per app | **Decided 2026-08-19:** any Google Fonts family. `fonts add <family>` downloads the files once into the app's `store/assets/fonts/`; export never fetches. Inter + Noto fallbacks bundled with the tool as the default |
-| The three template designs | The three in section 10.2 (hero-top, split-caption, full-bleed-card), refined against Braele's five screens |
-| Google Play output in v1? | No — Phase 8 (after v1); the target registry is designed for it from day one |
+| Decision                                                                      | Default if unanswered                                                                                                                                                                                                  |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workspace repo and the app repos: ignore, submodule, or absorb? (section 6.1) | **Decided 2026-08-19:** no workspace repo; tool and template are each their own repo, apps keep theirs                                                                                                                 |
+| Tool name                                                                     | Keep `store-shots` as the directory/package name                                                                                                                                                                       |
+| Brand fonts per app                                                           | **Decided 2026-08-19:** any Google Fonts family. `fonts add <family>` downloads the files once into the app's `store/assets/fonts/`; export never fetches. Inter + Noto fallbacks bundled with the tool as the default |
+| The three template designs                                                    | The three in section 10.2 (hero-top, split-caption, full-bleed-card), refined against Braele's five screens                                                                                                            |
+| Google Play output in v1?                                                     | No — Phase 8 (after v1); the target registry is designed for it from day one                                                                                                                                           |
 
 ## 4. Goals and non-goals
 
@@ -113,7 +113,7 @@ Template integration:
 
 ## 5. System boundary
 
-The tool owns: per-app config discovery, content and metadata loading, templates and brand theme, source-image mapping, preview, rendering, validation, tool-owned output files, and *invoking* fastlane.
+The tool owns: per-app config discovery, content and metadata loading, templates and brand theme, source-image mapping, preview, rendering, validation, tool-owned output files, and _invoking_ fastlane.
 
 fastlane (per app) owns: credentials, `deliver` uploads, builds, release lanes, submission.
 
@@ -175,22 +175,22 @@ Braele already has `store/` with ASO notes and `store/screenshots/raw-ios/`. Pha
 
 ### 7.1 Components
 
-| Component | Responsibility |
-| --- | --- |
-| Project registry | Discover apps in the workspace (any directory with `store-shots.config.json`); switch between them in the UI |
-| Config loader | Read and validate `store-shots.config.json`; resolve all paths against the app root; refuse escapes |
-| Content loader | Load `store/content/<locale>.json`; fallback rules; direction |
-| Metadata store | Read/write `fastlane/metadata/<locale>/*.txt` with the same limits table the `validate_metadata` lane uses |
-| Source resolver | Map screen id × locale × target to exactly one raw PNG |
-| Template registry | Fixed templates with declared fields, supported targets, override schema |
-| Preview renderer | Scaled in-browser render using the same components as export |
-| Export renderer | Playwright Chromium, exact viewport, isolated export route |
-| Image processor | Sharp: flatten, RGB, dimension/format inspection |
-| Validator | Schema, files, translations, overflow, output, and store readiness checks |
-| Fastlane runner | Spawn `fastlane ios <lane>` in the app directory, stream output, never pass secrets |
-| Capture helper | List booted simulators, capture into `store/raw/<device>/<locale>/` with the right name |
-| CLI | `init`, `validate`, `generate`, `clean`, `capture`, `metadata`, `readiness`, `lane`, `fonts` |
-| Output writer | Temp file → validate → atomic move; cleanup only files listed in the previous generated manifest |
+| Component         | Responsibility                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| Project registry  | Discover apps in the workspace (any directory with `store-shots.config.json`); switch between them in the UI |
+| Config loader     | Read and validate `store-shots.config.json`; resolve all paths against the app root; refuse escapes          |
+| Content loader    | Load `store/content/<locale>.json`; fallback rules; direction                                                |
+| Metadata store    | Read/write `fastlane/metadata/<locale>/*.txt` with the same limits table the `validate_metadata` lane uses   |
+| Source resolver   | Map screen id × locale × target to exactly one raw PNG                                                       |
+| Template registry | Fixed templates with declared fields, supported targets, override schema                                     |
+| Preview renderer  | Scaled in-browser render using the same components as export                                                 |
+| Export renderer   | Playwright Chromium, exact viewport, isolated export route                                                   |
+| Image processor   | Sharp: flatten, RGB, dimension/format inspection                                                             |
+| Validator         | Schema, files, translations, overflow, output, and store readiness checks                                    |
+| Fastlane runner   | Spawn `fastlane ios <lane>` in the app directory, stream output, never pass secrets                          |
+| Capture helper    | List booted simulators, capture into `store/raw/<device>/<locale>/` with the right name                      |
+| CLI               | `init`, `validate`, `generate`, `clean`, `capture`, `metadata`, `readiness`, `lane`, `fonts`                 |
+| Output writer     | Temp file → validate → atomic move; cleanup only files listed in the previous generated manifest             |
 
 ### 7.2 Dependencies
 
@@ -254,7 +254,17 @@ Raw captures at a smaller device (Braele's 1206×2622) remain usable: templates 
   },
   "metadata": {
     "manage": true,
-    "fields": ["name", "subtitle", "keywords", "promotional_text", "description", "release_notes", "support_url", "marketing_url", "privacy_url"]
+    "fields": [
+      "name",
+      "subtitle",
+      "keywords",
+      "promotional_text",
+      "description",
+      "release_notes",
+      "support_url",
+      "marketing_url",
+      "privacy_url"
+    ]
   },
   "fastlane": {
     "enabled": true,
@@ -278,8 +288,22 @@ Screenshot copy (`store/content`) and store metadata (`fastlane/metadata`) stay 
 
 ```ts
 export const targetProfiles = {
-  "iphone-6.9-1320x2868": { platform: "ios", family: "iphone", displayClass: "6.9-inch", orientation: "portrait", width: 1320, height: 2868 },
-  "ipad-13-2064x2752":    { platform: "ios", family: "ipad",   displayClass: "13-inch",  orientation: "portrait", width: 2064, height: 2752 },
+  "iphone-6.9-1320x2868": {
+    platform: "ios",
+    family: "iphone",
+    displayClass: "6.9-inch",
+    orientation: "portrait",
+    width: 1320,
+    height: 2868,
+  },
+  "ipad-13-2064x2752": {
+    platform: "ios",
+    family: "ipad",
+    displayClass: "13-inch",
+    orientation: "portrait",
+    width: 2064,
+    height: 2752,
+  },
   // Phase 8:
   // "play-phone-1080x1920": { platform: "android", family: "phone", ... },
   // "play-feature-1024x500": { platform: "android", family: "feature-graphic", ... }
@@ -368,16 +392,16 @@ This section is new in revision 2.
 
 ### 13.2 Readiness dashboard (per app)
 
-| Check | Rule |
-| --- | --- |
-| Locales | every locale in config has a metadata directory and every managed field is present and non-empty |
-| Limits | every field within its limit |
-| Screenshots | for each target and locale, count within `screensPerTarget`, dimensions exact, no alpha |
-| Consistency | the same screen set exists in every locale (no locale missing screen 3) |
-| Version | `app.json` `expo.version` matches what `Deliverfile` will send (it reads app.json, so this checks release_notes was updated since the last version bump, tracked in the generated manifest) |
-| Icon | `assets/icon.png` exists, 1024×1024, no alpha |
-| Credentials | `fastlane/asc_api_key.json` and `AuthKey_*.p8` exist (existence only; contents never read) |
-| Placeholders | no `__APP_SLUG__`-style tokens left in `app.json`, `Fastfile`, metadata |
+| Check        | Rule                                                                                                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Locales      | every locale in config has a metadata directory and every managed field is present and non-empty                                                                                            |
+| Limits       | every field within its limit                                                                                                                                                                |
+| Screenshots  | for each target and locale, count within `screensPerTarget`, dimensions exact, no alpha                                                                                                     |
+| Consistency  | the same screen set exists in every locale (no locale missing screen 3)                                                                                                                     |
+| Version      | `app.json` `expo.version` matches what `Deliverfile` will send (it reads app.json, so this checks release_notes was updated since the last version bump, tracked in the generated manifest) |
+| Icon         | `assets/icon.png` exists, 1024×1024, no alpha                                                                                                                                               |
+| Credentials  | `fastlane/asc_api_key.json` and `AuthKey_*.p8` exist (existence only; contents never read)                                                                                                  |
+| Placeholders | no `__APP_SLUG__`-style tokens left in `app.json`, `Fastfile`, metadata                                                                                                                     |
 
 Each check yields pass / warn / fail with a one-line fix hint. `readiness --json` is CI-friendly.
 
@@ -544,17 +568,17 @@ Acceptance: full Braele matrix regenerates reproducibly; all tests pass; a new d
 
 ## 24. Risks and mitigations
 
-| Risk | Mitigation |
-| --- | --- |
-| Browser text rendering drift between runs/machines | Pinned Chromium via Playwright, bundled fonts, tolerant goldens |
-| Long DE/FR/NL copy breaks layouts | Safe regions, bounded fitting, strict overflow, locale grid |
-| Hand captures are inconsistent (status bar, dev labels) | `capture` helper with status-bar override; readiness warns on odd raw dimensions |
-| iPad layouts treated as scaled phone layouts | Every template declares and tests an iPad layout |
-| Tool overwrites human-made screenshots | Manifest-owned cleanup only; Braele's existing files untouched until deleted by hand |
-| Running fastlane from a UI invites accidental uploads | Allowlist, confirmation naming app + lane, readiness gate, no build/submit lanes |
-| Tool, template and apps live in different repos | Tool finds apps by folder layout, not git; documented in `CLAUDE.md`/README |
-| Apple changes accepted sizes | Central registry, spec link, review on change |
-| Scope creep into a design tool | Fixed templates and semantic controls only |
+| Risk                                                    | Mitigation                                                                           |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Browser text rendering drift between runs/machines      | Pinned Chromium via Playwright, bundled fonts, tolerant goldens                      |
+| Long DE/FR/NL copy breaks layouts                       | Safe regions, bounded fitting, strict overflow, locale grid                          |
+| Hand captures are inconsistent (status bar, dev labels) | `capture` helper with status-bar override; readiness warns on odd raw dimensions     |
+| iPad layouts treated as scaled phone layouts            | Every template declares and tests an iPad layout                                     |
+| Tool overwrites human-made screenshots                  | Manifest-owned cleanup only; Braele's existing files untouched until deleted by hand |
+| Running fastlane from a UI invites accidental uploads   | Allowlist, confirmation naming app + lane, readiness gate, no build/submit lanes     |
+| Tool, template and apps live in different repos         | Tool finds apps by folder layout, not git; documented in `CLAUDE.md`/README          |
+| Apple changes accepted sizes                            | Central registry, spec link, review on change                                        |
+| Scope creep into a design tool                          | Fixed templates and semantic controls only                                           |
 
 ## 25. Claude Code execution protocol
 
@@ -596,7 +620,7 @@ Recheck Apple and fastlane docs when bumping the device registry or the fastlane
 - [x] Phase 0 — discovery and decisions (this document)
 - [x] Approval of revision 2 (2026-08-19: defaults accepted; fonts from Google Fonts)
 - [x] Phase 1 — tool + template repos, skeleton, schemas, fixture, `init` on template (2026-08-19; also `init` on Braele so readiness could be verified against a real app)
-- [ ] Phase 2 — hero-top + exact export
+- [x] Phase 2 — hero-top + exact export (2026-08-19: Playwright + Sharp, `generate`/`clean`, `fonts add|list|check` from Google Fonts, Inter bundled; Braele en-US iPhone set generated from its existing captures)
 - [ ] Phase 3 — localization + overflow
 - [ ] Phase 4 — editor UI
 - [ ] Phase 5 — store management

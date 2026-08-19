@@ -16,9 +16,10 @@ The workspace folder itself is not a repo; it only groups repos (and may hold un
 
 Apps are discovered by scanning the workspace root (three levels up, or `STORE_SHOTS_WORKSPACE`).
 
-Phase 1 status: config, schemas, validation, readiness, `init`, fixture, tests, and a
-read-only UI. Rendering (`generate`), fonts, metadata editing and the fastlane runner
-arrive in later phases.
+Status: Phases 1-2 done — config, schemas, validation, readiness, `init`, `generate`
+(Playwright + Sharp, exact-size no-alpha PNGs), `clean`, fonts from Google Fonts, one
+template (`hero-top`), fixture, tests, read-only UI. Editor UI, overflow fitting, metadata
+editing and the fastlane runner arrive in the next phases.
 
 ## Requirements
 
@@ -39,7 +40,11 @@ npx store-shots projects                          # apps in the workspace that h
 npx store-shots init      --project ../../breathe # scaffold store/ + config (never overwrites)
 npx store-shots validate  --project ../../breathe [--dry-run] [--json]
 npx store-shots readiness --project ../../breathe [--json]
-npm run dev                                       # read-only UI at http://localhost:3000
+npx store-shots generate  --project ../../breathe [--locale en-US] [--screen home] [--target iphone-6.9-1320x2868] [--strict] [--dry-run] [--json]
+npx store-shots clean     --project ../../breathe # delete only files listed in .store-shots-manifest.json
+npx store-shots fonts add "Space Grotesk" --project ../../breathe   # download once from Google Fonts into store/assets/fonts/
+npx store-shots fonts list|check --project ../../breathe
+npm run dev                                       # UI at http://localhost:3000
 ```
 
 Exit codes: 0 ok, 1 validation/readiness failed, 2 usage or config error.
@@ -79,7 +84,15 @@ lib/
   readiness.ts    store readiness checks (plan §13.2)
   init.ts         store/ scaffold
   png.ts          PNG header reader; png-write.ts solid-PNG writer for fixtures
-  templates/      template descriptors (components arrive in Phase 2+)
+  fonts.ts        Google Fonts download (once, into the app), fonts.lock.json, @font-face CSS; Inter bundled in assets/fonts
+  generate.ts     generate orchestration: validate -> plan -> render -> flatten -> verify -> atomic write -> manifest
+  generated-manifest.ts  .store-shots-manifest.json read/write and manifest-only cleanup
+  render/html.tsx render a template to a self-contained HTML document (fonts + image via file:// or /api URLs)
+  render/checks.ts in-page checks (fonts loaded, images decoded, text overflow, text/device overlap)
+  render/export.ts Playwright Chromium worker + Sharp flatten/inspect
+  templates/registry.ts  thin adapter over ../templates
+templates/        React templates: types, shared pieces (artwork root, device shell, text block), hero-top
+assets/fonts/     bundled Inter (OFL)
 schema/           generated JSON Schemas referenced by $schema in app files
 fixtures/demo-app two screens, en-US + ar-SA, both targets; used by tests
 tests/            vitest

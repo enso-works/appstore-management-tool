@@ -95,10 +95,13 @@ describe("validateProject on the fixture", () => {
     expect(c).toContain("manifest.unknown-template");
   });
 
-  it("warns on unknown overrides", () => {
+  it("rejects unknown or out-of-range overrides", () => {
     editJson(path.join(fx.root, "store/manifest.json"), (m) => (m.screens[0].overrides = { wobble: 1 }));
-    const r = validateProject(load());
-    expect(r.issues.warnings.map((i) => i.code)).toContain("manifest.unknown-override");
+    let r = validateProject(load());
+    expect(r.issues.errors.map((i) => i.code)).toContain("manifest.override-invalid");
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => (m.screens[0].overrides = { deviceTilt: 45 }));
+    r = validateProject(load());
+    expect(r.issues.errors.map((i) => i.code)).toContain("manifest.override-invalid");
   });
 
   it("reports missing raw captures with a capture hint", () => {

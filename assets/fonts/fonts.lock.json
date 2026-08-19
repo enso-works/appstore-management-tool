@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "fonts": [
+    {
+      "family": "Inter",
+      "source": "google",
+      "files": [
+        {
+          "path": "inter/inter-400.ttf",
+          "weight": 400,
+          "style": "normal",
+          "sha256": "1b08e7fc267a5c7e1d614100f604b83e7e8a0be241f0f288faa2b3ac93a683ba"
+        },
+        {
+          "path": "inter/inter-600.ttf",
+          "weight": 600,
+          "style": "normal",
+          "sha256": "e7a1aaf7eda9f2fad4131725fa556265ec75ca7b2d756260173a040363e8d4f7"
+        },
+        {
+          "path": "inter/inter-700.ttf",
+          "weight": 700,
+          "style": "normal",
+          "sha256": "b37284b5701b6b168dfc770aa1a4ac492106422fd3ba76bc7641e37434e8019c"
+        }
+      ],
+      "license": "inter/LICENSE.txt"
+    }
+  ]
+}
