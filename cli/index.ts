@@ -547,6 +547,52 @@ frames
     if (!all.length) console.log("No frames match.");
   });
 
+program
+  .command("check")
+  .description("CI gate: validate + readiness + metadata limits in one run; non-zero exit on any error")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--strict", "warnings fail too")
+  .option("--json", "machine-readable output")
+  .action((opts: { project?: string; strict?: boolean; json?: boolean }) => {
+    const project = openProject(opts.project);
+    const validation = validateProject(project);
+    const readiness = readinessReport(project);
+    const metaOver: { locale: string; field: string; length: number; limit: number }[] = [];
+    for (const locale of listMetadataLocales(project)) {
+      const state = readMetadataLocale(project, locale, [...METADATA_FIELDS]);
+      for (const f of state.fields)
+        if (f.present && f.overLimit) metaOver.push({ locale, field: f.field, length: f.length, limit: f.limit });
+    }
+    const errors =
+      validation.issues.errors.length + readiness.checks.filter((c) => c.status === "fail").length + metaOver.length;
+    const warnings = validation.issues.warnings.length + readiness.checks.filter((c) => c.status === "warn").length;
+    const ok = errors === 0 && (!opts.strict || warnings === 0);
+    if (opts.json) {
+      console.log(
+        JSON.stringify(
+          {
+            ok,
+            errors,
+            warnings,
+            validation: validation.issues.items,
+            readiness,
+            metadataOverLimit: metaOver,
+            plan: validation.plan.map((j) => j.key),
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      console.log(`check: ${project.config.projectName}`);
+      printIssues(validation.issues.items.filter((i) => i.level !== "info"));
+      printReadiness(readiness);
+      for (const m of metaOver) console.log(`METADATA ${m.locale}/${m.field} is ${m.length}/${m.limit}`);
+      console.log(`\n${errors} error(s), ${warnings} warning(s) -> ${ok ? "OK" : "FAIL"}`);
+    }
+    process.exit(ok ? 0 : 1);
+  });
+
 program.parseAsync(process.argv).catch((err) => {
   console.error(err instanceof Error ? err.message : String(err));
   process.exit(2);
