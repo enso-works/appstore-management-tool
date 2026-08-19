@@ -19,3 +19,10 @@ ticked here when done. Plan context: `store-tool-plan.md`.
 | 12  | App Preview poster             | `appreview-6.9-886x1920` poster target written to `store/generated/posters/<locale>/` (not a deliver screenshot) with the existing templates                                                                  | done 2026-08-19 |
 
 Out of scope for this pass: video rendering, hosted/cloud anything, credentials in the tool.
+
+## Follow-up (2026-08-20)
+
+- Panorama per-slide copy: `headline2/caption2/eyebrow2` (and `...3`) render one text stack per
+  slide while the device spans the artwork — reproduces hand-made multi-slide listings exactly.
+- Drag the text block too (sets `textOffsetX/Y`); new `textOffsetX` override.
+- Editor UX: live thumbnails in the screens sidebar, per-slide copy groups (SLIDE 1 / SLIDE 2).

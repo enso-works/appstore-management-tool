@@ -72,6 +72,20 @@ describe("validateProject on the fixture", () => {
     expect(r.issues.errors.map((i) => i.code)).toContain("content.missing-screen");
   });
 
+  it("accepts slice-suffixed fields for panorama screens and rejects them otherwise", () => {
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens[0].panorama = { slices: 2 };
+      m.screens[1].order = 3;
+      m.screens[1].source.filePattern = "02-planning.png";
+    });
+    editJson(path.join(fx.root, "store/content/en-US.json"), (c) => (c.screens.home.headline2 = "Second slide"));
+    let r = validateProject(load());
+    expect(codes(r)).not.toContain("content.unknown-field");
+    editJson(path.join(fx.root, "store/content/en-US.json"), (c) => (c.screens.planning.headline2 = "nope"));
+    r = validateProject(load());
+    expect(r.issues.errors.map((i) => i.code)).toContain("content.unknown-field");
+  });
+
   it("flags fields a template does not declare", () => {
     editJson(path.join(fx.root, "store/content/en-US.json"), (c) => (c.screens.home.subtitle = "x"));
     const r = validateProject(load());

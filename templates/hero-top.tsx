@@ -64,6 +64,11 @@ export const descriptor = {
 };
 
 /** Shared by hero-top and split-caption: the text stack (eyebrow / headline / caption) + device. */
+/** Field name for slice i (0-based): headline, headline2, headline3 ... */
+export function sliceField(base: string, slice: number): string {
+  return slice === 0 ? base : `${base}${slice + 1}`;
+}
+
 export function renderTextAndDevice(
   input: TemplateRenderInput<CommonOverrides>,
   defaults: StackLayoutDefaults,
@@ -71,6 +76,7 @@ export function renderTextAndDevice(
 ): ReactElement {
   const { target, fields, brand } = input;
   const W = target.width;
+  const slices = Math.max(1, Math.round(input.canvasWidth / W));
   const isTablet = target.family === "ipad";
   const align = textAlignOf(input, fallbackAlign);
 
@@ -91,61 +97,76 @@ export function renderTextAndDevice(
 
   const layout = stackLayout(input, textHeight, defaults);
 
+  // Panoramas get one text stack per slice (fields headline2, caption2, ...):
+  // each slide reads as its own screenshot while the artwork stays continuous.
+  const sliceLayout = slices > 1 ? stackLayout({ ...input, canvasWidth: W }, textHeight, defaults) : layout;
+  const stacks = Array.from({ length: slices }, (_, i) => ({
+    slice: i,
+    left: sliceLayout.text.left + i * W,
+    eyebrow: fields[sliceField("eyebrow", i)],
+    headline: fields[sliceField("headline", i)],
+    caption: fields[sliceField("caption", i)],
+  })).filter((st) => st.headline || st.eyebrow || st.caption);
+
   return (
     <Artwork input={input}>
-      <div
-        style={{
-          position: "absolute",
-          left: layout.text.left,
-          top: layout.text.top,
-          width: layout.text.width,
-          height: layout.text.height,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          alignItems: align === "center" ? "center" : align === "end" ? "flex-end" : "flex-start",
-        }}
-      >
-        <TextBlock
-          id="eyebrow"
-          text={fields.eyebrow}
-          fontSize={eyebrowSize}
-          lineHeight={1.3}
-          maxLines={1}
-          weight={600}
-          align={align}
+      {stacks.map((st) => (
+        <div
+          key={st.slice}
+          data-text-stack={st.slice}
           style={{
-            textTransform: "uppercase",
-            letterSpacing: Math.round(eyebrowSize * 0.12),
-            opacity: 0.85,
-            marginBottom: Math.round(W * 0.02),
-            width: "100%",
+            position: "absolute",
+            left: st.left,
+            top: layout.text.top,
+            width: sliceLayout.text.width,
+            height: layout.text.height,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "flex-start",
+            alignItems: align === "center" ? "center" : align === "end" ? "flex-end" : "flex-start",
           }}
-        />
-        <TextBlock
-          id="headline"
-          text={fields.headline}
-          fontSize={headlineSize}
-          lineHeight={1.08}
-          maxLines={headlineMaxLines}
-          weight={700}
-          align={align}
-          fitMinScale={0.7}
-          fontFamily={brand.headlineFontStack}
-          style={{ letterSpacing: brand.headlineFontStack ? 0 : -Math.round(headlineSize * 0.02), width: "100%" }}
-        />
-        <TextBlock
-          id="caption"
-          text={fields.caption}
-          fontSize={captionSize}
-          lineHeight={1.3}
-          maxLines={3}
-          weight={400}
-          align={align}
-          fitMinScale={0.8}
-          style={{ opacity: 0.88, marginTop: Math.round(W * 0.02), width: "100%" }}
-        />
-      </div>
+        >
+          <TextBlock
+            id={sliceField("eyebrow", st.slice)}
+            text={st.eyebrow}
+            fontSize={eyebrowSize}
+            lineHeight={1.3}
+            maxLines={1}
+            weight={600}
+            align={align}
+            style={{
+              textTransform: "uppercase",
+              letterSpacing: Math.round(eyebrowSize * 0.12),
+              opacity: 0.85,
+              marginBottom: Math.round(W * 0.02),
+              width: "100%",
+            }}
+          />
+          <TextBlock
+            id={sliceField("headline", st.slice)}
+            text={st.headline}
+            fontSize={headlineSize}
+            lineHeight={1.08}
+            maxLines={headlineMaxLines}
+            weight={700}
+            align={align}
+            fitMinScale={0.7}
+            fontFamily={brand.headlineFontStack}
+            style={{ letterSpacing: brand.headlineFontStack ? 0 : -Math.round(headlineSize * 0.02), width: "100%" }}
+          />
+          <TextBlock
+            id={sliceField("caption", st.slice)}
+            text={st.caption}
+            fontSize={captionSize}
+            lineHeight={1.3}
+            maxLines={3}
+            weight={400}
+            align={align}
+            fitMinScale={0.8}
+            style={{ opacity: 0.88, marginTop: Math.round(W * 0.02), width: "100%" }}
+          />
+        </div>
+      ))}
       <DeviceShell
         input={input}
         width={layout.device.width}

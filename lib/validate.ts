@@ -218,7 +218,10 @@ function validateContent(project: Project, manifest: Manifest, content: Map<stri
           );
         }
       }
-      const known = templateFields(template);
+      const slices = screen.panorama?.slices ?? 1;
+      const known = templateFields(template).flatMap((f) =>
+        Array.from({ length: slices }, (_, i) => (i === 0 ? f : `${f}${i + 1}`)),
+      );
       for (const f of Object.keys(fields)) {
         if (!known.includes(f)) {
           issues[strict ? "error" : "warn"](

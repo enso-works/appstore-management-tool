@@ -79,6 +79,7 @@ const OVERRIDE_CONTROLS: Record<
     hint: "< 1 puts the phone beside the text",
   },
   textSide: { label: "Text side", kind: "select", options: ["start", "end"] },
+  textOffsetX: { label: "Text offset X", kind: "number", min: -1, max: 1, step: 0.01 },
   textOffsetY: { label: "Text offset Y", kind: "number", min: -0.3, max: 1, step: 0.01 },
   textAlign: { label: "Text align", kind: "select", options: ["start", "center", "end"] },
   textColor: { label: "Text colour", kind: "text", hint: "CSS colour; default brand.onPrimary" },
@@ -242,6 +243,10 @@ export default function Editor({ name }: { name: string }) {
         const rtl = (content[locale]?.direction ?? "ltr") === "rtl";
         o.screenshotOffsetX = Math.round((num(o.screenshotOffsetX, 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
         o.screenshotOffsetY = Math.round((num(o.screenshotOffsetY, 0) + ev.data.dy / W) * 100) / 100;
+      } else if (ev.data.mode === "text") {
+        const rtl = (content[locale]?.direction ?? "ltr") === "rtl";
+        o.textOffsetX = Math.round((num(o.textOffsetX, 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
+        o.textOffsetY = Math.max(-0.3, Math.min(1, Math.round((num(o.textOffsetY, 0) + ev.data.dy / W) * 100) / 100));
       } else if (ev.data.mode === "tilt") {
         o.deviceTilt = Math.max(-30, Math.min(30, Math.round((num(o.deviceTilt, 0) + ev.data.dTilt) * 2) / 2));
       } else if (ev.data.mode === "scale") {
@@ -281,7 +286,7 @@ export default function Editor({ name }: { name: string }) {
     key: string;
   }
   const gridJobs: GridJob[] =
-    canvasMode === "strip"
+    canvasMode !== "locales"
       ? screens
           .filter((s) => s.enabled)
           .map((s) => {
@@ -310,7 +315,7 @@ export default function Editor({ name }: { name: string }) {
         : [];
   const gridInputsKey = JSON.stringify(gridJobs.map((j) => [j.id, j.key]));
   useEffect(() => {
-    if (canvasMode === "single" || !snap || !target) return;
+    if (!snap || !target) return;
     stripAbort.current?.abort();
     const controller = new AbortController();
     stripAbort.current = controller;
@@ -800,6 +805,27 @@ export default function Editor({ name }: { name: string }) {
                       onClick={() => setScreenId(s.id)}
                       title={st.title}
                     >
+                      <span
+                        className={styles.thumb}
+                        style={{ aspectRatio: `${target?.width ?? 1} / ${target?.height ?? 2}` }}
+                      >
+                        {gridHtml[s.id]?.html && target ? (
+                          <iframe
+                            title={`thumb ${s.id}`}
+                            srcDoc={gridHtml[s.id].html}
+                            sandbox="allow-same-origin"
+                            tabIndex={-1}
+                            style={{
+                              width: target.width * (s.panorama?.slices ?? 1),
+                              height: target.height,
+                              border: 0,
+                              transform: `scale(${36 / target.width})`,
+                              transformOrigin: "0 0",
+                              pointerEvents: "none",
+                            }}
+                          />
+                        ) : null}
+                      </span>
                       <span className={`${styles.dot} ${styles[st.level]}`} />
                       <span className={styles.order}>{String(s.order).padStart(2, "0")}</span>
                       <span className={styles.screenId}>{s.id}</span>
@@ -996,69 +1022,85 @@ export default function Editor({ name }: { name: string }) {
                 <div className={styles.sectionTitle}>
                   Copy <span className={styles.muted}>{locale}</span>
                 </div>
-                {template?.requiredFields.concat(template.optionalFields).map((f) => {
-                  const required = template.requiredFields.includes(f);
-                  const value = fields[f];
-                  const ref = refFields[f];
-                  return (
-                    <div key={f} className={styles.field}>
-                      <div className={styles.fieldHead}>
-                        <span>
-                          {f}
-                          {required && <span className={styles.req}> *</span>}
-                        </span>
-                        {locale !== refLocale && typeof ref === "string" && !value && (
-                          <button
-                            className={styles.link}
-                            onClick={() => setField(f, ref)}
-                            title={`copy the ${refLocale} text as a starting point`}
-                          >
-                            prefill {refLocale}
-                          </button>
-                        )}
-                        <span
-                          className={
-                            previewInfo.budgets?.[f] &&
-                            typeof value === "string" &&
-                            value.length > previewInfo.budgets[f]
-                              ? styles.warn
-                              : styles.muted
-                          }
-                          title={
-                            previewInfo.budgets?.[f]
-                              ? `~${previewInfo.budgets[f]} characters fit before the text shrinks`
-                              : undefined
-                          }
-                        >
-                          {typeof value === "string" ? value.length : 0}
-                          {previewInfo.budgets?.[f] ? `/~${previewInfo.budgets[f]}` : ""}
-                        </span>
-                        {!required && (
-                          <button
-                            className={styles.link}
-                            onClick={() => setField(f, value === null ? "" : null)}
-                            title="null = intentionally empty"
-                          >
-                            {value === null ? "empty (null)" : "set empty"}
-                          </button>
-                        )}
-                      </div>
-                      <textarea
-                        className={styles.textarea}
-                        rows={f === "headline" ? 2 : 2}
-                        value={value ?? ""}
-                        disabled={value === null}
-                        dir={content[locale]?.direction ?? "auto"}
-                        onChange={(e) => setField(f, e.target.value)}
-                        placeholder={required ? "required" : "optional"}
-                      />
-                      {locale !== refLocale && ref && (
-                        <div className={styles.ref}>
-                          {refLocale}: {ref}
+                {Array.from({ length: screen.panorama?.slices ?? 1 }, (_, slice) => slice).flatMap((slice) => {
+                  const items =
+                    template?.requiredFields.concat(template.optionalFields).map((base) => {
+                      const f = slice === 0 ? base : `${base}${slice + 1}`;
+                      return { f, base, slice };
+                    }) ?? [];
+                  return [
+                    ...(screen.panorama
+                      ? [
+                          <div key={`slide-${slice}`} className={styles.sliceHead}>
+                            Slide {slice + 1}
+                          </div>,
+                        ]
+                      : []),
+                    ...items.map(({ f, base }) => {
+                      const required = slice === 0 && template!.requiredFields.includes(base);
+                      const value = fields[f];
+                      const ref = refFields[f];
+                      return (
+                        <div key={f} className={styles.field}>
+                          <div className={styles.fieldHead}>
+                            <span>
+                              {f}
+                              {required && <span className={styles.req}> *</span>}
+                            </span>
+                            {locale !== refLocale && typeof ref === "string" && !value && (
+                              <button
+                                className={styles.link}
+                                onClick={() => setField(f, ref)}
+                                title={`copy the ${refLocale} text as a starting point`}
+                              >
+                                prefill {refLocale}
+                              </button>
+                            )}
+                            <span
+                              className={
+                                previewInfo.budgets?.[f] &&
+                                typeof value === "string" &&
+                                value.length > previewInfo.budgets[f]
+                                  ? styles.warn
+                                  : styles.muted
+                              }
+                              title={
+                                previewInfo.budgets?.[f]
+                                  ? `~${previewInfo.budgets[f]} characters fit before the text shrinks`
+                                  : undefined
+                              }
+                            >
+                              {typeof value === "string" ? value.length : 0}
+                              {previewInfo.budgets?.[f] ? `/~${previewInfo.budgets[f]}` : ""}
+                            </span>
+                            {!required && (
+                              <button
+                                className={styles.link}
+                                onClick={() => setField(f, value === null ? "" : null)}
+                                title="null = intentionally empty"
+                              >
+                                {value === null ? "empty (null)" : "set empty"}
+                              </button>
+                            )}
+                          </div>
+                          <textarea
+                            className={styles.textarea}
+                            rows={f === "headline" ? 2 : 2}
+                            value={value ?? ""}
+                            disabled={value === null}
+                            dir={content[locale]?.direction ?? "auto"}
+                            onChange={(e) => setField(f, e.target.value)}
+                            placeholder={required ? "required" : "optional"}
+                          />
+                          {locale !== refLocale && ref && (
+                            <div className={styles.ref}>
+                              {refLocale}: {ref}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
+                      );
+                    }),
+                  ];
                 })}
 
                 <div className={styles.sectionTitle}>

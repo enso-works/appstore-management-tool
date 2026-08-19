@@ -104,15 +104,20 @@ const DRAG_SCRIPT = `<script>
   var device = document.querySelector("[data-device]");
   var active = null;
   function post(msg) { parent.postMessage(msg, "*"); }
+  function stackOf(el) { return el && el.closest ? el.closest("[data-text-stack]") : null; }
   document.addEventListener("pointerdown", function (e) {
     if (e.button !== 0) return;
     var onDevice = device && device.contains(e.target);
-    active = { x: e.clientX, y: e.clientY, onDevice: onDevice, alt: e.altKey, shift: e.shiftKey, moved: false };
+    var stack = onDevice ? null : stackOf(e.target);
+    active = { x: e.clientX, y: e.clientY, onDevice: onDevice, stack: stack, alt: e.altKey, shift: e.shiftKey, moved: false };
     if (onDevice) {
       active.base = device.style.transform || "";
       document.body.style.cursor = e.altKey ? "grab" : e.shiftKey ? "nwse-resize" : "move";
+    } else if (stack) {
+      active.base = stack.style.transform || "";
+      document.body.style.cursor = "move";
     }
-    post({ type: "store-shots-pan", key: key, phase: "start", onDevice: onDevice });
+    post({ type: "store-shots-pan", key: key, phase: "start", onDevice: onDevice || !!stack });
     e.preventDefault();
   });
   document.addEventListener("pointermove", function (e) {
@@ -125,6 +130,8 @@ const DRAG_SCRIPT = `<script>
       else if (active.shift) t = t + " scale(" + Math.max(0.2, 1 + dx / 600) + ")";
       else t = "translate(" + dx + "px," + dy + "px) " + t;
       device.style.transform = t;
+    } else if (active.stack) {
+      active.stack.style.transform = "translate(" + dx + "px," + dy + "px) " + active.base;
     } else {
       post({ type: "store-shots-pan", key: key, phase: "move", dx: dx, dy: dy });
     }
@@ -136,6 +143,8 @@ const DRAG_SCRIPT = `<script>
     document.body.style.cursor = "";
     if (a.onDevice && a.moved) {
       post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: a.alt ? "tilt" : a.shift ? "scale" : "move", dTilt: dx / 8, dScale: Math.max(0.2, 1 + dx / 600) });
+    } else if (a.stack && a.moved) {
+      post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: "text" });
     } else {
       post({ type: "store-shots-pan", key: key, phase: "end", dx: dx, dy: dy, click: !a.moved });
     }
@@ -143,5 +152,6 @@ const DRAG_SCRIPT = `<script>
   document.addEventListener("pointerup", end);
   document.addEventListener("pointercancel", end);
   if (device) device.style.cursor = "move";
+  document.querySelectorAll("[data-text-stack]").forEach(function (el) { el.style.cursor = "move"; });
 })();
 </script>`;

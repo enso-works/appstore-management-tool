@@ -202,3 +202,35 @@ describe("feature graphic", () => {
     expect(html).toContain("data-device");
   });
 });
+
+describe("panorama per-slice text", () => {
+  it("renders one text stack per slice from headline2/caption2 fields", async () => {
+    const { renderStatic } = await import("../lib/render/ssr");
+    const mod = templateModules["hero-top"];
+    const html = renderStatic(
+      mod.render(
+        input("iphone-6.9-1320x2868", {
+          canvasWidth: 2640,
+          fields: { headline: "Slide one", caption: "First", headline2: "Slide two", caption2: "Second" },
+        }),
+      ),
+    );
+    expect(html).toContain('data-text-stack="0"');
+    expect(html).toContain('data-text-stack="1"');
+    expect(html).toContain('data-check="headline"');
+    expect(html).toContain('data-check="headline2"');
+    expect(html).toContain("Slide two");
+    // Second stack offset by one slice width (left = 1320 + pad).
+    expect(html).toMatch(/data-text-stack="1" style="position:absolute;left:141[0-9]px/);
+  });
+
+  it("omits empty slices entirely", async () => {
+    const { renderStatic } = await import("../lib/render/ssr");
+    const mod = templateModules["hero-top"];
+    const html = renderStatic(
+      mod.render(input("iphone-6.9-1320x2868", { canvasWidth: 2640, fields: { headline: "Only one" } })),
+    );
+    expect(html).toContain('data-text-stack="0"');
+    expect(html).not.toContain('data-text-stack="1"');
+  });
+});

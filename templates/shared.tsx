@@ -34,6 +34,8 @@ export const commonOverridesSchema = z.strictObject({
   textWidth: z.number().min(0.25).max(1).optional(),
   /** Which side the text column hugs when narrower than full width (logical: start = left in LTR). */
   textSide: z.enum(["start", "end"]).optional(),
+  /** Horizontal nudge of the text block, fraction of the target width (mirrored in RTL). */
+  textOffsetX: z.number().min(-1).max(1).optional(),
   /** Vertical nudge of the text block, fraction of canvas width (positive = down). */
   textOffsetY: z.number().min(-0.3).max(1).optional(),
   textAlign: z.enum(["start", "center", "end"]).optional(),
@@ -354,7 +356,8 @@ export function stackLayout(
   const textW = Math.round(usable * textWidth);
   const side = overrides.textSide ?? defaults.textSide;
   const hugsLeft = (side === "start") !== (direction === "rtl"); // visual left
-  const textLeft = hugsLeft ? pad : CW - pad - textW;
+  const textLeft =
+    (hugsLeft ? pad : CW - pad - textW) + Math.round(W * (overrides.textOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));
   const textTop = Math.round(W * 0.09) + Math.round(W * (overrides.textOffsetY ?? 0));
 
   const scale = overrides.screenshotScale ?? defaults.scale;
