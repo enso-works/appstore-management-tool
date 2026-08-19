@@ -1,0 +1,281 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "projectName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "bundleId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "defaultLocale": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
+    },
+    "locales": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
+      }
+    },
+    "paths": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "manifest": {
+          "default": "store/manifest.json",
+          "type": "string",
+          "minLength": 1
+        },
+        "content": {
+          "default": "store/content",
+          "type": "string",
+          "minLength": 1
+        },
+        "raw": {
+          "default": "store/raw",
+          "type": "string",
+          "minLength": 1
+        },
+        "assets": {
+          "default": "store/assets",
+          "type": "string",
+          "minLength": 1
+        },
+        "outputScreenshots": {
+          "default": "fastlane/screenshots",
+          "type": "string",
+          "minLength": 1
+        },
+        "metadata": {
+          "default": "fastlane/metadata",
+          "type": "string",
+          "minLength": 1
+        },
+        "generated": {
+          "default": "store/generated",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "targets": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "iphone-6.9-1320x2868",
+          "ipad-13-2064x2752"
+        ]
+      }
+    },
+    "sourceDevices": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "brand": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "font": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "family": {
+              "default": "Inter",
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "default": "google",
+              "type": "string",
+              "enum": [
+                "google",
+                "local"
+              ]
+            },
+            "weights": {
+              "default": [
+                400,
+                600,
+                700
+              ],
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 900
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "primary": {
+          "default": "#111111",
+          "type": "string",
+          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$"
+        },
+        "onPrimary": {
+          "default": "#FFFFFF",
+          "type": "string",
+          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "output": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "format": {
+          "default": "png",
+          "type": "string",
+          "enum": [
+            "png"
+          ]
+        },
+        "backgroundColor": {
+          "default": "#FFFFFF",
+          "type": "string",
+          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$"
+        },
+        "cleanBeforeRender": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "validation": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "strictTranslations": {
+          "default": true,
+          "type": "boolean"
+        },
+        "failOnOverflow": {
+          "default": true,
+          "type": "boolean"
+        },
+        "failOnAlpha": {
+          "default": true,
+          "type": "boolean"
+        },
+        "screensPerTarget": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "min": {
+              "default": 3,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            },
+            "max": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "metadata": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "manage": {
+          "default": true,
+          "type": "boolean"
+        },
+        "fields": {
+          "default": [
+            "name",
+            "subtitle",
+            "keywords",
+            "promotional_text",
+            "description",
+            "release_notes",
+            "support_url",
+            "marketing_url",
+            "privacy_url"
+          ],
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "name",
+              "subtitle",
+              "keywords",
+              "promotional_text",
+              "description",
+              "release_notes",
+              "support_url",
+              "marketing_url",
+              "privacy_url"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "fastlane": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "lanes": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "validate": {
+              "default": "ios validate_metadata",
+              "type": "string"
+            },
+            "metadata": {
+              "default": "ios metadata",
+              "type": "string"
+            },
+            "screenshots": {
+              "default": "ios screenshots",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "projectName",
+    "defaultLocale",
+    "locales",
+    "targets"
+  ],
+  "additionalProperties": false
+}

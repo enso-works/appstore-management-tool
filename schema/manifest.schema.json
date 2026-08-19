@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "screens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$"
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "enabled": {
+            "default": true,
+            "type": "boolean"
+          },
+          "template": {
+            "type": "string",
+            "minLength": 1
+          },
+          "source": {
+            "default": {},
+            "type": "object",
+            "properties": {
+              "filePattern": {
+                "default": "{order}-{id}.png",
+                "type": "string",
+                "minLength": 1
+              },
+              "localized": {
+                "default": true,
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "overrides": {
+            "default": {},
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "id",
+          "order",
+          "template"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "screens"
+  ],
+  "additionalProperties": false
+}

@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "generatedAt": {
+      "type": "string"
+    },
+    "appVersion": {
+      "type": "string"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "locale": {
+            "type": "string"
+          },
+          "screen": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string"
+          },
+          "inputsSha256": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "target",
+          "locale",
+          "screen",
+          "sha256",
+          "inputsSha256"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "version",
+    "generatedAt",
+    "files"
+  ],
+  "additionalProperties": false
+}

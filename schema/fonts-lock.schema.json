@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "number",
+      "const": 1
+    },
+    "fonts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "family": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "google",
+              "local"
+            ]
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "weight": {
+                  "type": "number"
+                },
+                "style": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "weight",
+                "style",
+                "sha256"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "license": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "family",
+          "source",
+          "files"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "version",
+    "fonts"
+  ],
+  "additionalProperties": false
+}
