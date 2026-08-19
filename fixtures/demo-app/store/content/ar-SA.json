@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../../schema/content.schema.json",
+  "locale": "ar-SA",
+  "direction": "rtl",
+  "screens": {
+    "home": {
+      "eyebrow": "يوم أهدأ",
+      "headline": "خطّط لكل شيء في مكان واحد",
+      "caption": "مهام وتذكيرات وملاحظات تبقى متزامنة."
+    },
+    "planning": {
+      "headline": "حوّل الخطط إلى تقدّم",
+      "caption": "اعرف ما يهم اليوم وما يأتي بعده."
+    }
+  }
+}

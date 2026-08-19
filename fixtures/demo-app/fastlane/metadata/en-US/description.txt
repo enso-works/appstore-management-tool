@@ -1,0 +1,3 @@
+Demo App keeps tasks, reminders and notes in one calm place.
+
+This is fixture text used by the store tool's tests.

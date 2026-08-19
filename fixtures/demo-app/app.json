@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Demo App",
+    "slug": "demo-app",
+    "version": "1.2.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.demo",
+      "infoPlist": {
+        "CFBundleLocalizations": [
+          "en",
+          "ar"
+        ]
+      }
+    }
+  }
+}

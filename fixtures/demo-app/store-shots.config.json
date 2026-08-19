@@ -1,0 +1,35 @@
+{
+  "$schema": "../../schema/project.schema.json",
+  "projectName": "Demo App",
+  "bundleId": "com.example.demo",
+  "defaultLocale": "en-US",
+  "locales": [
+    "en-US",
+    "ar-SA"
+  ],
+  "targets": [
+    "iphone-6.9-1320x2868",
+    "ipad-13-2064x2752"
+  ],
+  "brand": {
+    "font": {
+      "family": "Inter",
+      "source": "google",
+      "weights": [
+        400,
+        700
+      ]
+    },
+    "primary": "#6946F4",
+    "onPrimary": "#FFFFFF"
+  },
+  "validation": {
+    "screensPerTarget": {
+      "min": 2,
+      "max": 10
+    }
+  },
+  "fastlane": {
+    "enabled": false
+  }
+}

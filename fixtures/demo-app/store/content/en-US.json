@@ -1,0 +1,16 @@
+{
+  "$schema": "../../../../schema/content.schema.json",
+  "locale": "en-US",
+  "direction": "ltr",
+  "screens": {
+    "home": {
+      "eyebrow": "A calmer day",
+      "headline": "Plan everything in one place",
+      "caption": "Tasks, reminders, and notes that stay in sync."
+    },
+    "planning": {
+      "headline": "Turn plans into progress",
+      "caption": "See what matters today and what comes next."
+    }
+  }
+}

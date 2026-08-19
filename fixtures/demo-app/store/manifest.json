@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../schema/manifest.schema.json",
+  "screens": [
+    {
+      "id": "home",
+      "order": 1,
+      "enabled": true,
+      "template": "hero-top",
+      "source": {
+        "filePattern": "{order}-{id}.png",
+        "localized": true
+      },
+      "overrides": {
+        "background": "linear-gradient(160deg, #6946F4, #312A91)"
+      }
+    },
+    {
+      "id": "planning",
+      "order": 2,
+      "enabled": true,
+      "template": "split-caption",
+      "source": {
+        "filePattern": "{order}-{id}.png",
+        "localized": false
+      }
+    }
+  ]
+}
