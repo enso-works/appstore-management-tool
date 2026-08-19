@@ -57,7 +57,7 @@ export function previewHtml(
   function report() {
     var fits = ${FIT_SOURCE};
     var checks = ${IN_PAGE_CHECKS_SOURCE};
-    parent.postMessage({ type: "store-shots-preview", fits: fits, checks: checks }, "*");
+    parent.postMessage({ type: "store-shots-preview", key: ${JSON.stringify(job.key)}, fits: fits, checks: checks }, "*");
   }
   if (document.fonts && document.fonts.ready) {
     document.fonts.ready.then(function () {

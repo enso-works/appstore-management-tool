@@ -62,8 +62,8 @@
   grid-area: canvas;
   position: relative;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
   background:
     linear-gradient(
       45deg,
@@ -464,15 +464,124 @@
   position: absolute;
   top: 10px;
   left: 12px;
-  right: 12px;
+  right: auto;
+  max-width: calc(100% - 24px);
   z-index: 2;
   font-size: 12px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 4px 10px;
   display: grid;
   gap: 3px;
-  max-height: 120px;
+  max-height: 200px;
   overflow: auto;
+}
+
+.issueToggle {
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70vw;
+}
+
+.canvasViewport {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+
+.canvasStore {
+  background: #0b0b0c;
+}
+
+.world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: flex-start;
+  will-change: transform;
+}
+
+.frameWrap {
+  position: relative;
+  flex: none;
+  overflow: visible;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  background: #000;
+}
+
+.frameSelected {
+  outline: 12px solid #2563eb;
+  outline-offset: 6px;
+}
+
+.framePlaceholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  background: #111;
+}
+
+.frameLabel {
+  position: absolute;
+  left: 0;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #c9c9cc;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.zoomBar {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--muted);
+}
+
+.zoomPct {
+  min-width: 42px;
+  text-align: center;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.emptyCanvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--muted);
+  z-index: 1;
 }

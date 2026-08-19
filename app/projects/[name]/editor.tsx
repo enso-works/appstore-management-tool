@@ -11,6 +11,7 @@ import type { FitResult } from "@/lib/render/fit";
 import type { ReadinessReport } from "@/lib/readiness";
 import type { GenerationSummary } from "@/lib/generate";
 import StorePanel from "./store-panel";
+import PreviewCanvas, { type CanvasItem } from "./preview-canvas";
 import styles from "./editor.module.css";
 
 interface Snapshot {
@@ -120,8 +121,13 @@ export default function Editor({ name }: { name: string }) {
   const [showLog, setShowLog] = useState(false);
   const [newScreenId, setNewScreenId] = useState("");
   const [view, setView] = useState<"screens" | "store">("screens");
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.2);
+  const [canvasMode, setCanvasMode] = useState<"single" | "strip">("single");
+  const [storeLook, setStoreLook] = useState(false);
+  const [issuesOpen, setIssuesOpen] = useState(false);
+  /** Strip mode: artwork HTML per screen id, keyed by a cache key of its inputs. */
+  const [stripHtml, setStripHtml] = useState<Record<string, { key: string; html: string; sourceExists?: boolean }>>({});
+  const [checksById, setChecksById] = useState<Record<string, { checks: InPageResult; fits: FitResult[] }>>({});
+  const stripAbort = useRef<AbortController | null>(null);
 
   // ---- load --------------------------------------------------------------
   const load = useCallback(async () => {
@@ -211,25 +217,77 @@ export default function Editor({ name }: { name: string }) {
 
   useEffect(() => {
     const onMessage = (ev: MessageEvent) => {
-      if (ev.data?.type === "store-shots-preview") {
-        setPreviewInfo((p) => ({ ...p, checks: ev.data.checks as InPageResult, fits: ev.data.fits as FitResult[] }));
-      }
+      if (ev.data?.type !== "store-shots-preview") return;
+      const checks = ev.data.checks as InPageResult;
+      const fits = ev.data.fits as FitResult[];
+      const key = ev.data.key as string | undefined; // <target>/<locale>/<screen>
+      const sid = key?.split("/")[2];
+      if (sid) setChecksById((m) => ({ ...m, [sid]: { checks, fits } }));
+      if (!sid || sid === screenId) setPreviewInfo((p) => ({ ...p, checks, fits }));
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, []);
+  }, [screenId]);
 
+  // Strip mode: render every enabled screen of the current locale/target (drafts included).
+  const stripInputsKey = JSON.stringify([
+    targetId,
+    locale,
+    direction,
+    screens.map((s) => [s, content[locale]?.screens[s.id] ?? {}]),
+  ]);
   useEffect(() => {
-    const el = canvasRef.current;
-    if (!el || !target) return;
-    const ro = new ResizeObserver(() => {
-      const pad = 24;
-      const s = Math.min((el.clientWidth - pad) / target.width, (el.clientHeight - pad) / target.height);
-      setScale(Math.max(0.05, Math.min(1, s)));
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [target]);
+    if (canvasMode !== "strip" || !snap || !target) return;
+    stripAbort.current?.abort();
+    const controller = new AbortController();
+    stripAbort.current = controller;
+    const handle = setTimeout(async () => {
+      const jobs = screens
+        .filter((s) => s.enabled)
+        .map((s) => {
+          const f = (content[locale]?.screens[s.id] as Fields | undefined) ?? {};
+          return { screen: s, fields: f, key: JSON.stringify([targetId, locale, direction, s, f]) };
+        });
+      const need = jobs.filter((j) => stripHtml[j.screen.id]?.key !== j.key);
+      if (!need.length) return;
+      const results = await Promise.all(
+        need.map(async (j) => {
+          try {
+            const res = await fetch(`/api/projects/${encodeURIComponent(name)}/preview`, {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ targetId, locale, screen: j.screen, fields: j.fields, direction }),
+              signal: controller.signal,
+            });
+            if (!res.ok) return { id: j.screen.id, key: j.key, html: "" };
+            const sidecar = res.headers.get("x-store-shots-job");
+            let sourceExists: boolean | undefined;
+            try {
+              sourceExists = sidecar
+                ? (JSON.parse(decodeURIComponent(sidecar)) as { sourceExists: boolean }).sourceExists
+                : undefined;
+            } catch {
+              sourceExists = undefined;
+            }
+            return { id: j.screen.id, key: j.key, html: await res.text(), sourceExists };
+          } catch {
+            return null;
+          }
+        }),
+      );
+      if (controller.signal.aborted) return;
+      setStripHtml((m) => {
+        const next = { ...m };
+        for (const r of results) if (r) next[r.id] = { key: r.key, html: r.html, sourceExists: r.sourceExists };
+        return next;
+      });
+    }, 250);
+    return () => {
+      clearTimeout(handle);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canvasMode, snap, name, stripInputsKey]);
 
   // ---- editing -----------------------------------------------------------
   function setField(field: string, value: string | null) {
@@ -438,6 +496,42 @@ export default function Editor({ name }: { name: string }) {
     : [];
   const fitted = (previewInfo.fits ?? []).filter((f) => f.scale < 1 && f.fits);
 
+  function statusFor(id: string): { status: "ok" | "warn" | "error"; text?: string } {
+    const s = screens.find((x) => x.id === id);
+    const base = s ? screenStatus(s) : { level: "ok" as const, title: "" };
+    const c = checksById[id];
+    const problems: string[] = [];
+    const warns: string[] = [];
+    if (c) {
+      for (const o of c.checks.overflow) (failOnOverflow ? problems : warns).push(`${o.id} overflows`);
+      for (const o of c.checks.textOverlapsDevice) (failOnOverlap ? problems : warns).push(`${o} overlaps device`);
+      for (const f of c.fits) if (f.scale < 1 && f.fits) warns.push(`${f.id} ${Math.round(f.scale * 100)}%`);
+    }
+    if (stripHtml[id]?.sourceExists === false) problems.push("capture missing");
+    if (base.level === "error" || problems.length)
+      return {
+        status: "error",
+        text: [base.level === "error" ? base.title : "", ...problems].filter(Boolean).join(", "),
+      };
+    if (base.level === "warn" || warns.length)
+      return { status: "warn", text: [base.level === "warn" ? base.title : "", ...warns].filter(Boolean).join(", ") };
+    return { status: "ok" };
+  }
+  const canvasItems: CanvasItem[] =
+    canvasMode === "single"
+      ? screen
+        ? [{ id: screen.id, html: previewHtml, order: screen.order }]
+        : []
+      : screens
+          .filter((s) => s.enabled)
+          .map((s) => ({
+            id: s.id,
+            html: stripHtml[s.id]?.html ?? "",
+            order: s.order,
+            ...statusFor(s.id),
+            statusText: statusFor(s.id).text,
+          }));
+
   if (loadError)
     return (
       <main className={styles.center}>
@@ -474,6 +568,29 @@ export default function Editor({ name }: { name: string }) {
             Store
           </button>
         </span>
+        {view === "screens" && (
+          <>
+            <span className={styles.tabs}>
+              <button
+                className={`${styles.tab} ${canvasMode === "single" ? styles.tabActive : ""}`}
+                onClick={() => setCanvasMode("single")}
+                title="one screen"
+              >
+                Single
+              </button>
+              <button
+                className={`${styles.tab} ${canvasMode === "strip" ? styles.tabActive : ""}`}
+                onClick={() => setCanvasMode("strip")}
+                title="every screen side by side, as on the store"
+              >
+                Strip
+              </button>
+            </span>
+            <label className={styles.check} title="App Store look: dark page, rounded corners, store spacing">
+              <input type="checkbox" checked={storeLook} onChange={(e) => setStoreLook(e.target.checked)} /> store look
+            </label>
+          </>
+        )}
         <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className={styles.select}>
           {snap.targets.map((t) => (
             <option key={t.id} value={t.id}>
@@ -565,66 +682,77 @@ export default function Editor({ name }: { name: string }) {
             </p>
           </aside>
 
-          <main className={styles.canvas} ref={canvasRef}>
+          <main className={styles.canvas}>
             {(globalIssues.length > 0 || currentScreenIssues.length > 0) && (
-              <div className={styles.issueBanner}>
-                {[...globalIssues, ...currentScreenIssues].slice(0, 6).map((i, idx) => (
-                  <div key={idx} className={i.level === "error" ? styles.error : styles.warn}>
-                    {i.key ? `[${i.key}] ` : ""}
-                    {i.message}
-                    {i.hint ? <span className={styles.muted}> — {i.hint}</span> : null}
-                  </div>
-                ))}
+              <div className={styles.issueBanner} onPointerDown={(e) => e.stopPropagation()}>
+                <button className={styles.issueToggle} onClick={() => setIssuesOpen((v) => !v)}>
+                  <span
+                    className={
+                      [...globalIssues, ...currentScreenIssues].some((i) => i.level === "error")
+                        ? styles.error
+                        : styles.warn
+                    }
+                  >
+                    {globalIssues.length + currentScreenIssues.length} issue(s)
+                  </span>
+                  <span className={styles.muted}>
+                    {" "}
+                    {issuesOpen ? "▾" : "▸ "}
+                    {!issuesOpen && [...globalIssues, ...currentScreenIssues][0]?.message}
+                  </span>
+                </button>
+                {issuesOpen &&
+                  [...globalIssues, ...currentScreenIssues].map((i, idx) => (
+                    <div key={idx} className={i.level === "error" ? styles.error : styles.warn}>
+                      {i.key ? `[${i.key}] ` : ""}
+                      {i.message}
+                      {i.hint ? <span className={styles.muted}> — {i.hint}</span> : null}
+                    </div>
+                  ))}
               </div>
             )}
-            {!screen && <p className={styles.muted}>No screen selected. Add one on the left.</p>}
-            {screen && target && (
-              <div className={styles.frame} style={{ width: target.width * scale, height: target.height * scale }}>
-                <iframe
-                  title="preview"
-                  srcDoc={previewHtml}
-                  sandbox="allow-scripts allow-same-origin"
-                  style={{
-                    width: target.width,
-                    height: target.height,
-                    transform: `scale(${scale})`,
-                    transformOrigin: "0 0",
-                    border: 0,
-                    background: "#000",
-                  }}
-                />
-              </div>
+            {!screen && <p className={styles.emptyCanvas}>No screen selected. Add one on the left.</p>}
+            {target && (
+              <PreviewCanvas
+                target={target}
+                items={canvasItems}
+                selectedId={screenId}
+                onSelect={setScreenId}
+                mode={canvasMode}
+                storeLook={storeLook}
+                footer={
+                  <>
+                    <span>
+                      {target.width}×{target.height}
+                      {canvasMode === "strip" ? ` · ${canvasItems.length} screens · ${locale}` : ""}
+                    </span>
+                    {previewInfo.loading && <span className={styles.muted}> rendering…</span>}
+                    {previewInfo.error && <span className={styles.error}> {previewInfo.error}</span>}
+                    {previewProblems.map((p) => (
+                      <span key={p} className={styles.error}>
+                        {" "}
+                        {p}
+                      </span>
+                    ))}
+                    {previewWarnings.map((p) => (
+                      <span key={p} className={styles.warn}>
+                        {" "}
+                        {p}
+                      </span>
+                    ))}
+                    {fitted.map((f) => (
+                      <span key={f.id} className={styles.warn}>
+                        {" "}
+                        {f.id} shrunk to {Math.round(f.scale * 100)}%
+                      </span>
+                    ))}
+                    {previewInfo.checks && previewProblems.length === 0 && !previewInfo.loading && (
+                      <span className={styles.ok}> fits</span>
+                    )}
+                  </>
+                }
+              />
             )}
-            <div className={styles.canvasInfo}>
-              {target && (
-                <span>
-                  {target.width}×{target.height}
-                </span>
-              )}
-              {previewInfo.loading && <span className={styles.muted}> rendering…</span>}
-              {previewInfo.error && <span className={styles.error}> {previewInfo.error}</span>}
-              {previewProblems.map((p) => (
-                <span key={p} className={styles.error}>
-                  {" "}
-                  {p}
-                </span>
-              ))}
-              {previewWarnings.map((p) => (
-                <span key={p} className={styles.warn}>
-                  {" "}
-                  {p}
-                </span>
-              ))}
-              {fitted.map((f) => (
-                <span key={f.id} className={styles.warn}>
-                  {" "}
-                  {f.id} shrunk to {Math.round(f.scale * 100)}%
-                </span>
-              ))}
-              {previewInfo.checks && previewProblems.length === 0 && !previewInfo.loading && (
-                <span className={styles.ok}> fits</span>
-              )}
-            </div>
           </main>
 
           <aside className={styles.right}>

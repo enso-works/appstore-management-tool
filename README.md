@@ -19,7 +19,7 @@ Apps are discovered by scanning the workspace root (three levels up, or `STORE_S
 Status: Phases 1-4 done — config, schemas, validation, readiness, `init`, `generate`
 (Playwright + Sharp, exact-size no-alpha PNGs), `clean`, fonts from Google Fonts, glyph
 coverage, in-page font fitting, one template (`hero-top`), the editor UI (live preview,
-copy + overrides editing with sliders, save, generate), the Store tab (readiness, metadata
+copy + overrides editing with sliders, zoom/pan canvas, Strip mode showing every screen side by side with an App Store look, save, generate), the Store tab (readiness, metadata
 editor with limits, fastlane runner), three templates (hero-top, split-caption, full-bleed-card)
 with free phone positioning, headline font, background images/patterns. Phase 7 (hardening,
 capture helper, incremental rendering) is next.
