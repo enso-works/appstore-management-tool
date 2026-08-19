@@ -343,6 +343,47 @@ describe("Google Play target", () => {
   }, 60_000);
 });
 
+describe("feature graphic target", () => {
+  it("writes featureGraphic.png into the supply layout", async () => {
+    const fx = tempFixture();
+    try {
+      editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+        c.targets = ["play-feature-1024x500"];
+        c.sourceDevices = { "play-feature-1024x500": "iphone" };
+        c.locales = ["en-US"];
+        c.validation = { screensPerTarget: { min: 1, max: 10 } };
+      });
+      editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+        m.screens = [
+          {
+            id: "feature",
+            order: 1,
+            enabled: true,
+            template: "feature-graphic",
+            source: { filePattern: "01-home.png", localized: false },
+            overrides: {},
+          },
+        ];
+      });
+      editJson(
+        path.join(fx.root, "store/content/en-US.json"),
+        (c) => (c.screens = { feature: { headline: "Demo App", caption: "Everything in one place" } }),
+      );
+      const p = loadProject(path.join(fx.root, "store-shots.config.json"));
+      const s = await generateProject(p, { renderer });
+      expect(s.failed).toBe(0);
+      expect(s.filesWritten).toEqual(["fastlane/metadata/android/en-US/images/featureGraphic.png"]);
+      expect(readPngInfo(path.join(fx.root, s.filesWritten[0]))).toMatchObject({
+        width: 1024,
+        height: 500,
+        hasAlpha: false,
+      });
+    } finally {
+      fx.cleanup();
+    }
+  }, 60_000);
+});
+
 describe("glyph coverage", () => {
   it("fails validation for characters no local font covers and suggests a family", async () => {
     const fx = tempFixture();

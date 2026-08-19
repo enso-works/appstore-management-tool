@@ -55,7 +55,18 @@ export const targetProfiles = {
     height: 1920,
     fileToken: "PLAY_PHONE",
   },
-  // Later: "play-feature-1024x500" (feature graphic, landscape, its own template).
+  // Google Play feature graphic: one landscape banner per locale, uploaded by
+  // supply from <play-locale>/images/featureGraphic.png.
+  "play-feature-1024x500": {
+    id: "play-feature-1024x500",
+    platform: "android",
+    family: "feature-graphic",
+    displayClass: "feature graphic",
+    orientation: "landscape",
+    width: 1024,
+    height: 500,
+    fileToken: "PLAY_FEATURE",
+  },
 } as const satisfies Record<string, TargetProfile>;
 
 export type TargetId = keyof typeof targetProfiles;

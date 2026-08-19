@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadProject } from "../lib/config";
 import { laneSpec, preflightLane, runLane } from "../lib/fastlane";
 import {
+  readPlayLocale,
+  writePlayField,
   createMetadataLocale,
   metadataEtag,
   MetadataConflict,
@@ -125,5 +127,25 @@ describe("fastlane runner", () => {
       if (prev === undefined) delete process.env.STORE_SHOTS_FASTLANE;
       else process.env.STORE_SHOTS_FASTLANE = prev;
     }
+  });
+});
+
+describe("Google Play text metadata", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+  const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+
+  it("writes and reads supply-layout text files with limits", () => {
+    const p = load();
+    const r = writePlayField(p, "en-US", "short_description", "  Box & 4-7-8 breathing with a calming orb \r\n");
+    expect(r.overLimit).toBe(false);
+    expect(fs.readFileSync(path.join(fx.root, "fastlane/metadata/android/en-US/short_description.txt"), "utf8")).toBe(
+      "Box & 4-7-8 breathing with a calming orb",
+    );
+    writePlayField(p, "en-US", "title", "x".repeat(31));
+    const state = readPlayLocale(p, "en-US");
+    expect(state.fields.find((f) => f.field === "title")?.overLimit).toBe(true);
+    expect(state.fields.find((f) => f.field === "full_description")?.present).toBe(false);
   });
 });

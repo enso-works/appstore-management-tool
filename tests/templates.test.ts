@@ -24,7 +24,7 @@ function input(targetId: keyof typeof targetProfiles, extra: Partial<TemplateRen
 }
 
 describe("template contracts", () => {
-  for (const mod of Object.values(templateModules)) {
+  for (const mod of Object.values(templateModules).filter((m) => m.descriptor.id !== "feature-graphic")) {
     describe(mod.descriptor.id, () => {
       it("declares fields and targets", () => {
         expect(mod.descriptor.requiredFields).toContain("headline");
@@ -180,5 +180,25 @@ describe("device frames", () => {
     const mod = templateModules["hero-top"];
     expect(mod.overridesSchema.safeParse({ shell: "frame:Apple iPhone 16 Pro Max Black Titanium" }).success).toBe(true);
     expect(mod.overridesSchema.safeParse({ shell: "bogus" }).success).toBe(false);
+  });
+});
+
+describe("feature graphic", () => {
+  it("renders a 1024x500 landscape banner with the capture card", async () => {
+    const { renderStatic } = await import("../lib/render/ssr");
+    const mod = templateModules["feature-graphic"];
+    const html = renderStatic(
+      mod.render(
+        input("play-feature-1024x500" as never, {
+          target: targetProfiles["play-feature-1024x500"],
+          canvasWidth: 1024,
+          fields: { headline: "Braele", caption: "Breathe & relax" },
+        }),
+      ),
+    );
+    expect(html).toContain("width:1024px");
+    expect(html).toContain("height:500px");
+    expect(html).toContain('data-check="headline"');
+    expect(html).toContain("data-device");
   });
 });

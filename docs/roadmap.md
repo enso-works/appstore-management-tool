@@ -15,7 +15,7 @@ ticked here when done. Plan context: `store-tool-plan.md`.
 | 8   | One-command captures           | `source.deepLink` per screen + `capture --all [--clean-status-bar]`: opens each deep link in the booted simulator, waits, captures every screen in order                                                      | done 2026-08-19 |
 | 9   | frameit device frames          | `frames setup` (runs `fastlane frameit download_frames`), `frames list`; `shell: "frame:<Device> <Colour>"` uses the official frame PNG + `offsets.json` so the capture sits exactly in the screen cut-out    | done 2026-08-19 |
 | 10  | CI gate                        | `store-shots check [--json]` = validate + readiness + metadata limits in one exit code; GitHub Actions workflow for the tool (tests, lint, typecheck)                                                         | done 2026-08-19 |
-| 11  | Google Play completion         | `play-feature-1024x500` target + `feature-graphic` template; Play text metadata (title 30 / short 80 / full 4000) in the Store tab; optional `play` lane key                                                  |                 |
+| 11  | Google Play completion         | `play-feature-1024x500` target + `feature-graphic` template; Play text metadata (title 30 / short 80 / full 4000) in the Store tab; optional `play` lane key                                                  | done 2026-08-19 |
 | 12  | App Preview poster             | `appreview-6.9-886x1920` poster target written to `store/generated/posters/<locale>/` (not a deliver screenshot) with the existing templates                                                                  |                 |
 
 Out of scope for this pass: video rendering, hosted/cloud anything, credentials in the tool.

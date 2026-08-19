@@ -27,15 +27,24 @@ export function resolveWithin(root: string, relative: string): string {
   const resolved = path.resolve(absRoot, relative);
   if (!isInside(absRoot, resolved)) throw new PathEscapeError(absRoot, relative);
 
-  // Symlink check on the nearest existing ancestor.
-  let probe = resolved;
-  while (!fs.existsSync(probe)) {
-    const parent = path.dirname(probe);
-    if (parent === probe) break;
-    probe = parent;
-  }
-  const realRoot = safeRealpath(absRoot);
-  const realProbe = safeRealpath(probe);
+  // Symlink check on the nearest existing ancestors. Both sides are reduced to
+  // their nearest existing ancestor before realpath so a not-yet-created root
+  // under a symlinked parent (e.g. macOS /var -> /private/var) still compares
+  // in the same namespace.
+  const nearestExisting = (p: string): string => {
+    let cur = p;
+    while (!fs.existsSync(cur)) {
+      const parent = path.dirname(cur);
+      if (parent === cur) break;
+      cur = parent;
+    }
+    return cur;
+  };
+  const rootAnchor = nearestExisting(absRoot);
+  const realRootAnchor = safeRealpath(rootAnchor);
+  const realRoot = path.join(realRootAnchor, path.relative(rootAnchor, absRoot));
+  const probeAnchor = nearestExisting(resolved);
+  const realProbe = path.join(safeRealpath(probeAnchor), path.relative(probeAnchor, resolved));
   if (!isInside(realRoot, realProbe)) throw new PathEscapeError(absRoot, relative);
   return resolved;
 }

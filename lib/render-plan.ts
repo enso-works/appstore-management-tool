@@ -84,11 +84,14 @@ export function buildJob(
     device,
     target: targetId,
   });
-  const slices = screen.panorama?.slices ?? 1;
+  const slices = target.family === "feature-graphic" ? 1 : (screen.panorama?.slices ?? 1);
   const dir = outputDirFor(target, locale, project.paths);
-  const outputPaths = Array.from({ length: slices }, (_, i) =>
-    path.join(dir, outputFileName(screen, target, project.config.output.format, i)),
-  );
+  const outputPaths =
+    target.family === "feature-graphic"
+      ? [path.join(dir, "featureGraphic.png")] // supply expects exactly this name
+      : Array.from({ length: slices }, (_, i) =>
+          path.join(dir, outputFileName(screen, target, project.config.output.format, i)),
+        );
   const job: RenderJob = {
     key: `${targetId}/${locale}/${screen.id}`,
     target,

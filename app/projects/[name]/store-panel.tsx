@@ -41,11 +41,13 @@ export default function StorePanel({
   locales,
   readiness,
   onReadiness,
+  hasPlay,
 }: {
   name: string;
   locales: string[];
   readiness: ReadinessReport;
   onReadiness: (r: ReadinessReport) => void;
+  hasPlay: boolean;
 }) {
   const [meta, setMeta] = useState<MetadataSnapshot | null>(null);
   const [locale, setLocale] = useState(locales[0]);
@@ -58,6 +60,17 @@ export default function StorePanel({
     Record<string, { command: string; uploads: boolean; blocked: boolean; reasons: string[] }>
   >({});
   const [override, setOverride] = useState("");
+  const [play, setPlay] = useState<{
+    locales: Record<
+      string,
+      {
+        dirExists: boolean;
+        fields: { field: string; value: string; length: number; limit: number; overLimit: boolean }[];
+      }
+    >;
+  } | null>(null);
+  const [playLocale, setPlayLocale] = useState<string>("");
+  const [playDrafts, setPlayDrafts] = useState<Record<string, Record<string, string>>>({});
   const logRef = useRef<HTMLPreElement>(null);
 
   const load = useCallback(
@@ -81,8 +94,16 @@ export default function StorePanel({
         if (r.ok) pf[key] = await r.json();
       }
       setPreflight(pf);
+      if (hasPlay) {
+        const pr = await fetch(`/api/projects/${encodeURIComponent(name)}/play`, { cache: "no-store" });
+        if (pr.ok) {
+          const data = await pr.json();
+          setPlay(data);
+          setPlayLocale((l) => l || Object.keys(data.locales)[0] || "");
+        }
+      }
     },
-    [name],
+    [name, hasPlay],
   );
 
   useEffect(() => {
@@ -384,6 +405,72 @@ export default function StorePanel({
               </div>
             );
           })}
+        {hasPlay && play && (
+          <>
+            <div className={styles.sectionTitle}>
+              Google Play text
+              <select className={styles.select} value={playLocale} onChange={(e) => setPlayLocale(e.target.value)}>
+                {Object.keys(play.locales).map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                    {playDrafts[l] && Object.keys(playDrafts[l]).length ? " *" : ""}
+                  </option>
+                ))}
+              </select>
+              <span className={styles.spacer} />
+              <button
+                className={styles.btn}
+                disabled={!playDrafts[playLocale] || !Object.keys(playDrafts[playLocale] ?? {}).length}
+                onClick={async () => {
+                  const fields = playDrafts[playLocale] ?? {};
+                  const res = await fetch(
+                    `/api/projects/${encodeURIComponent(name)}/play/${encodeURIComponent(playLocale)}`,
+                    {
+                      method: "PUT",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({ fields }),
+                    },
+                  );
+                  if (!res.ok) setStatus(`Play save failed: ${(await res.json()).error}`);
+                  else {
+                    setPlayDrafts((d) => ({ ...d, [playLocale]: {} }));
+                    await load();
+                    setStatus("Play saved");
+                    setTimeout(() => setStatus(""), 1500);
+                  }
+                }}
+              >
+                Save Play {playLocale}
+              </button>
+            </div>
+            {play.locales[playLocale]?.fields.map((f) => {
+              const value = playDrafts[playLocale]?.[f.field] ?? f.value;
+              const n = len(value);
+              const over = n > f.limit;
+              return (
+                <div key={f.field} className={styles.field}>
+                  <div className={styles.fieldHead}>
+                    <span>{f.field}</span>
+                    <span className={over ? styles.error : styles.muted}>
+                      {n}/{f.limit}
+                    </span>
+                  </div>
+                  <textarea
+                    className={`${styles.textarea} ${over ? styles.textareaOver : ""}`}
+                    rows={f.field === "full_description" ? 8 : 2}
+                    value={value}
+                    onChange={(e) =>
+                      setPlayDrafts((d) => ({
+                        ...d,
+                        [playLocale]: { ...(d[playLocale] ?? {}), [f.field]: e.target.value },
+                      }))
+                    }
+                  />
+                </div>
+              );
+            })}
+          </>
+        )}
       </section>
     </div>
   );

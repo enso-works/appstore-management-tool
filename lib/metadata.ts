@@ -182,3 +182,51 @@ export function createMetadataLocale(project: Project, locale: string, seedFrom?
   }
   return created;
 }
+
+/** Google Play text metadata (supply layout: fastlane/metadata/android/<locale>/*.txt). */
+export const PLAY_FIELDS = ["title", "short_description", "full_description"] as const;
+export type PlayField = (typeof PLAY_FIELDS)[number];
+
+export const PLAY_LIMITS: Record<PlayField, number> = {
+  title: 30,
+  short_description: 80,
+  full_description: 4000,
+};
+
+export interface PlayLocaleState {
+  locale: string;
+  dirExists: boolean;
+  fields: { field: PlayField; present: boolean; value: string; length: number; limit: number; overLimit: boolean }[];
+}
+
+export function readPlayLocale(project: Project, playLocale: string): PlayLocaleState {
+  const dir = path.join(project.paths.outputPlay, playLocale);
+  const exists = dirExists(dir);
+  return {
+    locale: playLocale,
+    dirExists: exists,
+    fields: PLAY_FIELDS.map((field) => {
+      const file = path.join(dir, `${field}.txt`);
+      const present = exists && fileExists(file);
+      const value = present ? fs.readFileSync(file, "utf8") : "";
+      const length = metadataLength(value);
+      return { field, present, value, length, limit: PLAY_LIMITS[field], overLimit: length > PLAY_LIMITS[field] };
+    }),
+  };
+}
+
+export function writePlayField(
+  project: Project,
+  playLocale: string,
+  field: PlayField,
+  value: string,
+): { length: number; overLimit: boolean } {
+  const dir = resolveWithin(project.paths.outputPlay, playLocale);
+  fs.mkdirSync(dir, { recursive: true });
+  const normalised = rubyStrip(value.replace(/\r\n?/g, "\n")) + (field === "full_description" ? "\n" : "");
+  const tmp = path.join(dir, `.${field}.txt.tmp`);
+  fs.writeFileSync(tmp, normalised, "utf8");
+  fs.renameSync(tmp, path.join(dir, `${field}.txt`));
+  const length = metadataLength(normalised);
+  return { length, overLimit: length > PLAY_LIMITS[field] };
+}

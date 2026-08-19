@@ -780,6 +780,7 @@ export default function Editor({ name }: { name: string }) {
             locales={snap.config.locales}
             readiness={snap.readiness}
             onReadiness={(r) => setSnap((s) => (s ? { ...s, readiness: r } : s))}
+            hasPlay={snap.config.targets.some((t) => t.startsWith("play-"))}
           />
         </div>
       )}

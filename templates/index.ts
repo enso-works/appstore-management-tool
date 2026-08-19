@@ -1,3 +1,4 @@
+import featureGraphic from "./feature-graphic";
 import fullBleedCard from "./full-bleed-card";
 import heroTop from "./hero-top";
 import splitCaption from "./split-caption";
@@ -8,6 +9,7 @@ export const templateModules: Record<string, TemplateModule> = {
   [heroTop.descriptor.id]: heroTop as unknown as TemplateModule,
   [splitCaption.descriptor.id]: splitCaption as unknown as TemplateModule,
   [fullBleedCard.descriptor.id]: fullBleedCard as unknown as TemplateModule,
+  [featureGraphic.descriptor.id]: featureGraphic as unknown as TemplateModule,
 };
 
 export const templateIds = Object.keys(templateModules);
