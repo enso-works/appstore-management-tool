@@ -16,7 +16,7 @@ The workspace folder itself is not a repo; it only groups repos (and may hold un
 
 Apps are discovered by scanning the workspace root (three levels up, or `STORE_SHOTS_WORKSPACE`).
 
-Status: Phases 1-4 done — config, schemas, validation, readiness, `init`, `generate`
+Status: plan phases 1-8 and roadmap items 1-12 done — config, schemas, validation, readiness, `init`, `generate`
 (Playwright + Sharp, exact-size no-alpha PNGs), `clean`, fonts from Google Fonts, glyph
 coverage, in-page font fitting, one template (`hero-top`), the editor UI (live preview,
 copy + overrides editing with sliders, zoom/pan canvas, Strip mode showing every screen side by side with an App Store look, save, generate), the Store tab (readiness, metadata
@@ -74,7 +74,9 @@ npm run schemas     # regenerate schema/*.schema.json from lib/schema.ts
 npm run fixtures    # regenerate fixtures/demo-app
 ```
 
-More: `docs/templates.md` (writing a template), `docs/troubleshooting.md`, `docs/store-tool-plan.md` (plan + phase status).
+More: `docs/templates.md` (writing a template), `docs/troubleshooting.md`, `docs/store-tool-plan.md` (plan + phase status), `docs/roadmap.md` (post-v1 items).
+
+Also available: panorama screens (one artwork across 2-3 slides), drag-the-phone positioning in the preview, locale grid, live-listing comparison, contact sheets (`sheet`), duplicate screen + override presets, per-field character budgets, `capture --all` via deep links, official device frames (`frames setup|list`, `shell: "frame:<name>"`), `check` CI gate, Google Play feature graphic + text metadata, App Preview posters.
 
 ## Layout
 
