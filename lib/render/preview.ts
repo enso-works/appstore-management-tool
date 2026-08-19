@@ -136,6 +136,21 @@ const DRAG_SCRIPT = `<script>
       post({ type: "store-shots-pan", key: key, phase: "move", dx: dx, dy: dy });
     }
   });
+  function hitOf(a) {
+    if (a.onDevice) return "phone";
+    if (a.stack) return "text:" + (a.stack.getAttribute("data-text-stack") || "0");
+    return "background";
+  }
+  function highlight(hit) {
+    document.querySelectorAll("[data-device],[data-text-stack]").forEach(function (el) { el.style.outline = ""; el.style.outlineOffset = ""; });
+    var el = null;
+    if (hit === "phone") el = device;
+    else if (hit && hit.indexOf("text:") === 0) el = document.querySelector('[data-text-stack="' + hit.slice(5) + '"]');
+    if (el) { el.style.outline = Math.max(2, Math.round(window.innerWidth * 0.004)) + "px dashed rgba(37,99,235,0.9)"; el.style.outlineOffset = "6px"; }
+  }
+  window.addEventListener("message", function (e) {
+    if (e.data && e.data.type === "store-shots-select") highlight(e.data.hit);
+  });
   function end(e) {
     if (!active) return;
     var dx = e.clientX - active.x, dy = e.clientY - active.y;
@@ -146,6 +161,7 @@ const DRAG_SCRIPT = `<script>
     } else if (a.stack && a.moved) {
       post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: "text" });
     } else {
+      if (!a.moved) { var h = hitOf(a); highlight(h); post({ type: "store-shots-click", key: key, hit: h }); }
       post({ type: "store-shots-pan", key: key, phase: "end", dx: dx, dy: dy, click: !a.moved });
     }
   }

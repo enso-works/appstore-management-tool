@@ -26,3 +26,9 @@ Out of scope for this pass: video rendering, hosted/cloud anything, credentials 
   slide while the device spans the artwork — reproduces hand-made multi-slide listings exactly.
 - Drag the text block too (sets `textOffsetX/Y`); new `textOffsetX` override.
 - Editor UX: live thumbnails in the screens sidebar, per-slide copy groups (SLIDE 1 / SLIDE 2).
+- Autosave: content and manifest edits (including drags) save ~1s after the last change; the
+  Save button is now a Saved/Saving indicator that can force a flush.
+- Selection-based inspector: click the phone, a text block or the background in the preview
+  (or the Background / Phone / Text chips) and the Style panel shows only that element's
+  controls, with the rest behind "All overrides". The selected element gets a dashed outline.
+- Selects keep unknown values (e.g. shell "frame:...") visible instead of silently resetting.

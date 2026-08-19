@@ -637,3 +637,37 @@
   color: var(--muted);
   margin: 12px 0 2px;
 }
+
+.chips {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.chip {
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.chipActive {
+  border-color: #2563eb;
+  color: var(--fg);
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.allOverrides {
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.allOverrides summary {
+  cursor: pointer;
+  color: var(--muted);
+  margin-bottom: 4px;
+}

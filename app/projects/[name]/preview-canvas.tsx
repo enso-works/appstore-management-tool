@@ -32,6 +32,8 @@ export interface PreviewCanvasProps {
   interactive?: boolean;
   /** Optional second row under the frames (e.g. the live App Store listing) — images rendered at target height. */
   belowRow?: { label: string; images: string[] };
+  /** Element to highlight in the single-mode iframe: "phone" | "background" | "text:<slice>". */
+  highlightEl?: string | null;
 }
 
 type Zoom = "fit" | number;
@@ -56,6 +58,7 @@ export default function PreviewCanvas({
   footer,
   interactive = false,
   belowRow,
+  highlightEl,
 }: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -191,6 +194,20 @@ export default function PreviewCanvas({
     return () => window.removeEventListener("message", onMessage);
   }, [pan, scale]);
 
+  const singleIframeRef = useRef<HTMLIFrameElement | null>(null);
+  useEffect(() => {
+    if (mode !== "single") return;
+    const t = setTimeout(
+      () =>
+        singleIframeRef.current?.contentWindow?.postMessage(
+          { type: "store-shots-select", hit: highlightEl ?? null },
+          "*",
+        ),
+      150,
+    );
+    return () => clearTimeout(t);
+  }, [highlightEl, mode, items]);
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
@@ -250,6 +267,7 @@ export default function PreviewCanvas({
               >
                 {item.html ? (
                   <iframe
+                    ref={mode === "single" ? singleIframeRef : undefined}
                     title={`${item.id} ${slice + 1}/${slices}`}
                     srcDoc={item.html}
                     sandbox="allow-scripts allow-same-origin"

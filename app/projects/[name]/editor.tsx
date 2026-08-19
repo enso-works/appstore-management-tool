@@ -88,6 +88,16 @@ const OVERRIDE_CONTROLS: Record<
   cardColor: { label: "Card colour", kind: "text", hint: "CSS colour; default brand.primary at 93%" },
 };
 
+const EL_GROUPS: Record<string, string[]> = {
+  background: ["background", "backgroundImage", "patternColor"],
+  phone: ["screenshotScale", "screenshotOffsetX", "screenshotOffsetY", "deviceTilt", "shell"],
+  text: ["textWidth", "textSide", "textOffsetX", "textOffsetY", "textAlign", "textColor", "cardPosition", "cardColor"],
+};
+
+function groupOf(sel: string): string {
+  return sel.startsWith("text") ? "text" : sel;
+}
+
 function emptyContent(locale: string): LocaleContent {
   return { locale, screens: {} };
 }
@@ -128,6 +138,7 @@ export default function Editor({ name }: { name: string }) {
   const [canvasMode, setCanvasMode] = useState<"single" | "strip" | "locales">("single");
   const [storeLook, setStoreLook] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
+  const [selectedEl, setSelectedEl] = useState<string>("phone");
   const [showLive, setShowLive] = useState(false);
   const [liveCountry, setLiveCountry] = useState("us");
   const [live, setLive] = useState<{
@@ -261,6 +272,14 @@ export default function Editor({ name }: { name: string }) {
     return () => window.removeEventListener("message", onDrag);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screenKey, targetId, locale]);
+
+  useEffect(() => {
+    const onClick = (ev: MessageEvent) => {
+      if (ev.data?.type === "store-shots-click" && typeof ev.data.hit === "string") setSelectedEl(ev.data.hit);
+    };
+    window.addEventListener("message", onClick);
+    return () => window.removeEventListener("message", onClick);
+  }, []);
 
   useEffect(() => {
     const onMessage = (ev: MessageEvent) => {
@@ -475,6 +494,15 @@ export default function Editor({ name }: { name: string }) {
   }
 
   // ---- save --------------------------------------------------------------
+  const saveRef = useRef<() => Promise<void>>(async () => {});
+  const dirtyKey = `${dirty.manifest}|${[...dirty.content].join(",")}|${JSON.stringify(manifest)}|${JSON.stringify(content)}`;
+  useEffect(() => {
+    if (!isDirty) return;
+    const t = setTimeout(() => void saveRef.current(), 900);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirtyKey]);
+
   async function save() {
     if (!snap) return;
     setStatus("Saving…");
@@ -506,11 +534,12 @@ export default function Editor({ name }: { name: string }) {
       setIssues(latestIssues);
       setDirty({ manifest: false, content: new Set() });
       setStatus("Saved");
-      setTimeout(() => setStatus(""), 1500);
+      setTimeout(() => setStatus((v) => (v === "Saved" ? "" : v)), 1500);
     } catch (err) {
       setStatus(`Save failed: ${(err as Error).message}`);
     }
   }
+  saveRef.current = save;
 
   // ---- generate ----------------------------------------------------------
   async function generate(scope: "screen" | "locale" | "all") {
@@ -767,8 +796,8 @@ export default function Editor({ name }: { name: string }) {
           readiness: {snap.readiness.status}
         </button>
         <span className={styles.status}>{status}</span>
-        <button className={styles.btn} onClick={save} disabled={!isDirty}>
-          Save{isDirty ? " *" : ""}
+        <button className={styles.btn} onClick={save} disabled={!isDirty} title="autosaves ~1s after you stop editing">
+          {isDirty ? "Saving…" : "Saved"}
         </button>
         <button className={styles.btnPrimary} onClick={() => generate("screen")} disabled={gen.running || !screen}>
           Generate screen
@@ -895,6 +924,7 @@ export default function Editor({ name }: { name: string }) {
                 mode={canvasMode}
                 storeLook={storeLook}
                 interactive
+                highlightEl={selectedEl}
                 belowRow={belowRow}
                 footer={
                   <>
@@ -1148,58 +1178,120 @@ export default function Editor({ name }: { name: string }) {
                     save preset
                   </button>
                 </div>
-                {(template?.overrideKeys ?? []).map((key) => {
-                  const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
-                  const v = screen.overrides[key];
-                  return (
-                    <label key={key} className={styles.row}>
-                      <span title={c.hint}>{c.label}</span>
-                      {c.kind === "select" ? (
-                        <select
-                          className={styles.select}
-                          value={(v as string) ?? ""}
-                          onChange={(e) => setOverride(key, e.target.value)}
-                        >
-                          <option value="">default</option>
-                          {c.options!.map((o) => (
-                            <option key={o} value={o}>
-                              {o}
-                            </option>
-                          ))}
-                        </select>
-                      ) : c.kind === "number" ? (
-                        <span className={styles.inline}>
+                <div className={styles.chips}>
+                  {["background", "phone", "text"].map((g) => (
+                    <button
+                      key={g}
+                      className={`${styles.chip} ${groupOf(selectedEl) === g ? styles.chipActive : ""}`}
+                      onClick={() => setSelectedEl(g === "text" ? "text:0" : g)}
+                      title="or click the element in the preview"
+                    >
+                      {g === "background" ? "Background" : g === "phone" ? "Phone" : "Text"}
+                    </button>
+                  ))}
+                </div>
+                {(template?.overrideKeys ?? [])
+                  .filter((k) => (EL_GROUPS[groupOf(selectedEl)] ?? []).includes(k))
+                  .map((key) => {
+                    const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
+                    const v = screen.overrides[key];
+                    return (
+                      <label key={key} className={styles.row}>
+                        <span title={c.hint}>{c.label}</span>
+                        {c.kind === "select" ? (
+                          <select
+                            className={styles.select}
+                            value={(v as string) ?? ""}
+                            onChange={(e) => setOverride(key, e.target.value)}
+                          >
+                            <option value="">default</option>
+                            {typeof v === "string" && v && !c.options!.includes(v) && <option value={v}>{v}</option>}
+                            {c.options!.map((o) => (
+                              <option key={o} value={o}>
+                                {o}
+                              </option>
+                            ))}
+                          </select>
+                        ) : c.kind === "number" ? (
+                          <span className={styles.inline}>
+                            <input
+                              type="range"
+                              min={c.min}
+                              max={c.max}
+                              step={c.step}
+                              value={typeof v === "number" ? v : (c.min ?? 0) + ((c.max ?? 1) - (c.min ?? 0)) / 2}
+                              onChange={(e) => setOverride(key, Number(e.target.value))}
+                              className={styles.range}
+                            />
+                            <input
+                              className={`${styles.input} ${styles.num}`}
+                              type="number"
+                              min={c.min}
+                              max={c.max}
+                              step={c.step}
+                              value={(v as number) ?? ""}
+                              onChange={(e) => setOverride(key, e.target.value === "" ? "" : Number(e.target.value))}
+                              placeholder="–"
+                            />
+                          </span>
+                        ) : (
                           <input
-                            type="range"
-                            min={c.min}
-                            max={c.max}
-                            step={c.step}
-                            value={typeof v === "number" ? v : (c.min ?? 0) + ((c.max ?? 1) - (c.min ?? 0)) / 2}
-                            onChange={(e) => setOverride(key, Number(e.target.value))}
-                            className={styles.range}
+                            className={styles.input}
+                            value={(v as string) ?? ""}
+                            onChange={(e) => setOverride(key, e.target.value)}
+                            placeholder="default"
                           />
-                          <input
-                            className={`${styles.input} ${styles.num}`}
-                            type="number"
-                            min={c.min}
-                            max={c.max}
-                            step={c.step}
-                            value={(v as number) ?? ""}
-                            onChange={(e) => setOverride(key, e.target.value === "" ? "" : Number(e.target.value))}
-                            placeholder="–"
-                          />
-                        </span>
-                      ) : (
-                        <input
-                          className={styles.input}
-                          value={(v as string) ?? ""}
-                          onChange={(e) => setOverride(key, e.target.value)}
-                          placeholder="default"
-                        />
-                      )}
-                    </label>
-                  );
-                })}
+                        )}
+                      </label>
+                    );
+                  })}
+                <details className={styles.allOverrides}>
+                  <summary>All overrides</summary>
+                  {(template?.overrideKeys ?? [])
+                    .filter((k) => !(EL_GROUPS[groupOf(selectedEl)] ?? []).includes(k))
+                    .map((key) => {
+                      const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
+                      const v = screen.overrides[key];
+                      return (
+                        <label key={key} className={styles.row}>
+                          <span title={c.hint}>{c.label}</span>
+                          {c.kind === "select" ? (
+                            <select
+                              className={styles.select}
+                              value={(v as string) ?? ""}
+                              onChange={(e) => setOverride(key, e.target.value)}
+                            >
+                              <option value="">default</option>
+                              {typeof v === "string" && v && !c.options!.includes(v) && <option value={v}>{v}</option>}
+                              {c.options!.map((o) => (
+                                <option key={o} value={o}>
+                                  {o}
+                                </option>
+                              ))}
+                            </select>
+                          ) : c.kind === "number" ? (
+                            <input
+                              className={styles.input}
+                              type="number"
+                              min={c.min}
+                              max={c.max}
+                              step={c.step}
+                              value={(v as number) ?? ""}
+                              onChange={(e) => setOverride(key, e.target.value === "" ? "" : Number(e.target.value))}
+                              placeholder="–"
+                            />
+                          ) : (
+                            <input
+                              className={styles.input}
+                              value={(v as string) ?? ""}
+                              onChange={(e) => setOverride(key, e.target.value)}
+                              placeholder="default"
+                            />
+                          )}
+                        </label>
+                      );
+                    })}
+                </details>
                 <div className={styles.dangerRow}>
                   <button
                     className={styles.btn}
