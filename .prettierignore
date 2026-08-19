@@ -1,0 +1,7 @@
+node_modules/
+.next/
+fixtures/
+schema/
+*.ico
+*.png
+package-lock.json
