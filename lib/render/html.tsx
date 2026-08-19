@@ -5,6 +5,7 @@ import { getTemplateModule } from "../../templates";
 import type { BrandTheme, TemplateRenderInput } from "../../templates/types";
 import type { Project } from "../config";
 import { fontFaceCss, fontFamilyCss, resolveFontStack, type ResolvedFont } from "../fonts";
+import { frameNameFromShell, getFrame } from "../frames";
 import type { RenderJob } from "../render-plan";
 import type { LocaleContent } from "../schema";
 
@@ -15,6 +16,8 @@ export interface ArtworkUrls {
   fontUrl: (absPath: string) => string;
   /** Maps a store/assets-relative path to a URL the page can load. */
   assetUrl: (relPath: string) => string;
+  /** Maps a device-frame file (absolute path) to a URL the page can load; default file://. */
+  frameUrl?: (absPath: string) => string;
 }
 
 export function brandThemeOf(project: Project, stack?: ResolvedFont[]): BrandTheme {
@@ -97,6 +100,24 @@ export function renderArtworkHtml(
     );
   }
   const input = templateInputFor(project, job, content, urls.sourceImage, "export", stack, urls.assetUrl);
+  const frameName = frameNameFromShell(job.screen.overrides.shell);
+  if (frameName) {
+    const frame = getFrame(frameName);
+    if (!frame) {
+      throw new Error(
+        `Device frame "${frameName}" is not available locally. Run: store-shots frames setup, then check the name with: store-shots frames list`,
+      );
+    }
+    const toUrl = urls.frameUrl ?? ((p: string) => pathToFileURL(p).href);
+    input.frame = {
+      url: toUrl(frame.file),
+      frameWidth: frame.frameWidth,
+      frameHeight: frame.frameHeight,
+      screenX: frame.screenX,
+      screenY: frame.screenY,
+      screenWidth: frame.screenWidth,
+    };
+  }
   const mod = getTemplateModule(job.screen.template)!;
   const body = renderStatic(mod.render(input));
   const html = [

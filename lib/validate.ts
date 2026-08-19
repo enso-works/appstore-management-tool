@@ -12,6 +12,7 @@ import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
 import { requiredFontFamilies, resolveFontStack } from "./fonts";
 import { GlyphChecker, suggestFamilyFor } from "./glyphs";
+import { frameNameFromShell, framesAvailable, getFrame } from "./frames";
 
 export interface ValidationResult {
   issues: IssueList;
@@ -144,6 +145,20 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
             },
           );
         }
+      }
+      const frameName = frameNameFromShell(screen.overrides.shell);
+      if (frameName && !getFrame(frameName)) {
+        issues.error(
+          "manifest.frame-missing",
+          `Screen "${screen.id}" uses device frame "${frameName}", which is not available locally`,
+          {
+            key,
+            file,
+            hint: framesAvailable()
+              ? "check the exact name with `store-shots frames list <search>`"
+              : "run `store-shots frames setup` to download the official frames (fastlane frameit)",
+          },
+        );
       }
       const mod = getTemplateModule(template.id);
       const parsedOverrides = mod?.overridesSchema.safeParse(screen.overrides);

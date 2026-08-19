@@ -16,6 +16,7 @@ import { METADATA_FIELDS } from "../lib/schema";
 import { LANE_KEYS, preflightLane, runLane, type LaneKey } from "../lib/fastlane";
 import { captureAll, captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
 import { writeContactSheets } from "../lib/sheet";
+import { downloadFrames, framesAvailable, framesDir, listFrames } from "../lib/frames";
 
 const program = new Command();
 
@@ -512,6 +513,38 @@ program
     }
     for (const r of results)
       console.log(`${displayRelative(project.root, r.file)}  (${r.locale}, ${r.target}, ${r.count} screenshots)`);
+  });
+
+const frames = program
+  .command("frames")
+  .description('Official device frames (fastlane frameit) for shell: "frame:<name>"');
+
+frames
+  .command("setup")
+  .description(
+    "Download the official frames via `fastlane frameit download_frames` (~300 files into ~/.fastlane/frameit)",
+  )
+  .action(() => {
+    const code = downloadFrames((l) => console.log(l));
+    if (code === 0) console.log(`\nFrames ready in ${framesDir()}. Use: store-shots frames list iphone`);
+    process.exit(code === 0 ? 0 : 1);
+  });
+
+frames
+  .command("list [search]")
+  .description("List locally available frames (name, size, screen cut-out)")
+  .action((search?: string) => {
+    if (!framesAvailable()) {
+      console.error("No frames downloaded yet. Run: store-shots frames setup");
+      process.exit(1);
+    }
+    const all = listFrames(search);
+    for (const f of all) {
+      console.log(
+        `${f.name}  (${f.frameWidth}x${f.frameHeight}, screen ${f.screenWidth}px at +${f.screenX}+${f.screenY})`,
+      );
+    }
+    if (!all.length) console.log("No frames match.");
   });
 
 program.parseAsync(process.argv).catch((err) => {

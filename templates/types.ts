@@ -47,6 +47,15 @@ export interface TemplateRenderInput<O = Record<string, unknown>> {
   mode: "preview" | "export";
   /** Resolve a store/assets-relative path (e.g. "backgrounds/waves.png") to a URL the page can load. */
   assetUrl: (relPath: string) => string;
+  /** Resolved device frame when overrides.shell is "frame:<name>" (URL + screen cut-out geometry). */
+  frame?: {
+    url: string;
+    frameWidth: number;
+    frameHeight: number;
+    screenX: number;
+    screenY: number;
+    screenWidth: number;
+  };
 }
 
 export interface TemplateModule<S extends z.ZodTypeAny = z.ZodTypeAny> {

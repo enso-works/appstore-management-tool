@@ -53,6 +53,7 @@ export function previewHtml(
     sourceImage: sourceExists ? urls.sourceImage(job.sourcePath) : MISSING_SOURCE_DATA_URI,
     fontUrl: urls.fontUrl,
     assetUrl: urls.assetUrl,
+    frameUrl: urls.frameUrl,
   });
   const script = `<script>
 (function () {

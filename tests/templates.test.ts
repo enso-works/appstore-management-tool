@@ -150,3 +150,35 @@ describe("stackLayout", () => {
     expect(b.device.top - a.device.top).toBe(-264 + 66);
   });
 });
+
+describe("device frames", () => {
+  it("renders the frame artwork with the capture in the cut-out when shell is frame:<name>", async () => {
+    const { renderStatic } = await import("../lib/render/ssr");
+    const mod = templateModules["hero-top"];
+    const html = renderStatic(
+      mod.render(
+        input("iphone-6.9-1320x2868", {
+          overrides: { shell: "frame:Test Frame" },
+          frame: {
+            url: "frame://test.png",
+            frameWidth: 1470,
+            frameHeight: 3000,
+            screenX: 75,
+            screenY: 66,
+            screenWidth: 1320,
+          },
+        }),
+      ),
+    );
+    expect(html).toContain("frame://test.png");
+    // Device width default 0.8 * 1320 = 1056 -> scale 0.8; frame box 1176 wide.
+    expect(html).toContain("width:1176px");
+    expect(html).not.toContain("box-shadow"); // no CSS shell when a real frame is used
+  });
+
+  it("accepts frame:<name> in the shell override schema", () => {
+    const mod = templateModules["hero-top"];
+    expect(mod.overridesSchema.safeParse({ shell: "frame:Apple iPhone 16 Pro Max Black Titanium" }).success).toBe(true);
+    expect(mod.overridesSchema.safeParse({ shell: "bogus" }).success).toBe(false);
+  });
+});

@@ -39,6 +39,10 @@
               "localized": {
                 "default": true,
                 "type": "boolean"
+              },
+              "deepLink": {
+                "type": "string",
+                "minLength": 1
               }
             },
             "additionalProperties": false

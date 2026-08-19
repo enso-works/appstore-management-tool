@@ -39,8 +39,10 @@ export const commonOverridesSchema = z.strictObject({
   textAlign: z.enum(["start", "center", "end"]).optional(),
   /** Text colour override (any CSS colour); default brand.onPrimary. */
   textColor: z.string().min(1).optional(),
-  /** Neutral shell around the capture. */
-  shell: z.enum(["dark", "light", "none"]).optional(),
+  /** Neutral shell ("dark" | "light" | "none") or an official device frame: "frame:<name>" (see `store-shots frames list`). */
+  shell: z
+    .union([z.enum(["dark", "light", "none"]), z.string().regex(/^frame:.+/, 'use "frame:<device frame name>"')])
+    .optional(),
 });
 
 export type CommonOverrides = z.infer<typeof commonOverridesSchema>;
@@ -157,7 +159,51 @@ export interface DeviceShellProps {
  * around the shell centre.
  */
 export function DeviceShell({ input, width, height, left, top }: DeviceShellProps): ReactElement {
-  const shell = input.overrides.shell ?? "dark";
+  const frame = input.frame;
+  if (frame) {
+    // Official frameit artwork: scale so the frame's screen cut-out width equals
+    // the requested device width; the capture sits exactly in the cut-out.
+    const s = width / frame.screenWidth;
+    const tilt = input.overrides.deviceTilt ?? 0;
+    const screenH = height; // capture height at requested width
+    return (
+      <div
+        data-device=""
+        style={{
+          position: "absolute",
+          left: left - frame.screenX * s,
+          top: top - frame.screenY * s,
+          width: frame.frameWidth * s,
+          height: frame.frameHeight * s,
+          transform: tilt ? `rotate(${tilt}deg)` : undefined,
+          transformOrigin: "50% 50%",
+        }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={input.sourceImageUrl}
+          alt=""
+          data-source=""
+          style={{
+            position: "absolute",
+            left: frame.screenX * s,
+            top: frame.screenY * s,
+            width,
+            height: screenH,
+            objectFit: "cover",
+            objectPosition: "top center",
+          }}
+        />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={frame.url}
+          alt=""
+          style={{ position: "absolute", left: 0, top: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+        />
+      </div>
+    );
+  }
+  const shell = input.overrides.shell === "light" || input.overrides.shell === "none" ? input.overrides.shell : "dark";
   const radius = Math.round(width * 0.11);
   const bezel = shell === "none" ? 0 : Math.round(width * 0.018);
   const shellColor = shell === "light" ? "#f3f4f6" : "#0b0c0f";

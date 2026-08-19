@@ -25,6 +25,7 @@ export async function POST(req: Request, ctx: Ctx) {
         sourceImage: (abs) =>
           `${base}?kind=raw&path=${encodeURIComponent(path.relative(project.paths.raw, abs).split(path.sep).join("/"))}`,
         assetUrl: (rel) => `${base}?kind=asset&path=${encodeURIComponent(rel)}`,
+        frameUrl: (abs) => `${base}?kind=devframe&path=${encodeURIComponent(path.basename(abs))}`,
         fontUrl: (abs) => {
           const inApp = !path.relative(appFonts, abs).startsWith("..");
           const root = inApp ? appFonts : bundled;
