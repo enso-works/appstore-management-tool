@@ -26,6 +26,8 @@ export interface PreviewCanvasProps {
   storeLook: boolean;
   /** Extra status line rendered bottom-left (fits / problems). */
   footer?: React.ReactNode;
+  /** Single mode: let the iframe receive pointer events (drag the phone); pan messages come back via postMessage. */
+  interactive?: boolean;
 }
 
 type Zoom = "fit" | number;
@@ -48,6 +50,7 @@ export default function PreviewCanvas({
   mode,
   storeLook,
   footer,
+  interactive = false,
 }: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -168,6 +171,19 @@ export default function PreviewCanvas({
     return () => window.removeEventListener("keydown", onKey);
   }, [stepZoom, zoomTo]);
 
+  useEffect(() => {
+    let start: { x: number; y: number } | null = null;
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.data?.type !== "store-shots-pan") return;
+      if (ev.data.phase === "start") start = { x: pan.x, y: pan.y };
+      else if (ev.data.phase === "move" && start)
+        setPan({ x: start.x + ev.data.dx * scale, y: start.y + ev.data.dy * scale });
+      else if (ev.data.phase === "end") start = null;
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [pan, scale]);
+
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
@@ -234,7 +250,7 @@ export default function PreviewCanvas({
                     marginLeft: -slice * target.width,
                     border: 0,
                     background: "#000",
-                    pointerEvents: "none",
+                    pointerEvents: interactive && mode === "single" ? "auto" : "none",
                     display: "block",
                   }}
                 />

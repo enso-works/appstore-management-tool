@@ -184,7 +184,7 @@ export default function Editor({ name }: { name: string }) {
         const res = await fetch(`/api/projects/${encodeURIComponent(name)}/preview`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ targetId, locale, screen, fields, direction }),
+          body: JSON.stringify({ targetId, locale, screen, fields, direction, interactive: true }),
           signal: controller.signal,
         });
         if (!res.ok) {
@@ -214,6 +214,32 @@ export default function Editor({ name }: { name: string }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [snap, name, targetId, locale, screenId, screenKey, fieldsKey, direction]);
+
+  // Drag-to-position: the preview iframe posts deltas in artwork px; convert to override fractions of target width.
+  useEffect(() => {
+    const onDrag = (ev: MessageEvent) => {
+      if (ev.data?.type !== "store-shots-drag-end" || !screen || !target) return;
+      const o = { ...screen.overrides } as Record<string, number | string | undefined>;
+      const W = target.width;
+      const num = (v: unknown, d: number) => (typeof v === "number" ? v : d);
+      if (ev.data.mode === "move") {
+        const rtl = (content[locale]?.direction ?? "ltr") === "rtl";
+        o.screenshotOffsetX = Math.round((num(o.screenshotOffsetX, 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
+        o.screenshotOffsetY = Math.round((num(o.screenshotOffsetY, 0) + ev.data.dy / W) * 100) / 100;
+      } else if (ev.data.mode === "tilt") {
+        o.deviceTilt = Math.max(-30, Math.min(30, Math.round((num(o.deviceTilt, 0) + ev.data.dTilt) * 2) / 2));
+      } else if (ev.data.mode === "scale") {
+        const tpl = snap?.templates.find((t) => t.id === screen.template);
+        void tpl;
+        const base = num(o.screenshotScale, target.family === "ipad" ? 0.72 : 0.8);
+        o.screenshotScale = Math.max(0.3, Math.min(1.8, Math.round(base * ev.data.dScale * 100) / 100));
+      }
+      updateScreen({ overrides: o });
+    };
+    window.addEventListener("message", onDrag);
+    return () => window.removeEventListener("message", onDrag);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenKey, targetId, locale]);
 
   useEffect(() => {
     const onMessage = (ev: MessageEvent) => {
@@ -720,11 +746,14 @@ export default function Editor({ name }: { name: string }) {
                 onSelect={setScreenId}
                 mode={canvasMode}
                 storeLook={storeLook}
+                interactive
                 footer={
                   <>
                     <span>
                       {target.width}×{target.height}
-                      {canvasMode === "strip" ? ` · ${canvasItems.length} screens · ${locale}` : ""}
+                      {canvasMode === "strip"
+                        ? ` · ${canvasItems.length} screens · ${locale}`
+                        : " · drag phone to move, ⌥ tilt, ⇧ scale"}
                     </span>
                     {previewInfo.loading && <span className={styles.muted}> rendering…</span>}
                     {previewInfo.error && <span className={styles.error}> {previewInfo.error}</span>}

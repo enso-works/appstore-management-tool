@@ -16,6 +16,8 @@ export interface PreviewRequest {
   /** Draft copy for this screen. */
   fields: Record<string, string | null | undefined>;
   direction?: "ltr" | "rtl";
+  /** Include the drag-to-position script (editor Single mode). */
+  interactive?: boolean;
 }
 
 export interface PreviewResult {
@@ -67,8 +69,9 @@ export function previewHtml(
   } else { report(); }
 })();
 </script>`;
+  const dragScript = req.interactive ? DRAG_SCRIPT.replace("__KEY__", JSON.stringify(job.key)) : "";
   return {
-    html: html.replace("</body></html>", `${script}\n</body></html>`),
+    html: html.replace("</body></html>", `${script}\n${dragScript}\n</body></html>`),
     job: { key: job.key, sourceExists, sourceRelPath: job.sourcePath.slice(project.paths.raw.length + 1) },
   };
 }
@@ -79,3 +82,57 @@ const MISSING_SOURCE_DATA_URI =
   encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="1300" viewBox="0 0 600 1300"><rect width="600" height="1300" fill="#222"/><text x="300" y="640" fill="#bbb" font-family="system-ui" font-size="40" text-anchor="middle">raw capture missing</text></svg>`,
   );
+
+/**
+ * Editor-only: drag the device to move it (plain), tilt it (alt) or scale it
+ * (shift). Feedback is applied live via transform; on release the deltas are
+ * posted to the parent, which turns them into override values and re-renders.
+ * Dragging anywhere else posts pan events so the canvas still pans.
+ */
+const DRAG_SCRIPT = `<script>
+(function () {
+  var key = __KEY__;
+  var device = document.querySelector("[data-device]");
+  var active = null;
+  function post(msg) { parent.postMessage(msg, "*"); }
+  document.addEventListener("pointerdown", function (e) {
+    if (e.button !== 0) return;
+    var onDevice = device && device.contains(e.target);
+    active = { x: e.clientX, y: e.clientY, onDevice: onDevice, alt: e.altKey, shift: e.shiftKey, moved: false };
+    if (onDevice) {
+      active.base = device.style.transform || "";
+      document.body.style.cursor = e.altKey ? "grab" : e.shiftKey ? "nwse-resize" : "move";
+    }
+    post({ type: "store-shots-pan", key: key, phase: "start", onDevice: onDevice });
+    e.preventDefault();
+  });
+  document.addEventListener("pointermove", function (e) {
+    if (!active) return;
+    var dx = e.clientX - active.x, dy = e.clientY - active.y;
+    if (Math.abs(dx) + Math.abs(dy) > 2) active.moved = true;
+    if (active.onDevice) {
+      var t = active.base;
+      if (active.alt) t = t + " rotate(" + (dx / 8) + "deg)";
+      else if (active.shift) t = t + " scale(" + Math.max(0.2, 1 + dx / 600) + ")";
+      else t = "translate(" + dx + "px," + dy + "px) " + t;
+      device.style.transform = t;
+    } else {
+      post({ type: "store-shots-pan", key: key, phase: "move", dx: dx, dy: dy });
+    }
+  });
+  function end(e) {
+    if (!active) return;
+    var dx = e.clientX - active.x, dy = e.clientY - active.y;
+    var a = active; active = null;
+    document.body.style.cursor = "";
+    if (a.onDevice && a.moved) {
+      post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: a.alt ? "tilt" : a.shift ? "scale" : "move", dTilt: dx / 8, dScale: Math.max(0.2, 1 + dx / 600) });
+    } else {
+      post({ type: "store-shots-pan", key: key, phase: "end", dx: dx, dy: dy, click: !a.moved });
+    }
+  }
+  document.addEventListener("pointerup", end);
+  document.addEventListener("pointercancel", end);
+  if (device) device.style.cursor = "move";
+})();
+</script>`;
