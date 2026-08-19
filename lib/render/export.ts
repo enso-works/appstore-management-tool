@@ -12,6 +12,8 @@ export interface ExportOptions {
   backgroundColor: string;
   /** Where to write the HTML page the browser loads (must be a real file for file:// assets). */
   workDir: string;
+  /** Artwork width when it differs from target.width (panoramas). */
+  canvasWidth?: number;
 }
 
 export interface ExportResult {
@@ -48,8 +50,9 @@ export class ExportRenderer {
     const htmlPath = path.join(opts.workDir, `${jobKey.replaceAll("/", "__")}.html`);
     fs.writeFileSync(htmlPath, html, "utf8");
 
+    const canvasWidth = opts.canvasWidth ?? target.width;
     const context: BrowserContext = await this.browser!.newContext({
-      viewport: { width: target.width, height: target.height },
+      viewport: { width: canvasWidth, height: target.height },
       deviceScaleFactor: 1,
       timezoneId: "UTC",
       locale: "en-US",
@@ -68,10 +71,10 @@ export class ExportRenderer {
       if (!checks.artworkFound) throw new Error("template did not render a [data-artwork] root");
       if (
         checks.artworkSize &&
-        (checks.artworkSize.width !== target.width || checks.artworkSize.height !== target.height)
+        (checks.artworkSize.width !== canvasWidth || checks.artworkSize.height !== target.height)
       ) {
         throw new Error(
-          `artwork root is ${checks.artworkSize.width}x${checks.artworkSize.height}, expected ${target.width}x${target.height}`,
+          `artwork root is ${checks.artworkSize.width}x${checks.artworkSize.height}, expected ${canvasWidth}x${target.height}`,
         );
       }
       const raw = await page
@@ -111,4 +114,18 @@ export async function inspectPng(
     hasAlpha: !!meta.hasAlpha,
     format: meta.format ?? "unknown",
   };
+}
+
+/** Cut a wide panorama PNG into `slices` equal-width PNGs. */
+export async function slicePng(png: Buffer, slices: number, sliceWidth: number, height: number): Promise<Buffer[]> {
+  const out: Buffer[] = [];
+  for (let i = 0; i < slices; i++) {
+    out.push(
+      await sharp(png)
+        .extract({ left: i * sliceWidth, top: 0, width: sliceWidth, height })
+        .png({ compressionLevel: 9, adaptiveFiltering: false })
+        .toBuffer(),
+    );
+  }
+  return out;
 }

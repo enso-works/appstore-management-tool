@@ -29,6 +29,8 @@ export interface BrandTheme {
 /** Everything a template needs to render one artwork. Identical for preview and export. */
 export interface TemplateRenderInput<O = Record<string, unknown>> {
   target: TargetProfile;
+  /** Artwork width in px: target.width, or slices x target.width for panoramas. Type metrics still follow target.width. */
+  canvasWidth: number;
   locale: string;
   direction: TextDirection;
   /** Copy for this screen; null = intentionally empty optional field. */

@@ -811,6 +811,23 @@ export default function Editor({ name }: { name: string }) {
                     onChange={(e) => updateScreen({ source: { ...screen.source, localized: e.target.checked } })}
                   />
                 </label>
+                <label className={styles.row}>
+                  <span title="one artwork spanning consecutive screenshots; the following order numbers are reserved">
+                    Panorama
+                  </span>
+                  <select
+                    className={styles.select}
+                    value={screen.panorama?.slices ?? 1}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      updateScreen({ panorama: n > 1 ? { slices: n } : undefined });
+                    }}
+                  >
+                    <option value={1}>single screenshot</option>
+                    <option value={2}>2 slices (double wide)</option>
+                    <option value={3}>3 slices (triple wide)</option>
+                  </select>
+                </label>
                 <p className={styles.small}>
                   store/raw/{target?.family}/{screen.source.localized ? locale : refLocale}/
                   {screen.source.filePattern

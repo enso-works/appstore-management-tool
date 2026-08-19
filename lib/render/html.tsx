@@ -51,6 +51,7 @@ export function templateInputFor(
   const overrides = mod.overridesSchema.parse(job.screen.overrides) as Record<string, unknown>;
   return {
     target: job.target,
+    canvasWidth: job.canvasWidth,
     locale: job.locale,
     direction: content.direction ?? "ltr",
     fields: content.screens[job.screen.id] ?? {},
@@ -106,7 +107,7 @@ export function renderArtworkHtml(
     `<title>${job.key}</title>`,
     `<style>${baseCss()}\n${stack.map((f) => fontFaceCss(f, urls.fontUrl)).join("\n")}</style>`,
     "</head>",
-    `<body style="width:${job.target.width}px;height:${job.target.height}px;overflow:hidden;">`,
+    `<body style="width:${job.canvasWidth}px;height:${job.target.height}px;overflow:hidden;">`,
     body,
     "</body></html>",
   ].join("\n");

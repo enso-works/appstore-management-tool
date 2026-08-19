@@ -9,6 +9,8 @@ export interface CanvasItem {
   /** Artwork HTML for the iframe (empty while loading). */
   html: string;
   order: number;
+  /** Panorama slices (1 = normal). The artwork is slices x target.width wide and shown as that many frames. */
+  slices?: number;
   /** ok | warn | error for the little badge under the frame. */
   status?: "ok" | "warn" | "error";
   statusText?: string;
@@ -55,10 +57,14 @@ export default function PreviewCanvas({
   const [dragging, setDragging] = useState(false);
 
   const shown = mode === "single" ? items.filter((i) => i.id === selectedId) : items;
+  // One visual frame per slice; a panorama item contributes `slices` frames showing the same artwork shifted.
+  const frames = shown.flatMap((item) =>
+    Array.from({ length: item.slices ?? 1 }, (_, slice) => ({ item, slice, key: `${item.id}#${slice}` })),
+  );
   const gap = Math.round(target.width * (storeLook ? 0.06 : 0.04));
   const radius = storeLook ? Math.round(target.width * 0.045) : 0;
   const pad = Math.round(target.width * 0.06);
-  const contentW = shown.length * target.width + Math.max(0, shown.length - 1) * gap + (storeLook ? 2 * pad : 0);
+  const contentW = frames.length * target.width + Math.max(0, frames.length - 1) * gap + (storeLook ? 2 * pad : 0);
   const contentH = target.height + (storeLook ? 2 * pad : 0);
 
   useLayoutEffect(() => {
@@ -81,7 +87,7 @@ export default function PreviewCanvas({
   const scale = zoom === "fit" ? fitScale : zoom;
 
   // Reset to fit when the layout (mode/target/count) changes (derived-state reset during render).
-  const layoutKey = `${mode}/${target.id}/${shown.length}/${storeLook}`;
+  const layoutKey = `${mode}/${target.id}/${frames.length}/${storeLook}`;
   const [lastLayoutKey, setLastLayoutKey] = useState(layoutKey);
   if (layoutKey !== lastLayoutKey) {
     setLastLayoutKey(layoutKey);
@@ -207,48 +213,53 @@ export default function PreviewCanvas({
           borderRadius: storeLook ? Math.round(target.width * 0.02) : 0,
         }}
       >
-        {shown.map((item) => (
-          <div
-            key={item.id}
-            data-frame-id={item.id}
-            className={`${styles.frameWrap} ${item.id === selectedId && mode === "strip" ? styles.frameSelected : ""}`}
-            style={{ width: target.width, height: target.height, borderRadius: radius }}
-          >
-            {item.html ? (
-              <iframe
-                title={item.id}
-                srcDoc={item.html}
-                sandbox="allow-scripts allow-same-origin"
-                style={{
-                  width: target.width,
-                  height: target.height,
-                  border: 0,
-                  background: "#000",
-                  pointerEvents: "none",
-                  display: "block",
-                  borderRadius: radius,
-                }}
-              />
-            ) : (
-              <div className={styles.framePlaceholder} style={{ fontSize: Math.round(target.width * 0.05) }}>
-                rendering…
-              </div>
-            )}
-            {mode === "strip" && (
-              <div
-                className={styles.frameLabel}
-                style={{
-                  fontSize: Math.round(target.width * 0.045),
-                  top: target.height + Math.round(target.width * 0.02),
-                }}
-              >
-                <span className={`${styles.dot} ${styles[item.status ?? "ok"]}`} />{" "}
-                {String(item.order).padStart(2, "0")} {item.id}
-                {item.statusText ? <span className={styles.muted}> — {item.statusText}</span> : null}
-              </div>
-            )}
-          </div>
-        ))}
+        {frames.map(({ item, slice, key }) => {
+          const slices = item.slices ?? 1;
+          const artW = target.width * slices;
+          return (
+            <div
+              key={key}
+              data-frame-id={item.id}
+              className={`${styles.frameWrap} ${item.id === selectedId && mode === "strip" ? styles.frameSelected : ""}`}
+              style={{ width: target.width, height: target.height, borderRadius: radius }}
+            >
+              {item.html ? (
+                <iframe
+                  title={`${item.id} ${slice + 1}/${slices}`}
+                  srcDoc={item.html}
+                  sandbox="allow-scripts allow-same-origin"
+                  style={{
+                    width: artW,
+                    height: target.height,
+                    marginLeft: -slice * target.width,
+                    border: 0,
+                    background: "#000",
+                    pointerEvents: "none",
+                    display: "block",
+                  }}
+                />
+              ) : (
+                <div className={styles.framePlaceholder} style={{ fontSize: Math.round(target.width * 0.05) }}>
+                  rendering…
+                </div>
+              )}
+              {mode === "strip" && (
+                <div
+                  className={styles.frameLabel}
+                  style={{
+                    fontSize: Math.round(target.width * 0.045),
+                    top: target.height + Math.round(target.width * 0.02),
+                  }}
+                >
+                  <span className={`${styles.dot} ${styles[item.status ?? "ok"]}`} />{" "}
+                  {String(item.order + slice).padStart(2, "0")} {item.id}
+                  {slices > 1 ? ` (${slice + 1}/${slices})` : ""}
+                  {item.statusText && slice === 0 ? <span className={styles.muted}> — {item.statusText}</span> : null}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className={styles.zoomBar} onPointerDown={(e) => e.stopPropagation()}>

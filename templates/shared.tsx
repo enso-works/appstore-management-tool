@@ -24,8 +24,8 @@ export const commonOverridesSchema = z.strictObject({
   patternColor: z.string().min(1).optional(),
   /** Device width as a fraction of the canvas width. */
   screenshotScale: z.number().min(0.3).max(1.8).optional(),
-  /** Horizontal nudge of the device, fraction of canvas width (negative = towards the start side). */
-  screenshotOffsetX: z.number().min(-1).max(1).optional(),
+  /** Horizontal nudge of the device, fraction of the target width (negative = towards the start side). Panoramas may go up to +-3. */
+  screenshotOffsetX: z.number().min(-3).max(3).optional(),
   /** Vertical nudge of the device, fraction of canvas width (positive = down). */
   screenshotOffsetY: z.number().min(-1.2).max(1.2).optional(),
   /** Rotation in degrees. */
@@ -124,7 +124,7 @@ export function Artwork({
       dir={direction}
       style={{
         position: "relative",
-        width: target.width,
+        width: input.canvasWidth,
         height: target.height,
         overflow: "hidden",
         background: backgroundCss(input),
@@ -300,14 +300,15 @@ export function stackLayout(
 ): StackLayout {
   const { target, overrides, direction } = input;
   const W = target.width;
+  const CW = input.canvasWidth; // full artwork width (== W unless panorama)
   const pad = Math.round(W * 0.07);
-  const usable = W - 2 * pad;
+  const usable = CW - 2 * pad;
   const textWidth = overrides.textWidth ?? defaults.textWidth;
   const narrow = textWidth < 0.999;
   const textW = Math.round(usable * textWidth);
   const side = overrides.textSide ?? defaults.textSide;
   const hugsLeft = (side === "start") !== (direction === "rtl"); // visual left
-  const textLeft = hugsLeft ? pad : W - pad - textW;
+  const textLeft = hugsLeft ? pad : CW - pad - textW;
   const textTop = Math.round(W * 0.09) + Math.round(W * (overrides.textOffsetY ?? 0));
 
   const scale = overrides.screenshotScale ?? defaults.scale;
@@ -318,10 +319,10 @@ export function stackLayout(
   let devLeft: number;
   let devTop: number;
   if (narrow) {
-    devLeft = hugsLeft ? Math.round(W * defaults.sideDeviceLeft) : Math.round(W - W * defaults.sideDeviceLeft - devW);
+    devLeft = hugsLeft ? Math.round(W * defaults.sideDeviceLeft) : Math.round(CW - W * defaults.sideDeviceLeft - devW);
     devTop = textTop;
   } else {
-    devLeft = Math.round((W - devW) / 2);
+    devLeft = Math.round((CW - devW) / 2);
     devTop = textTop + textHeight + Math.round(W * defaults.gap);
   }
   devLeft += Math.round(W * (overrides.screenshotOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));

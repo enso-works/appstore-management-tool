@@ -17,8 +17,14 @@ export interface RenderJob {
   sourcePath: string;
   /** Set when the interpolated source path escaped paths.raw; the job cannot render. */
   sourceError?: string;
-  /** Absolute path of the output PNG. */
+  /** Absolute path of the output PNG (first slice for panoramas). */
   outputPath: string;
+  /** Number of output files (1, or panorama.slices). */
+  slices: number;
+  /** Absolute output path per slice (length === slices). */
+  outputPaths: string[];
+  /** Artwork width in px (slices x target.width). */
+  canvasWidth: number;
 }
 
 export function padOrder(order: number): string {
@@ -37,9 +43,20 @@ export function interpolatePattern(
     .replaceAll("{target}", vars.target);
 }
 
-/** 01_home_IPHONE_69.png — numeric prefix keeps order; token avoids collisions. */
-export function outputFileName(screen: ScreenDefinition, target: TargetProfile, format: "png" | "jpg"): string {
-  return `${padOrder(screen.order)}_${screen.id.replaceAll("-", "_")}_${target.fileToken}.${format}`;
+/** 01_home_IPHONE_69.png — numeric prefix keeps order; token avoids collisions. Panorama slices use order+slice. */
+export function outputFileName(
+  screen: ScreenDefinition,
+  target: TargetProfile,
+  format: "png" | "jpg",
+  slice = 0,
+): string {
+  return `${padOrder(screen.order + slice)}_${screen.id.replaceAll("-", "_")}_${target.fileToken}.${format}`;
+}
+
+/** Orders a screen occupies: its own plus reserved ones for panorama slices. */
+export function ordersOf(screen: ScreenDefinition): number[] {
+  const n = screen.panorama?.slices ?? 1;
+  return Array.from({ length: n }, (_, i) => screen.order + i);
 }
 
 export interface PlanFilter {
@@ -67,6 +84,11 @@ export function buildJob(
     device,
     target: targetId,
   });
+  const slices = screen.panorama?.slices ?? 1;
+  const dir = outputDirFor(target, locale, project.paths);
+  const outputPaths = Array.from({ length: slices }, (_, i) =>
+    path.join(dir, outputFileName(screen, target, project.config.output.format, i)),
+  );
   const job: RenderJob = {
     key: `${targetId}/${locale}/${screen.id}`,
     target,
@@ -75,10 +97,10 @@ export function buildJob(
     sourceLocale,
     sourceDevice: device,
     sourcePath: path.join(project.paths.raw, device, sourceLocale, file),
-    outputPath: path.join(
-      outputDirFor(target, locale, project.paths),
-      outputFileName(screen, target, project.config.output.format),
-    ),
+    outputPath: outputPaths[0],
+    slices,
+    outputPaths,
+    canvasWidth: target.width * slices,
   };
   try {
     job.sourcePath = resolveWithin(project.paths.raw, path.join(device, sourceLocale, file));

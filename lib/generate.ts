@@ -7,7 +7,7 @@ import { requiredFontFamilies, resolveFontStack, sha256File } from "./fonts";
 import { readGeneratedManifest, writeGeneratedManifest } from "./generated-manifest";
 import { IssueList, type Issue } from "./issues";
 import { displayRelative, resolveWithin } from "./paths";
-import { ExportRenderer, inspectPng } from "./render/export";
+import { ExportRenderer, inspectPng, slicePng } from "./render/export";
 import { renderArtworkHtml } from "./render/html";
 import type { RenderJob, PlanFilter } from "./render-plan";
 import { buildRenderPlan } from "./render-plan";
@@ -158,7 +158,9 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
       `Ignoring unreadable ${project.config.paths.outputScreenshots}/.store-shots-manifest.json: ${(err as Error).message}`,
     );
   }
-  const plannedPaths = new Set(plan.map((j) => relOutput(project, j)));
+  const plannedPaths = new Set(
+    plan.flatMap((j) => j.outputPaths.map((p) => path.relative(project.root, p).split(path.sep).join("/"))),
+  );
   // Stale = recorded by the previous run but no longer planned (screen removed, locale dropped...).
   // Only deleted on a full run; a filtered run must not touch jobs outside the filter.
   if (!opts.noClean && project.config.output.cleanBeforeRender && !opts.filter && previous) {
@@ -188,11 +190,15 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
       const t0 = Date.now();
       const jobIssues = new IssueList();
       const rel = relOutput(project, job);
-      const prevEntry = previous?.files.find((f) => f.path === rel);
-      // A job that does not render this run keeps its previous manifest entry
-      // (if any) so its old output stays tracked and cleanable.
+      const relPaths = job.outputPaths.map((p) => path.relative(project.root, p).split(path.sep).join("/"));
+      const prevEntries = relPaths.map((rp) => previous?.files.find((f) => f.path === rp));
+      const prevEntry = prevEntries[0];
+      // A job that does not render this run keeps its previous manifest entries
+      // (if any) so its old outputs stay tracked and cleanable.
       const keepPrevious = () => {
-        if (prevEntry && fs.existsSync(job.outputPath)) files.push(prevEntry);
+        prevEntries.forEach((e, i) => {
+          if (e && fs.existsSync(job.outputPaths[i])) files.push(e);
+        });
       };
       const blocking = issues.items.filter((i) => issueBlocksJob(i, job));
       if (!blocking.length && (job.sourceError || !fs.existsSync(job.sourcePath))) {
@@ -217,11 +223,15 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
       if (
         !opts.force &&
         prevEntry &&
-        prevEntry.inputsSha256 === hash &&
-        fs.existsSync(job.outputPath) &&
-        sha256File(job.outputPath) === prevEntry.sha256
+        prevEntries.every(
+          (e, i) =>
+            e &&
+            e.inputsSha256 === hash &&
+            fs.existsSync(job.outputPaths[i]) &&
+            sha256File(job.outputPaths[i]) === e.sha256,
+        )
       ) {
-        files.push(prevEntry);
+        for (const e of prevEntries) files.push(e!);
         summary.unchanged++;
         summary.jobs.push({ key: job.key, status: "unchanged", output: rel, issues: [], durationMs: 0 });
         log(`SAME ${job.key} (inputs unchanged)`);
@@ -236,6 +246,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
         const result = await renderer.render(job.key, html, job.target, {
           backgroundColor: project.config.output.backgroundColor,
           workDir,
+          canvasWidth: job.canvasWidth,
         });
         const c = result.checks;
         if (c.fontsFailed.length)
@@ -277,10 +288,10 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
               hint: "set validation.failOnTextOverlap to make this an error",
             });
         }
-        if (result.width !== job.target.width || result.height !== job.target.height) {
+        if (result.width !== job.canvasWidth || result.height !== job.target.height) {
           jobIssues.error(
             "render.size",
-            `Output is ${result.width}x${result.height}, expected ${job.target.width}x${job.target.height}`,
+            `Output is ${result.width}x${result.height}, expected ${job.canvasWidth}x${job.target.height}`,
             { key: job.key },
           );
         }
@@ -290,34 +301,49 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
           });
 
         if (!jobIssues.hasErrors) {
-          fs.mkdirSync(path.dirname(job.outputPath), { recursive: true });
-          const tmp = path.join(path.dirname(job.outputPath), `.${path.basename(job.outputPath)}.tmp`);
-          fs.writeFileSync(tmp, result.png);
-          const inspected = await inspectPng(tmp);
-          if (
-            inspected.width !== job.target.width ||
-            inspected.height !== job.target.height ||
-            inspected.hasAlpha ||
-            inspected.format !== "png"
-          ) {
-            fs.rmSync(tmp, { force: true });
-            jobIssues.error(
-              "render.verify",
-              `Written file failed inspection (${inspected.format} ${inspected.width}x${inspected.height} alpha=${inspected.hasAlpha})`,
-              { key: job.key },
-            );
-          } else {
-            fs.renameSync(tmp, job.outputPath);
-            const rel = relOutput(project, job);
-            files.push({
-              path: rel,
-              target: job.target.id,
-              locale: job.locale,
-              screen: job.screen.id,
-              sha256: sha256File(job.outputPath),
-              inputsSha256: hash,
+          const pngs =
+            job.slices > 1 ? await slicePng(result.png, job.slices, job.target.width, job.target.height) : [result.png];
+          const written: { path: string; slice: number; sha256: string }[] = [];
+          for (let i = 0; i < pngs.length; i++) {
+            const outPath = job.outputPaths[i];
+            fs.mkdirSync(path.dirname(outPath), { recursive: true });
+            const tmp = path.join(path.dirname(outPath), `.${path.basename(outPath)}.tmp`);
+            fs.writeFileSync(tmp, pngs[i]);
+            const inspected = await inspectPng(tmp);
+            if (
+              inspected.width !== job.target.width ||
+              inspected.height !== job.target.height ||
+              inspected.hasAlpha ||
+              inspected.format !== "png"
+            ) {
+              fs.rmSync(tmp, { force: true });
+              jobIssues.error(
+                "render.verify",
+                `Written file failed inspection (${inspected.format} ${inspected.width}x${inspected.height} alpha=${inspected.hasAlpha})`,
+                { key: job.key },
+              );
+              break;
+            }
+            fs.renameSync(tmp, outPath);
+            written.push({
+              path: path.relative(project.root, outPath).split(path.sep).join("/"),
+              slice: i,
+              sha256: sha256File(outPath),
             });
-            summary.filesWritten.push(displayRelative(project.root, job.outputPath));
+          }
+          if (!jobIssues.hasErrors) {
+            for (const w of written) {
+              files.push({
+                path: w.path,
+                target: job.target.id,
+                locale: job.locale,
+                screen: job.screen.id,
+                ...(job.slices > 1 ? { slice: w.slice } : {}),
+                sha256: w.sha256,
+                inputsSha256: hash,
+              });
+              summary.filesWritten.push(w.path);
+            }
           }
         }
       } catch (err) {

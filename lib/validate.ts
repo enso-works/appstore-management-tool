@@ -4,7 +4,7 @@ import { IssueList } from "./issues";
 import { isAppStoreLocale } from "./locales";
 import { displayRelative, fileExists, resolveWithin } from "./paths";
 import { readPngInfo } from "./png";
-import { buildRenderPlan, type RenderJob } from "./render-plan";
+import { buildRenderPlan, ordersOf, type RenderJob } from "./render-plan";
 import type { LocaleContent, Manifest } from "./schema";
 import { getTarget } from "./targets";
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
@@ -75,18 +75,17 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
     ids.add(screen.id);
 
     if (screen.enabled) {
-      const prev = orders.get(screen.order);
-      if (prev) {
-        issues.error(
-          "manifest.duplicate-order",
-          `Screens "${prev}" and "${screen.id}" both have order ${screen.order}`,
-          {
-            key,
-            file,
-          },
-        );
+      for (const o of ordersOf(screen)) {
+        const prev = orders.get(o);
+        if (prev) {
+          issues.error(
+            "manifest.duplicate-order",
+            `Screens "${prev}" and "${screen.id}" both occupy order ${o}${screen.panorama ? " (panorama slices reserve the following orders)" : ""}`,
+            { key, file },
+          );
+        }
+        orders.set(o, screen.id);
       }
-      orders.set(screen.order, screen.id);
     }
 
     const template = getTemplate(screen.template);
@@ -273,7 +272,7 @@ function validateCounts(project: Project, plan: RenderJob[], issues: IssueList) 
   const counts = new Map<string, number>();
   for (const job of plan) {
     const k = `${job.target.id}/${job.locale}`;
-    counts.set(k, (counts.get(k) ?? 0) + 1);
+    counts.set(k, (counts.get(k) ?? 0) + job.slices);
   }
   for (const targetId of project.config.targets) {
     for (const locale of project.config.locales) {

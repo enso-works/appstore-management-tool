@@ -10,6 +10,7 @@ import { targetProfiles } from "../lib/targets";
 function input(targetId: keyof typeof targetProfiles, extra: Partial<TemplateRenderInput> = {}): TemplateRenderInput {
   return {
     target: targetProfiles[targetId],
+    canvasWidth: targetProfiles[targetId].width,
     locale: "en-US",
     direction: "ltr",
     fields: { headline: "Headline text", eyebrow: "Eyebrow", caption: "Caption copy here" },

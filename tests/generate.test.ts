@@ -227,6 +227,50 @@ describe("review regressions (phases 2-8)", () => {
   }, 60_000);
 });
 
+describe("panorama screens", () => {
+  it("renders one wide artwork and slices it into consecutive exact-size files", async () => {
+    const fx = tempFixture();
+    try {
+      editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+        m.screens[0].panorama = { slices: 2 };
+        m.screens[0].overrides = { screenshotOffsetX: 0.5, textWidth: 0.5 };
+        m.screens[1].order = 3; // 2 is reserved by the panorama
+        m.screens[1].source.filePattern = "02-planning.png"; // keep the existing capture name
+      });
+      const p = loadProject(path.join(fx.root, "store-shots.config.json"));
+      const { validateProject } = await import("../lib/validate");
+      expect(validateProject(p).issues.errors).toEqual([]);
+      const s = await generateProject(p, {
+        renderer,
+        filter: { locales: ["en-US"], targets: ["iphone-6.9-1320x2868"] },
+      });
+      expect(s.failed).toBe(0);
+      expect(s.filesWritten.sort()).toEqual([
+        "fastlane/screenshots/en-US/01_home_IPHONE_69.png",
+        "fastlane/screenshots/en-US/02_home_IPHONE_69.png",
+        "fastlane/screenshots/en-US/03_planning_IPHONE_69.png",
+      ]);
+      for (const f of s.filesWritten)
+        expect(readPngInfo(path.join(fx.root, f))).toMatchObject({ width: 1320, height: 2868, hasAlpha: false });
+      const m = readGeneratedManifest(p)!;
+      expect(m.files.filter((f) => f.screen === "home").map((f) => f.slice)).toEqual([0, 1]);
+      // Second run: unchanged (both slices checked).
+      const again = await generateProject(loadProject(path.join(fx.root, "store-shots.config.json")), {
+        renderer,
+        filter: { locales: ["en-US"], targets: ["iphone-6.9-1320x2868"] },
+      });
+      expect(again.unchanged).toBe(2);
+      // Reserved order collision is an error.
+      editJson(path.join(fx.root, "store/manifest.json"), (mm) => (mm.screens[1].order = 2));
+      expect(
+        validateProject(loadProject(path.join(fx.root, "store-shots.config.json"))).issues.errors.map((i) => i.code),
+      ).toContain("manifest.duplicate-order");
+    } finally {
+      fx.cleanup();
+    }
+  }, 90_000);
+});
+
 describe("Google Play target", () => {
   it("renders 9:16 PNGs into the supply layout with Play locale names, readiness counts them, clean removes them", async () => {
     const fx = tempFixture();

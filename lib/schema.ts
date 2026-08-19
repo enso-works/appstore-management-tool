@@ -142,6 +142,12 @@ export const screenSchema = z.strictObject({
     .prefault({}),
   /** Only for targets listed here; default: all configured targets. */
   targets: z.array(z.string()).optional(),
+  /**
+   * Panorama: render one artwork `slices` screenshots wide and cut it into
+   * consecutive files (order, order+1, ...). The following order numbers are
+   * reserved for the slices.
+   */
+  panorama: z.strictObject({ slices: z.number().int().min(2).max(3) }).optional(),
   overrides: z.record(z.string(), z.unknown()).prefault({}),
 });
 
@@ -176,6 +182,8 @@ export const generatedManifestSchema = z.strictObject({
       target: z.string(),
       locale: z.string(),
       screen: z.string(),
+      /** Slice index for panorama screens (0-based); absent for single files. */
+      slice: z.number().int().min(0).optional(),
       sha256: z.string(),
       inputsSha256: z.string(),
     }),

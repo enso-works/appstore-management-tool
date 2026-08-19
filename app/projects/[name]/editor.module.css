@@ -516,7 +516,7 @@
 .frameWrap {
   position: relative;
   flex: none;
-  overflow: visible;
+  overflow: hidden;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
   background: #000;
 }
@@ -540,6 +540,9 @@
   position: absolute;
   left: 0;
   max-width: 100%;
+  padding: 0.3em 0.6em;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 0.3em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

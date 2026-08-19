@@ -48,9 +48,9 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
         data-device-overlap="allowed"
         style={{
           position: "absolute",
-          left: offX + Math.round((W - W * scale) / 2),
+          left: offX + Math.round((input.canvasWidth - input.canvasWidth * scale) / 2),
           top: offY + (scale === 1 ? 0 : Math.round((target.height - target.height * scale) / 2)),
-          width: Math.round(W * scale),
+          width: Math.round(input.canvasWidth * scale),
           height: Math.round(target.height * scale),
           transform: tilt ? `rotate(${tilt}deg)` : undefined,
           transformOrigin: "50% 50%",
