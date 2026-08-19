@@ -3,15 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { readAppJson, type Project } from "./config";
-import { resolveFontStack, sha256File } from "./fonts";
+import { requiredFontFamilies, resolveFontStack, sha256File } from "./fonts";
 import { readGeneratedManifest, writeGeneratedManifest } from "./generated-manifest";
 import { IssueList, type Issue } from "./issues";
-import { displayRelative } from "./paths";
+import { displayRelative, resolveWithin } from "./paths";
 import { ExportRenderer, inspectPng } from "./render/export";
 import { renderArtworkHtml } from "./render/html";
 import type { RenderJob, PlanFilter } from "./render-plan";
 import { buildRenderPlan } from "./render-plan";
-import type { GeneratedManifest } from "./schema";
+import type { GeneratedManifest, LocaleContent } from "./schema";
 import { validateProject } from "./validate";
 
 export interface GenerateOptions {
@@ -92,18 +92,26 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
   };
 
   const { stack: fontStack, missing: missingFonts } = resolveFontStack(project);
-  const font = fontStack.find((f) => f.family.toLowerCase() === project.config.brand.font.family.toLowerCase());
-  for (const m of missingFonts.filter((x) => x !== project.config.brand.font.family)) {
+  const required = requiredFontFamilies(project);
+  const font = required.every((fam) => fontStack.some((f) => f.family.toLowerCase() === fam.toLowerCase()))
+    ? fontStack[0]
+    : undefined;
+  const alreadyReported = new Set(issues.items.filter((i) => i.code === "font.fallback-missing").map((i) => i.message));
+  for (const m of missingFonts.filter((x) => !required.includes(x))) {
+    if ([...alreadyReported].some((msg) => msg.includes(`"${m}"`))) continue;
     issues.warn("font.fallback-missing", `Fallback font "${m}" is not available locally; it will be skipped`, {
       file: "store-shots.config.json",
       hint: `store-shots fonts add "${m}"`,
     });
   }
-  if (!font) {
-    issues.error("font.missing", `Font "${project.config.brand.font.family}" is not available locally`, {
-      file: "store-shots.config.json",
-      hint: `store-shots fonts add "${project.config.brand.font.family}" --project ${displayRelative(process.cwd(), project.root) || "."}`,
-    });
+  if (!font && !issues.items.some((i) => i.code === "font.missing")) {
+    const missingRequired = required.filter((fam) => missingFonts.includes(fam));
+    for (const fam of missingRequired) {
+      issues.error("font.missing", `Font "${fam}" is not available locally`, {
+        file: "store-shots.config.json",
+        hint: `store-shots fonts add "${fam}" --project ${displayRelative(process.cwd(), project.root) || "."}`,
+      });
+    }
   }
 
   if (!validation.manifest) {
@@ -157,6 +165,8 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
     const stale = previous.files.filter((f) => !plannedPaths.has(f.path));
     for (const f of stale) {
       const abs = path.join(project.root, f.path);
+      const relCheck = path.relative(project.root, abs);
+      if (relCheck.startsWith("..") || path.isAbsolute(relCheck)) continue; // never follow an escaping entry
       if (fs.existsSync(abs)) fs.rmSync(abs);
     }
     if (stale.length) log(`removed ${stale.length} stale file(s) from the previous run`);
@@ -170,23 +180,40 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
   // Entries for jobs outside this run's plan are carried over untouched.
   const files: GeneratedManifest["files"] = previous?.files.filter((f) => !plannedPaths.has(f.path)) ?? [];
   const fontHashes = fontStack.flatMap((f) => f.files.map((x) => x.sha256));
+  const templatesHash = templatesSourceHash();
 
   try {
     await renderer.start();
     for (const job of plan) {
       const t0 = Date.now();
       const jobIssues = new IssueList();
+      const rel = relOutput(project, job);
+      const prevEntry = previous?.files.find((f) => f.path === rel);
+      // A job that does not render this run keeps its previous manifest entry
+      // (if any) so its old output stays tracked and cleanable.
+      const keepPrevious = () => {
+        if (prevEntry && fs.existsSync(job.outputPath)) files.push(prevEntry);
+      };
       const blocking = issues.items.filter((i) => issueBlocksJob(i, job));
+      if (!blocking.length && (job.sourceError || !fs.existsSync(job.sourcePath))) {
+        // validateSources reports a missing file once; a second job sharing it must still be skipped, not crash.
+        blocking.push({
+          level: "error",
+          code: "source.missing",
+          message: job.sourceError ?? "Raw capture not found",
+          key: job.key,
+          file: displayRelative(project.root, job.sourcePath),
+        });
+      }
       if (blocking.length) {
         summary.jobs.push({ key: job.key, status: "skipped", issues: blocking, durationMs: 0 });
         summary.skipped++;
+        keepPrevious();
         log(`SKIP ${job.key}: ${blocking[0].message}`);
         continue;
       }
       const content = validation.content.get(job.locale)!;
-      const rel = relOutput(project, job);
-      const hash = inputsHash(project, job, content.screens[job.screen.id] ?? {}, toolVersion, fontHashes);
-      const prevEntry = previous?.files.find((f) => f.path === rel);
+      const hash = inputsHash(project, job, content, toolVersion, fontHashes, templatesHash);
       if (
         !opts.force &&
         prevEntry &&
@@ -298,6 +325,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
       }
       issues.merge(jobIssues);
       const status: JobStatus = jobIssues.hasErrors ? "failed" : "rendered";
+      if (status === "failed") keepPrevious();
       if (status === "rendered") summary.rendered++;
       else summary.failed++;
       summary.jobs.push({
@@ -355,26 +383,54 @@ function readToolVersion(): string {
   }
 }
 
-/** Stable hash of everything that influences one output file (for incremental rendering, Phase 7). */
+/** Hash of the template sources: a template edit must invalidate every output. */
+let templatesHashCache: string | undefined;
+export function templatesSourceHash(): string {
+  if (templatesHashCache) return templatesHashCache;
+  const dir = path.resolve(import.meta.dirname, "..", "templates");
+  const h = crypto.createHash("sha256");
+  for (const name of fs.readdirSync(dir).sort()) {
+    if (/\.tsx?$/.test(name)) h.update(name).update(fs.readFileSync(path.join(dir, name)));
+  }
+  templatesHashCache = h.digest("hex");
+  return templatesHashCache;
+}
+
+/** Stable hash of everything that influences one output file (incremental rendering). */
 export function inputsHash(
   project: Project,
   job: RenderJob,
-  fields: Record<string, string | null | undefined>,
+  content: LocaleContent,
   toolVersion: string,
   fontHashes: string[],
+  templatesHash: string,
 ): string {
+  const fields = content.screens[job.screen.id] ?? {};
+  const assets: Record<string, string> = {};
+  const bg = job.screen.overrides.backgroundImage;
+  if (typeof bg === "string" && bg.startsWith("asset:")) {
+    try {
+      const abs = resolveWithin(project.paths.assets, bg.slice("asset:".length));
+      if (fs.existsSync(abs)) assets[bg] = sha256File(abs);
+    } catch {
+      // invalid asset paths are reported by validate; nothing to hash
+    }
+  }
   const h = crypto.createHash("sha256");
   h.update(
     JSON.stringify({
       toolVersion,
+      templatesHash,
       target: job.target.id,
       locale: job.locale,
+      direction: content.direction ?? null,
       screen: { id: job.screen.id, template: job.screen.template, overrides: job.screen.overrides },
       fields,
       brand: project.config.brand,
       output: project.config.output,
       source: sha256File(job.sourcePath),
       fonts: fontHashes,
+      assets,
     }),
   );
   return h.digest("hex");

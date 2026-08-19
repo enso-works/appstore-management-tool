@@ -111,6 +111,7 @@ export default function Editor({ name }: { name: string }) {
     fits?: FitResult[];
     error?: string;
     loading: boolean;
+    sourceExists?: boolean;
   }>({ loading: false });
   const [status, setStatus] = useState<string>("");
   const [gen, setGen] = useState<{ running: boolean; summary?: GenerationSummary & { log: string[] } }>({
@@ -186,8 +187,17 @@ export default function Editor({ name }: { name: string }) {
           setPreviewHtml("");
           return;
         }
+        const sidecar = res.headers.get("x-store-shots-job");
+        let sourceExists: boolean | undefined;
+        try {
+          sourceExists = sidecar
+            ? (JSON.parse(decodeURIComponent(sidecar)) as { sourceExists: boolean }).sourceExists
+            : undefined;
+        } catch {
+          sourceExists = undefined;
+        }
         setPreviewHtml(await res.text());
-        setPreviewInfo({ loading: false });
+        setPreviewInfo({ loading: false, sourceExists });
       } catch (err) {
         if ((err as Error).name !== "AbortError") setPreviewInfo({ loading: false, error: (err as Error).message });
       }
@@ -383,7 +393,7 @@ export default function Editor({ name }: { name: string }) {
 
   // ---- badges ------------------------------------------------------------
   function screenStatus(s: ScreenDefinition): { level: "ok" | "warn" | "error"; title: string } {
-    const keys = new Set([`${locale}/${s.id}`, `${targetId}/${locale}/${s.id}`]);
+    const keys = new Set([s.id, `${locale}/${s.id}`, `${targetId}/${locale}/${s.id}`]);
     const hits = issues.filter((i) => i.key && keys.has(i.key));
     const err = hits.find((i) => i.level === "error");
     if (err) return { level: "error", title: err.message };
@@ -395,13 +405,37 @@ export default function Editor({ name }: { name: string }) {
 
   const previewProblems: string[] = [];
   const previewWarnings: string[] = [];
+  const failOnOverflow = snap?.config.validation.failOnOverflow ?? true;
+  const failOnOverlap = snap?.config.validation.failOnTextOverlap ?? false;
   if (previewInfo.checks) {
-    for (const o of previewInfo.checks.overflow) previewProblems.push(`"${o.id}" overflows even at the minimum size`);
-    for (const id of previewInfo.checks.textOverlapsDevice) previewWarnings.push(`"${id}" overlaps the device`);
+    for (const o of previewInfo.checks.overflow)
+      (failOnOverflow ? previewProblems : previewWarnings).push(`"${o.id}" overflows even at the minimum size`);
+    for (const id of previewInfo.checks.textOverlapsDevice)
+      (failOnOverlap ? previewProblems : previewWarnings).push(`"${id}" overlaps the device`);
     if (previewInfo.checks.missingImages.length) previewProblems.push("raw capture did not load");
     if (previewInfo.checks.fontsFailed.length)
       previewProblems.push(`font failed: ${previewInfo.checks.fontsFailed.join(", ")}`);
   }
+  if (previewInfo.sourceExists === false) previewProblems.push("raw capture missing (placeholder shown)");
+  // Issues that no screen badge can carry: config, fonts, manifest-wide. Shown above the canvas.
+  const globalIssues = issues.filter(
+    (i) =>
+      i.level !== "info" &&
+      (!i.key ||
+        !screens.some(
+          (s) =>
+            [s.id, `${locale}/${s.id}`, `${targetId}/${locale}/${s.id}`].includes(i.key!) ||
+            i.key!.endsWith(`/${s.id}`),
+        )),
+  );
+  const currentScreenIssues = screen
+    ? issues.filter(
+        (i) =>
+          i.level !== "info" &&
+          i.key &&
+          [screen.id, `${locale}/${screen.id}`, `${targetId}/${locale}/${screen.id}`].includes(i.key),
+      )
+    : [];
   const fitted = (previewInfo.fits ?? []).filter((f) => f.scale < 1 && f.fits);
 
   if (loadError)
@@ -532,6 +566,17 @@ export default function Editor({ name }: { name: string }) {
           </aside>
 
           <main className={styles.canvas} ref={canvasRef}>
+            {(globalIssues.length > 0 || currentScreenIssues.length > 0) && (
+              <div className={styles.issueBanner}>
+                {[...globalIssues, ...currentScreenIssues].slice(0, 6).map((i, idx) => (
+                  <div key={idx} className={i.level === "error" ? styles.error : styles.warn}>
+                    {i.key ? `[${i.key}] ` : ""}
+                    {i.message}
+                    {i.hint ? <span className={styles.muted}> — {i.hint}</span> : null}
+                  </div>
+                ))}
+              </div>
+            )}
             {!screen && <p className={styles.muted}>No screen selected. Add one on the left.</p>}
             {screen && target && (
               <div className={styles.frame} style={{ width: target.width * scale, height: target.height * scale }}>
@@ -643,7 +688,8 @@ export default function Editor({ name }: { name: string }) {
                   {screen.source.filePattern
                     .replaceAll("{order}", String(screen.order).padStart(2, "0"))
                     .replaceAll("{id}", screen.id)}
-                  {previewInfo.checks && previewInfo.checks.missingImages.length > 0 && (
+                  {(previewInfo.sourceExists === false ||
+                    (previewInfo.checks && previewInfo.checks.missingImages.length > 0)) && (
                     <span className={styles.error}> (missing)</span>
                   )}
                 </p>

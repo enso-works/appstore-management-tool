@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { templateModules } from "../templates";
-import { stackLayout } from "../templates/shared";
+import { stackLayout, withAlpha } from "../templates/shared";
 import type { TemplateRenderInput } from "../templates/types";
 import { renderStatic } from "../lib/render/ssr";
 import { targetProfiles } from "../lib/targets";
@@ -100,6 +100,15 @@ describe("template contracts", () => {
       mod.render(input("iphone-6.9-1320x2868", { overrides: { backgroundImage: "asset:backgrounds/x.png" } })),
     );
     expect(html).toContain("asset://backgrounds/x.png");
+  });
+});
+
+describe("withAlpha", () => {
+  it("handles #rgb, #rrggbb, #rrggbbaa and leaves other colours alone", () => {
+    expect(withAlpha("#694", 0.5)).toBe("rgba(102, 153, 68, 0.5)");
+    expect(withAlpha("#6946F4", 0.93)).toBe("rgba(105, 70, 244, 0.93)");
+    expect(withAlpha("#6946F4CC", 0.93)).toBe("rgba(105, 70, 244, 0.93)");
+    expect(withAlpha("tomato", 0.5)).toBe("tomato");
   });
 });
 

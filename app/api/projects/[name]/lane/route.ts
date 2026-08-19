@@ -43,23 +43,53 @@ export async function POST(req: Request, ctx: Ctx) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
-        const send = (obj: unknown) => controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
-        runLane(project, {
-          key,
-          confirmed: body.confirmed,
-          overrideReason: body.overrideReason,
-          onLine: (line, s) => send({ stream: s, line }),
-          signal: req.signal,
-        })
-          .then((r) => {
-            send({ done: true, exitCode: r.exitCode, durationMs: r.durationMs });
+        let closed = false;
+        const send = (obj: unknown) => {
+          if (closed) return;
+          try {
+            controller.enqueue(encoder.encode(JSON.stringify(obj) + "\n"));
+          } catch {
+            closed = true; // client went away
+          }
+        };
+        const finish = () => {
+          if (closed) return;
+          closed = true;
+          try {
             controller.close();
+          } catch {
+            // already closed by cancel
+          }
+        };
+        req.signal.addEventListener("abort", () => {
+          closed = true;
+        });
+        let run: Promise<unknown>;
+        try {
+          run = runLane(project, {
+            key,
+            confirmed: body.confirmed,
+            overrideReason: body.overrideReason,
+            onLine: (line, s) => send({ stream: s, line }),
+            signal: req.signal,
+          });
+        } catch (err) {
+          run = Promise.reject(err);
+        }
+        run
+          .then((r) => {
+            const res = r as { exitCode: number | null; durationMs: number };
+            send({ done: true, exitCode: res.exitCode, durationMs: res.durationMs });
+            finish();
           })
           .catch((err: Error) => {
             send({ stream: "meta", line: `error: ${err.message}` });
             send({ done: true, exitCode: null, error: err.message });
-            controller.close();
+            finish();
           });
+      },
+      cancel() {
+        // client disconnected; runLane's abort signal (req.signal) kills the child
       },
     });
     return new Response(stream, {

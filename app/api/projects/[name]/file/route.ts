@@ -52,6 +52,8 @@ export async function GET(req: Request, ctx: Ctx) {
     const type = MIME[path.extname(abs).toLowerCase()];
     if (!type) throw new HttpError(404, "not found");
     const body = fs.readFileSync(abs);
-    return new Response(body, { headers: { "content-type": type, "cache-control": "no-store" } });
+    // Fonts are content-addressed by the lock file and never change in place; captures do.
+    const cache = kind === "font" ? "private, max-age=3600" : "no-store";
+    return new Response(body, { headers: { "content-type": type, "cache-control": cache } });
   });
 }

@@ -60,20 +60,30 @@ export default function StorePanel({
   const [override, setOverride] = useState("");
   const logRef = useRef<HTMLPreElement>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch(`/api/projects/${encodeURIComponent(name)}/metadata`, { cache: "no-store" });
-    if (res.ok) {
-      const data = (await res.json()) as MetadataSnapshot;
-      setMeta(data);
-      setDrafts({});
-    }
-    const pf: typeof preflight = {};
-    for (const key of ["validate", "metadata", "screenshots"] as LaneKey[]) {
-      const r = await fetch(`/api/projects/${encodeURIComponent(name)}/lane?key=${key}`, { cache: "no-store" });
-      if (r.ok) pf[key] = await r.json();
-    }
-    setPreflight(pf);
-  }, [name]);
+  const load = useCallback(
+    async (clearDraftsFor?: string[]) => {
+      const res = await fetch(`/api/projects/${encodeURIComponent(name)}/metadata`, { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as MetadataSnapshot;
+        setMeta(data);
+        // Only drop drafts that were just saved; unsaved edits in other locales survive a reload.
+        if (clearDraftsFor) {
+          setDrafts((d) => {
+            const next = { ...d };
+            for (const l of clearDraftsFor) delete next[l];
+            return next;
+          });
+        }
+      }
+      const pf: typeof preflight = {};
+      for (const key of ["validate", "metadata", "screenshots"] as LaneKey[]) {
+        const r = await fetch(`/api/projects/${encodeURIComponent(name)}/lane?key=${key}`, { cache: "no-store" });
+        if (r.ok) pf[key] = await r.json();
+      }
+      setPreflight(pf);
+    },
+    [name],
+  );
 
   useEffect(() => {
     const t = setTimeout(() => void load(), 0);
@@ -111,7 +121,7 @@ export default function StorePanel({
       return;
     }
     onReadiness(body.readiness);
-    await load();
+    await load([locale]);
     setStatus("Saved");
     setTimeout(() => setStatus(""), 1500);
   }
@@ -161,7 +171,7 @@ export default function StorePanel({
         return;
       }
     }
-    await load();
+    await load(locales);
     setStatus("Saved all");
     setTimeout(() => setStatus(""), 1500);
   }

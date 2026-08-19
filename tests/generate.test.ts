@@ -157,6 +157,76 @@ describe("generate on the fixture", () => {
   }, 60_000);
 });
 
+describe("review regressions (phases 2-8)", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+  const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+  const out = (rel: string) => path.join(fx.root, "fastlane/screenshots", rel);
+
+  it("skips every job that shares a missing capture instead of crashing, and keeps old outputs tracked", async () => {
+    const p = load();
+    await generateProject(p, { renderer });
+    // "planning" is localized:false -> en-US and ar-SA share one file.
+    fs.rmSync(path.join(fx.root, "store/raw/iphone/en-US/02-planning.png"));
+    const s = await generateProject(load(), { renderer });
+    expect(s.aborted).toBe(false);
+    expect(s.skipped).toBe(2);
+    expect(s.unchanged).toBe(6);
+    // Old outputs for the skipped jobs stay on disk AND stay in the manifest, so clean still removes them.
+    expect(fs.existsSync(out("ar-SA/02_planning_IPHONE_69.png"))).toBe(true);
+    expect(readGeneratedManifest(load())!.files.some((f) => f.path.endsWith("ar-SA/02_planning_IPHONE_69.png"))).toBe(
+      true,
+    );
+    cleanGenerated(load());
+    expect(fs.existsSync(out("ar-SA/02_planning_IPHONE_69.png"))).toBe(false);
+  }, 60_000);
+
+  it("re-renders when direction or a referenced background asset changes", async () => {
+    const p = load();
+    fs.mkdirSync(path.join(fx.root, "store/assets/backgrounds"), { recursive: true });
+    const asset = path.join(fx.root, "store/assets/backgrounds/bg.png");
+    fs.writeFileSync(
+      asset,
+      (await import("../lib/png-write")).encodeSolidPng({ width: 10, height: 10, color: [200, 10, 10] }),
+    );
+    editJson(
+      path.join(fx.root, "store/manifest.json"),
+      (m) => (m.screens[0].overrides = { backgroundImage: "asset:backgrounds/bg.png" }),
+    );
+    await generateProject(load(), { renderer, filter: { screens: ["home"], locales: ["en-US"] } });
+    let s = await generateProject(load(), { renderer, filter: { screens: ["home"], locales: ["en-US"] } });
+    expect(s.unchanged).toBe(2);
+    fs.writeFileSync(
+      asset,
+      (await import("../lib/png-write")).encodeSolidPng({ width: 10, height: 10, color: [10, 200, 10] }),
+    );
+    s = await generateProject(load(), { renderer, filter: { screens: ["home"], locales: ["en-US"] } });
+    expect(s.rendered).toBe(2);
+    editJson(path.join(fx.root, "store/content/en-US.json"), (c) => (c.direction = "rtl"));
+    s = await generateProject(load(), { renderer, filter: { screens: ["home"], locales: ["en-US"] } });
+    expect(s.rendered).toBe(2);
+    void p;
+  }, 90_000);
+
+  it("treats a missing headline font as an error, not a silent fallback", async () => {
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => (c.brand.headlineFont = { family: "Nope Serif" }));
+    const s = await generateProject(load(), { renderer });
+    expect(s.aborted).toBe(true);
+    expect(s.issues.filter((i) => i.code === "font.missing")).toHaveLength(1);
+    expect(s.issues[0].message).toContain("Nope Serif");
+  }, 60_000);
+
+  it("full-bleed-card text over the capture is not reported as an overlap", async () => {
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => (m.screens[0].template = "full-bleed-card"));
+    for (const l of ["en-US", "ar-SA"])
+      editJson(path.join(fx.root, `store/content/${l}.json`), (c) => delete c.screens.home.eyebrow);
+    const s = await generateProject(load(), { renderer, filter: { screens: ["home"], locales: ["en-US"] } });
+    expect(s.rendered).toBe(2);
+    expect(s.issues.some((i) => i.code === "render.text-overlaps-device")).toBe(false);
+  }, 60_000);
+});
+
 describe("Google Play target", () => {
   it("renders 9:16 PNGs into the supply layout with Play locale names, readiness counts them, clean removes them", async () => {
     const fx = tempFixture();

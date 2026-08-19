@@ -10,7 +10,7 @@ import { getTarget } from "./targets";
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
 import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
-import { resolveFontStack } from "./fonts";
+import { requiredFontFamilies, resolveFontStack } from "./fonts";
 import { GlyphChecker, suggestFamilyFor } from "./glyphs";
 
 export interface ValidationResult {
@@ -297,8 +297,9 @@ function validateCounts(project: Project, plan: RenderJob[], issues: IssueList) 
 /** Every character of every field must exist in the local font stack (plan §12.3). */
 function validateGlyphs(project: Project, manifest: Manifest, content: Map<string, LocaleContent>, issues: IssueList) {
   const { stack, missing } = resolveFontStack(project);
+  const required = requiredFontFamilies(project);
   for (const m of missing) {
-    const isBrand = m === project.config.brand.font.family;
+    const isBrand = required.includes(m);
     issues[isBrand ? "error" : "warn"](
       isBrand ? "font.missing" : "font.fallback-missing",
       `Font "${m}" is not available locally`,

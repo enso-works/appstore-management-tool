@@ -422,6 +422,7 @@ program
       locale?: string;
       udid?: string;
       cleanStatusBar?: boolean;
+      force?: boolean;
       list?: boolean;
       project?: string;
     }) => {
@@ -440,6 +441,7 @@ program
           screenId: opts.screen,
           udid: opts.udid,
           cleanStatusBar: opts.cleanStatusBar,
+          force: opts.force,
         });
         console.log(`captured ${displayRelative(project.root, r.file)}  (${r.width}x${r.height}, ${r.simulator.name})`);
         if (r.aspectWarning) console.log(`WARN  ${r.aspectWarning}`);

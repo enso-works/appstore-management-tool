@@ -47,7 +47,8 @@ export const IN_PAGE_CHECKS_SOURCE = `(function (tolerance) {
     if (!imgs[i].complete || imgs[i].naturalWidth === 0) result.missingImages.push(imgs[i].getAttribute("src") || "(no src)");
   }
   var device = doc.querySelector("[data-device]");
-  var dr = device ? device.getBoundingClientRect() : null;
+  // Templates that intentionally lay text over the capture (full-bleed card) opt out.
+  var dr = device && device.getAttribute("data-device-overlap") !== "allowed" ? device.getBoundingClientRect() : null;
   function intersects(a, b) {
     return a.left < b.right - tolerance && a.right > b.left + tolerance && a.top < b.bottom - tolerance && a.bottom > b.top + tolerance;
   }

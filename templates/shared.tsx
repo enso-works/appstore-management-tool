@@ -58,6 +58,20 @@ export function darken(hex: string, factor: number): string {
   return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
+/** #rgb / #rrggbb / #rrggbbaa -> rgba(r,g,b,alpha); other colour strings are returned unchanged. */
+export function withAlpha(color: string, alpha: number): string {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(color.trim());
+  if (!m) return color;
+  let hex = m[1];
+  if (hex.length === 3)
+    hex = hex
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  const n = parseInt(hex.slice(0, 6), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
 export function defaultBackground(primary: string): string {
   return `linear-gradient(165deg, ${primary} 0%, ${darken(primary, 0.45)} 100%)`;
 }

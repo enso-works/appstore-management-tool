@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { z } from "zod";
-import { Artwork, COMMON_OVERRIDE_KEYS, commonOverridesSchema, TextBlock, textAlignOf } from "./shared";
+import { Artwork, COMMON_OVERRIDE_KEYS, commonOverridesSchema, TextBlock, textAlignOf, withAlpha } from "./shared";
 import type { TemplateModule, TemplateRenderInput } from "./types";
 
 /**
@@ -45,6 +45,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
     <Artwork input={input}>
       <div
         data-device=""
+        data-device-overlap="allowed"
         style={{
           position: "absolute",
           left: offX + Math.round((W - W * scale) / 2),
@@ -73,7 +74,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
           [position === "top" ? "top" : "bottom"]: pad,
           padding: Math.round(W * 0.05),
           borderRadius: Math.round(W * 0.04),
-          background: overrides.cardColor ?? `${brand.primary}ee`,
+          background: overrides.cardColor ?? withAlpha(brand.primary, 0.93),
           boxShadow: `0 ${Math.round(W * 0.02)}px ${Math.round(W * 0.06)}px rgba(0,0,0,0.3)`,
           display: "flex",
           flexDirection: "column",

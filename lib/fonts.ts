@@ -88,9 +88,19 @@ function safeLock(dir: string): FontsLock | undefined {
  * returned in `missing` so validate can report them; the brand family itself
  * missing is a hard error for the caller.
  */
+/** Families whose absence is an error (not a fallback): body and headline faces. */
+export function requiredFontFamilies(project: Project): string[] {
+  const b = project.config.brand;
+  return [b.font.family, ...(b.headlineFont ? [b.headlineFont.family] : [])];
+}
+
 export function resolveFontStack(project: Project): { stack: ResolvedFont[]; missing: string[] } {
   const b = project.config.brand;
-  const wanted = [b.font.family, ...(b.headlineFont ? [b.headlineFont.family] : []), ...b.font.fallbacks];
+  const wanted = [
+    b.font.family,
+    ...(b.headlineFont ? [b.headlineFont.family, ...b.headlineFont.fallbacks] : []),
+    ...b.font.fallbacks,
+  ];
   const stack: ResolvedFont[] = [];
   const missing: string[] = [];
   for (const family of wanted) {
