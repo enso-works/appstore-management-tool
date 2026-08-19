@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
+import { captureAll, captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
 import { loadProject } from "../lib/config";
 import { encodeSolidPng } from "../lib/png-write";
 import { editJson, tempFixture } from "./helpers";
@@ -147,5 +147,52 @@ describe("capture helper", () => {
 
   it("prints locale switch commands", () => {
     expect(localeSwitchHint("AAA", "de-DE")[1]).toContain("de_DE");
+  });
+});
+
+describe("capture --all", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+  const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+
+  it("opens each deep link, waits, captures in order, and skips screens without one", async () => {
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens[0].source.deepLink = "demo://home";
+    });
+    const calls: string[][] = [];
+    const sleeps: number[] = [];
+    const r = await captureAll(load(), {
+      device: "iphone",
+      locale: "en-US",
+      exec: fakeExec(),
+      spawn: fakeSpawn(calls),
+      settleSeconds: 0.01,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    expect(r.captured).toHaveLength(1);
+    expect(r.skipped).toEqual([{ screenId: "planning", reason: "no source.deepLink in the manifest" }]);
+    expect(calls.some((c) => c[2] === "openurl" && c[4] === "demo://home")).toBe(true);
+    expect(sleeps).toEqual([10]);
+    const openIdx = calls.findIndex((c) => c[2] === "openurl");
+    const shotIdx = calls.findIndex((c) => c[2] === "io");
+    expect(openIdx).toBeLessThan(shotIdx);
+  });
+
+  it("skips non-default locales for non-localized screens", async () => {
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens[1].source.deepLink = "demo://planning";
+    });
+    const r = await captureAll(load(), {
+      device: "iphone",
+      locale: "ar-SA",
+      exec: fakeExec(),
+      spawn: fakeSpawn([]),
+      sleep: async () => {},
+    });
+    expect(r.captured).toHaveLength(0);
+    expect(r.skipped.find((sk) => sk.screenId === "planning")?.reason).toMatch(/localized=false/);
   });
 });

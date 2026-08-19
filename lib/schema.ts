@@ -140,6 +140,8 @@ export const screenSchema = z.strictObject({
       filePattern: safePathFragment.default("{order}-{id}.png"),
       /** false: use the default-locale capture for every locale. */
       localized: z.boolean().default(true),
+      /** Deep link the capture helper opens before screenshotting (capture --all), e.g. "braele://session/478". */
+      deepLink: z.string().min(1).optional(),
     })
     .prefault({}),
   /** Only for targets listed here; default: all configured targets. */

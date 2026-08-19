@@ -14,7 +14,7 @@ import { addGoogleFont, appFontsDir, checkFont, listFonts, resolveFont } from ".
 import { listMetadataLocales, readMetadataLocale } from "../lib/metadata";
 import { METADATA_FIELDS } from "../lib/schema";
 import { LANE_KEYS, preflightLane, runLane, type LaneKey } from "../lib/fastlane";
-import { captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
+import { captureAll, captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
 import { writeContactSheets } from "../lib/sheet";
 
 const program = new Command();
@@ -417,7 +417,9 @@ program
 program
   .command("capture")
   .description("Screenshot a booted simulator into store/raw/<device>/<locale>/ with the name the manifest expects")
-  .option("--screen <id>", "screen id from store/manifest.json (required unless --list)")
+  .option("--screen <id>", "screen id from store/manifest.json (required unless --list or --all)")
+  .option("--all", "capture every enabled screen that declares source.deepLink, in order")
+  .option("--settle <seconds>", "wait after opening each deep link (default 2)")
   .option("--device <device>", "raw-capture device folder (iphone | ipad)", "iphone")
   .option("--locale <locale>", "locale folder (default: the project's default locale)")
   .option("--udid <udid>", "simulator UDID when more than one of that family is booted")
@@ -426,8 +428,10 @@ program
   .option("--list", "list booted simulators and exit")
   .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
   .action(
-    (opts: {
-      screen: string;
+    async (opts: {
+      screen?: string;
+      all?: boolean;
+      settle?: string;
       device: string;
       locale?: string;
       udid?: string;
@@ -444,11 +448,28 @@ program
       }
       const project = openProject(opts.project);
       const locale = opts.locale ?? project.config.defaultLocale;
+      if (opts.all) {
+        const r = await captureAll(project, {
+          device: opts.device,
+          locale,
+          udid: opts.udid,
+          cleanStatusBar: opts.cleanStatusBar,
+          settleSeconds: opts.settle ? Number(opts.settle) : undefined,
+          log: (l) => console.log(l),
+        });
+        console.log(`\n${r.captured.length} captured, ${r.skipped.length} skipped`);
+        for (const sk of r.skipped) console.log(`  skipped ${sk.screenId}: ${sk.reason}`);
+        process.exit(r.captured.length === 0 && r.skipped.length > 0 ? 1 : 0);
+      }
+      if (!opts.screen) {
+        console.error("--screen <id> is required (or --all / --list)");
+        process.exit(2);
+      }
       try {
         const r = captureScreen(project, {
           device: opts.device,
           locale,
-          screenId: opts.screen,
+          screenId: opts.screen!,
           udid: opts.udid,
           cleanStatusBar: opts.cleanStatusBar,
           force: opts.force,

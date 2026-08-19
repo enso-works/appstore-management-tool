@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { sourceDeviceFor, type Project } from "./config";
 import { loadManifest } from "./content";
+import type { ScreenDefinition } from "./schema";
 import { buildJob } from "./render-plan";
 import { readPngInfo } from "./png";
 import { getTarget } from "./targets";
@@ -162,4 +163,65 @@ export function localeSwitchHint(udid: string, locale: string): string[] {
     `xcrun simctl spawn ${udid} defaults write "Apple Global Domain" AppleLocale -string ${locale.replace("-", "_")}`,
     `xcrun simctl shutdown ${udid} && xcrun simctl boot ${udid}   # relaunch so the app picks it up`,
   ];
+}
+
+export interface CaptureAllOptions extends Omit<CaptureOptions, "screenId"> {
+  /** Seconds to wait after opening each deep link before the screenshot (default 2). */
+  settleSeconds?: number;
+  log?: (line: string) => void;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+export interface CaptureAllResult {
+  captured: CaptureResult[];
+  skipped: { screenId: string; reason: string }[];
+}
+
+/**
+ * Capture every enabled screen in order (roadmap #8). Screens that declare
+ * `source.deepLink` are navigated to via `xcrun simctl openurl`; screens
+ * without one are skipped with a hint (the user captures those by hand).
+ */
+export async function captureAll(project: Project, opts: CaptureAllOptions): Promise<CaptureAllResult> {
+  const spawn = opts.spawn ?? spawnSync;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const log = opts.log ?? (() => {});
+  const { manifest } = loadManifest(project);
+  if (!manifest) throw new Error(`No manifest at ${project.config.paths.manifest}`);
+  const screens = [...manifest.screens].filter((s) => s.enabled).sort((a, b) => a.order - b.order);
+  const captured: CaptureResult[] = [];
+  const skipped: { screenId: string; reason: string }[] = [];
+  for (const screen of screens as ScreenDefinition[]) {
+    if (!screen.source.deepLink) {
+      skipped.push({ screenId: screen.id, reason: "no source.deepLink in the manifest" });
+      continue;
+    }
+    if (!screen.source.localized && opts.locale !== project.config.defaultLocale) {
+      skipped.push({
+        screenId: screen.id,
+        reason: `localized=false; captured only for ${project.config.defaultLocale}`,
+      });
+      continue;
+    }
+    try {
+      // Resolve the simulator once per screen (cheap) so --udid and family rules apply.
+      const booted = listBootedSimulators(opts.exec ?? execFileSync);
+      const sim = opts.udid
+        ? booted.find((b) => b.udid === opts.udid)
+        : booted.find((b) => (/ipad|tablet/i.test(opts.device) ? b.family === "iPad" : b.family === "iPhone"));
+      if (!sim) throw new Error(`no booted ${opts.device} simulator`);
+      const open = spawn("xcrun", ["simctl", "openurl", sim.udid, screen.source.deepLink], { encoding: "utf8" });
+      if (open.status !== 0) throw new Error(`openurl failed: ${open.stderr || open.stdout || `exit ${open.status}`}`);
+      log(`open ${screen.source.deepLink}`);
+      await sleep((opts.settleSeconds ?? 2) * 1000);
+      const r = captureScreen(project, { ...opts, screenId: screen.id, force: true });
+      captured.push(r);
+      log(`captured ${r.file} (${r.width}x${r.height})`);
+      if (r.aspectWarning) log(`WARN ${r.aspectWarning}`);
+    } catch (err) {
+      skipped.push({ screenId: screen.id, reason: (err as Error).message });
+      log(`SKIP ${screen.id}: ${(err as Error).message}`);
+    }
+  }
+  return { captured, skipped };
 }
