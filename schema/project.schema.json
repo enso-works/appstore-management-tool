@@ -123,6 +123,55 @@
                 "minimum": 100,
                 "maximum": 900
               }
+            },
+            "fallbacks": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "headlineFont": {
+          "type": "object",
+          "properties": {
+            "family": {
+              "default": "Inter",
+              "type": "string",
+              "minLength": 1
+            },
+            "source": {
+              "default": "google",
+              "type": "string",
+              "enum": [
+                "google",
+                "local"
+              ]
+            },
+            "weights": {
+              "default": [
+                400,
+                600,
+                700
+              ],
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 100,
+                "maximum": 900
+              }
+            },
+            "fallbacks": {
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "additionalProperties": false
@@ -177,6 +226,10 @@
         },
         "failOnAlpha": {
           "default": true,
+          "type": "boolean"
+        },
+        "failOnTextOverlap": {
+          "default": false,
           "type": "boolean"
         },
         "screensPerTarget": {

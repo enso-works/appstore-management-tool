@@ -2,7 +2,7 @@ import { type Project, CONFIG_FILENAME, validateConfigSemantics } from "./config
 import { loadContent, loadManifest } from "./content";
 import { IssueList } from "./issues";
 import { isAppStoreLocale } from "./locales";
-import { displayRelative, fileExists } from "./paths";
+import { displayRelative, fileExists, resolveWithin } from "./paths";
 import { readPngInfo } from "./png";
 import { buildRenderPlan, type RenderJob } from "./render-plan";
 import type { LocaleContent, Manifest } from "./schema";
@@ -122,6 +122,27 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
             "manifest.template-unsupported-target",
             `Template "${template.id}" does not support target "${targetId}" (${target.family}/${target.orientation})`,
             { key, file },
+          );
+        }
+      }
+      const bg = screen.overrides.backgroundImage;
+      if (typeof bg === "string" && bg.startsWith("asset:")) {
+        const rel = bg.slice("asset:".length);
+        let ok = false;
+        try {
+          ok = fileExists(resolveWithin(project.paths.assets, rel));
+        } catch {
+          ok = false;
+        }
+        if (!ok) {
+          issues.error(
+            "manifest.asset-missing",
+            `Screen "${screen.id}" backgroundImage refers to ${project.config.paths.assets}/${rel}, which does not exist`,
+            {
+              key,
+              file,
+              hint: "put the image under store/assets/ (e.g. backgrounds/) or use pattern:waves|dots|grid",
+            },
           );
         }
       }

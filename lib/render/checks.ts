@@ -47,7 +47,10 @@ export const IN_PAGE_CHECKS_SOURCE = `(function (tolerance) {
     if (!imgs[i].complete || imgs[i].naturalWidth === 0) result.missingImages.push(imgs[i].getAttribute("src") || "(no src)");
   }
   var device = doc.querySelector("[data-device]");
-  var deviceTop = device ? device.getBoundingClientRect().top : Infinity;
+  var dr = device ? device.getBoundingClientRect() : null;
+  function intersects(a, b) {
+    return a.left < b.right - tolerance && a.right > b.left + tolerance && a.top < b.bottom - tolerance && a.bottom > b.top + tolerance;
+  }
   var nodes = doc.querySelectorAll("[data-check]");
   for (var n = 0; n < nodes.length; n++) {
     var e = nodes[n];
@@ -62,7 +65,7 @@ export const IN_PAGE_CHECKS_SOURCE = `(function (tolerance) {
     if (e.scrollWidth > e.clientWidth + tolerance || e.scrollHeight > vLimit) {
       result.overflow.push({ id: id, scrollWidth: e.scrollWidth, clientWidth: e.clientWidth, scrollHeight: e.scrollHeight, clientHeight: e.clientHeight });
     }
-    if (e.getBoundingClientRect().bottom > deviceTop + tolerance) result.textOverlapsDevice.push(id);
+    if (dr && intersects(e.getBoundingClientRect(), dr)) result.textOverlapsDevice.push(id);
   }
   return result;
 })(${OVERFLOW_TOLERANCE_PX})`;

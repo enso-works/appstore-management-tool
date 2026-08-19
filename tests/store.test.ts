@@ -86,6 +86,11 @@ describe("fastlane runner", () => {
     expect(pre.reasons.join(" ")).toMatch(/readiness failing/);
     const v = preflightLane(load(), "validate");
     expect(v.spec.uploads).toBe(false);
+    // An existing Fastfile without the lane is reported by name.
+    fs.mkdirSync(path.join(fx.root, "fastlane"), { recursive: true });
+    fs.writeFileSync(path.join(fx.root, "fastlane/Fastfile"), "platform :ios do\n  lane :beta do\n  end\nend\n");
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => (c.fastlane = { enabled: true }));
+    expect(preflightLane(load(), "validate").reasons.join(" ")).toMatch(/lane "validate_metadata" not found/);
   });
 
   it("refuses to run an upload lane without confirmation and without an override when blocked", async () => {
@@ -99,7 +104,10 @@ describe("fastlane runner", () => {
     fs.writeFileSync(fake, '#!/bin/sh\necho "args: $@"\necho "cwd: $(pwd)"\necho "warn" 1>&2\nexit 3\n');
     fs.chmodSync(fake, 0o755);
     fs.mkdirSync(path.join(fx.root, "fastlane"), { recursive: true });
-    fs.writeFileSync(path.join(fx.root, "fastlane/Fastfile"), "");
+    fs.writeFileSync(
+      path.join(fx.root, "fastlane/Fastfile"),
+      "platform :ios do\n  lane :validate_metadata do\n  end\nend\n",
+    );
     editJson(path.join(fx.root, "store-shots.config.json"), (c) => (c.fastlane = { enabled: true }));
     const prev = process.env.STORE_SHOTS_FASTLANE;
     process.env.STORE_SHOTS_FASTLANE = fake;

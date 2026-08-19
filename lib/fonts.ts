@@ -89,7 +89,8 @@ function safeLock(dir: string): FontsLock | undefined {
  * missing is a hard error for the caller.
  */
 export function resolveFontStack(project: Project): { stack: ResolvedFont[]; missing: string[] } {
-  const wanted = [project.config.brand.font.family, ...project.config.brand.font.fallbacks];
+  const b = project.config.brand;
+  const wanted = [b.font.family, ...(b.headlineFont ? [b.headlineFont.family] : []), ...b.font.fallbacks];
   const stack: ResolvedFont[] = [];
   const missing: string[] = [];
   for (const family of wanted) {

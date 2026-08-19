@@ -167,6 +167,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
         const { html } = renderArtworkHtml(project, job, content, {
           sourceImage: pathToFileURL(job.sourcePath).href,
           fontUrl: (p) => pathToFileURL(p).href,
+          assetUrl: (rel) => pathToFileURL(path.join(project.paths.assets, rel)).href,
         });
         const result = await renderer.render(job.key, html, job.target, {
           backgroundColor: project.config.output.backgroundColor,
@@ -203,7 +204,14 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
           else jobIssues.warn("render.overflow", msg, extra);
         }
         for (const id of c.textOverlapsDevice) {
-          jobIssues.error("render.text-overlaps-device", `"${id}" overlaps the device shell`, { key: job.key });
+          const msg = `"${id}" overlaps the device shell`;
+          if (project.config.validation.failOnTextOverlap)
+            jobIssues.error("render.text-overlaps-device", msg, { key: job.key });
+          else
+            jobIssues.warn("render.text-overlaps-device", msg, {
+              key: job.key,
+              hint: "set validation.failOnTextOverlap to make this an error",
+            });
         }
         if (result.width !== job.target.width || result.height !== job.target.height) {
           jobIssues.error(

@@ -50,6 +50,7 @@ export function previewHtml(
   const { html } = renderArtworkHtml(project, job, content, {
     sourceImage: sourceExists ? urls.sourceImage(job.sourcePath) : MISSING_SOURCE_DATA_URI,
     fontUrl: urls.fontUrl,
+    assetUrl: urls.assetUrl,
   });
   const script = `<script>
 (function () {

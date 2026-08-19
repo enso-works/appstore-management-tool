@@ -1,17 +1,24 @@
 import type { ReactElement } from "react";
-import { Artwork, COMMON_OVERRIDE_KEYS, commonOverridesSchema, DeviceShell, TextBlock, textAlignOf } from "./shared";
+import {
+  Artwork,
+  COMMON_OVERRIDE_KEYS,
+  commonOverridesSchema,
+  DeviceShell,
+  stackLayout,
+  TextBlock,
+  textAlignOf,
+  type CommonOverrides,
+  type StackLayoutDefaults,
+} from "./shared";
 import type { TemplateModule, TemplateRenderInput } from "./types";
 
 /**
  * Hero Top (plan §10.2): eyebrow + headline (+ caption) at the top, device
- * shell centered below running off the bottom edge. Works for iPhone (0.46)
- * and iPad (0.75) aspect ratios: all metrics scale with canvas width, and the
- * text region has a fixed height so the device always starts at the same
- * relative position.
+ * centred below running off the bottom edge. With textWidth < 1 the text
+ * becomes a side column and the device moves beside it; every positional
+ * override (scale, X/Y offset, tilt) applies on top.
  */
 export const overridesSchema = commonOverridesSchema;
-
-type Overrides = (typeof overridesSchema)["_output"];
 
 export const descriptor = {
   id: "hero-top",
@@ -23,41 +30,43 @@ export const descriptor = {
   overrideKeys: COMMON_OVERRIDE_KEYS,
 };
 
-export function render(input: TemplateRenderInput<Overrides>): ReactElement {
-  const { target, fields } = input;
+/** Shared by hero-top and split-caption: the text stack (eyebrow / headline / caption) + device. */
+export function renderTextAndDevice(
+  input: TemplateRenderInput<CommonOverrides>,
+  defaults: StackLayoutDefaults,
+  fallbackAlign: "start" | "center" | "end",
+): ReactElement {
+  const { target, fields, brand } = input;
   const W = target.width;
   const isTablet = target.family === "ipad";
-  const pad = Math.round(W * 0.07);
-  const align = textAlignOf(input, "center");
+  const align = textAlignOf(input, fallbackAlign);
 
-  // Text metrics (fractions of width). iPad canvases are wider, so type is a bit smaller relative to W.
+  // Type metrics scale with canvas width; iPad canvases are wider, so type is a bit smaller relative to W.
   const k = isTablet ? 0.78 : 1;
+  const textWidth = input.overrides.textWidth ?? defaults.textWidth;
+  const narrow = textWidth < 0.999;
+  // Narrow columns get slightly smaller type so a few lines still carry a real sentence.
+  const narrowK = narrow ? 0.85 : 1;
   const eyebrowSize = Math.round(W * 0.03 * k);
-  const headlineSize = Math.round(W * 0.082 * k);
+  const headlineSize = Math.round(W * 0.082 * k * narrowK);
   const captionSize = Math.round(W * 0.04 * k);
   const eyebrowH = fields.eyebrow ? Math.round(eyebrowSize * 1.3) + Math.round(W * 0.02) : 0;
-  const headlineMaxLines = 3;
+  const headlineMaxLines = narrow ? 4 : 3;
   const headlineH = Math.round(headlineSize * 1.08 * headlineMaxLines);
-  const captionH = fields.caption ? Math.round(W * 0.02) + Math.round(captionSize * 1.3 * 2) : 0;
-  const textTop = Math.round(W * 0.09);
-  const textBottom = textTop + eyebrowH + headlineH + captionH;
+  const captionH = fields.caption ? Math.round(W * 0.02) + Math.round(captionSize * 1.3 * 3) : 0;
+  const textHeight = eyebrowH + headlineH + captionH;
 
-  // Device: centred, below the text block, running off the bottom.
-  const scale = input.overrides.screenshotScale ?? (isTablet ? 0.72 : 0.8);
-  const devW = Math.round(W * scale);
-  const devH = Math.round(devW / (target.width / target.height));
-  const devTop = textBottom + Math.round(W * 0.06) + Math.round(W * (input.overrides.screenshotOffsetY ?? 0));
-  const devLeft = Math.round((W - devW) / 2);
+  const layout = stackLayout(input, textHeight, defaults);
 
   return (
     <Artwork input={input}>
       <div
         style={{
           position: "absolute",
-          left: pad,
-          right: pad,
-          top: textTop,
-          height: textBottom - textTop,
+          left: layout.text.left,
+          top: layout.text.top,
+          width: layout.text.width,
+          height: layout.text.height,
           display: "flex",
           flexDirection: "column",
           justifyContent: "flex-start",
@@ -77,6 +86,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
             letterSpacing: Math.round(eyebrowSize * 0.12),
             opacity: 0.85,
             marginBottom: Math.round(W * 0.02),
+            width: "100%",
           }}
         />
         <TextBlock
@@ -88,22 +98,38 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
           weight={700}
           align={align}
           fitMinScale={0.7}
-          style={{ letterSpacing: -Math.round(headlineSize * 0.02) }}
+          fontFamily={brand.headlineFontStack}
+          style={{ letterSpacing: brand.headlineFontStack ? 0 : -Math.round(headlineSize * 0.02), width: "100%" }}
         />
         <TextBlock
           id="caption"
           text={fields.caption}
           fontSize={captionSize}
           lineHeight={1.3}
-          maxLines={2}
+          maxLines={3}
           weight={400}
           align={align}
           fitMinScale={0.8}
-          style={{ opacity: 0.88, marginTop: Math.round(W * 0.02) }}
+          style={{ opacity: 0.88, marginTop: Math.round(W * 0.02), width: "100%" }}
         />
       </div>
-      <DeviceShell input={input} width={devW} height={devH} left={devLeft} top={devTop} />
+      <DeviceShell
+        input={input}
+        width={layout.device.width}
+        height={layout.device.height}
+        left={layout.device.left}
+        top={layout.device.top}
+      />
     </Artwork>
+  );
+}
+
+export function render(input: TemplateRenderInput<CommonOverrides>): ReactElement {
+  const isTablet = input.target.family === "ipad";
+  return renderTextAndDevice(
+    input,
+    { textWidth: 1, textSide: "start", scale: isTablet ? 0.72 : 0.8, gap: 0.06, sideDeviceLeft: 0.45 },
+    "center",
   );
 }
 

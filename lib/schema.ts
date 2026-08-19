@@ -71,6 +71,8 @@ export const projectConfigSchema = z.strictObject({
   brand: z
     .strictObject({
       font: fontConfigSchema.prefault({}),
+      /** Optional display face for headlines (e.g. a serif); body copy keeps `font`. */
+      headlineFont: fontConfigSchema.optional(),
       primary: hexColor.default("#111111"),
       onPrimary: hexColor.default("#FFFFFF"),
     })
@@ -88,6 +90,8 @@ export const projectConfigSchema = z.strictObject({
       strictTranslations: z.boolean().default(true),
       failOnOverflow: z.boolean().default(true),
       failOnAlpha: z.boolean().default(true),
+      /** Text overlapping the device shell is a warning by default (designers do it on purpose); true makes it an error. */
+      failOnTextOverlap: z.boolean().default(false),
       screensPerTarget: z
         .strictObject({
           min: z.number().int().min(1).max(10).default(3),

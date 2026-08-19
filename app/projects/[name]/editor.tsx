@@ -42,14 +42,46 @@ const OVERRIDE_CONTROLS: Record<
     hint?: string;
   }
 > = {
-  background: { label: "Background", kind: "text", hint: "any CSS background; empty = brand gradient" },
-  screenshotScale: { label: "Screenshot scale", kind: "number", min: 0.4, max: 1.2, step: 0.02 },
-  screenshotOffsetY: { label: "Screenshot offset Y", kind: "number", min: -0.5, max: 0.8, step: 0.02 },
-  deviceTilt: { label: "Device tilt (deg)", kind: "number", min: -15, max: 15, step: 1 },
-  textAlign: { label: "Text align", kind: "select", options: ["start", "center", "end"] },
-  shell: { label: "Device shell", kind: "select", options: ["dark", "light", "none"] },
+  background: { label: "Background", kind: "text", hint: "any CSS background; empty = brand gradient. e.g. #F3EEE4" },
+  backgroundImage: {
+    label: "Background image",
+    kind: "text",
+    hint: "asset:backgrounds/<file> (under store/assets) or pattern:waves | pattern:dots | pattern:grid",
+  },
+  patternColor: { label: "Pattern colour", kind: "text", hint: "CSS colour for pattern lines, e.g. rgba(0,0,0,0.08)" },
+  screenshotScale: { label: "Phone scale", kind: "number", min: 0.3, max: 1.8, step: 0.01 },
+  screenshotOffsetX: {
+    label: "Phone offset X",
+    kind: "number",
+    min: -1,
+    max: 1,
+    step: 0.01,
+    hint: "fraction of canvas width; + = right",
+  },
+  screenshotOffsetY: {
+    label: "Phone offset Y",
+    kind: "number",
+    min: -1.2,
+    max: 1.2,
+    step: 0.01,
+    hint: "fraction of canvas width; + = down",
+  },
+  deviceTilt: { label: "Phone tilt (deg)", kind: "number", min: -30, max: 30, step: 0.5 },
+  textWidth: {
+    label: "Text width",
+    kind: "number",
+    min: 0.25,
+    max: 1,
+    step: 0.01,
+    hint: "< 1 puts the phone beside the text",
+  },
   textSide: { label: "Text side", kind: "select", options: ["start", "end"] },
+  textOffsetY: { label: "Text offset Y", kind: "number", min: -0.3, max: 1, step: 0.01 },
+  textAlign: { label: "Text align", kind: "select", options: ["start", "center", "end"] },
+  textColor: { label: "Text colour", kind: "text", hint: "CSS colour; default brand.onPrimary" },
+  shell: { label: "Device shell", kind: "select", options: ["dark", "light", "none"] },
   cardPosition: { label: "Card position", kind: "select", options: ["top", "bottom"] },
+  cardColor: { label: "Card colour", kind: "text", hint: "CSS colour; default brand.primary at 93%" },
 };
 
 function emptyContent(locale: string): LocaleContent {
@@ -672,16 +704,27 @@ export default function Editor({ name }: { name: string }) {
                           ))}
                         </select>
                       ) : c.kind === "number" ? (
-                        <input
-                          className={styles.input}
-                          type="number"
-                          min={c.min}
-                          max={c.max}
-                          step={c.step}
-                          value={(v as number) ?? ""}
-                          onChange={(e) => setOverride(key, e.target.value === "" ? "" : Number(e.target.value))}
-                          placeholder="default"
-                        />
+                        <span className={styles.inline}>
+                          <input
+                            type="range"
+                            min={c.min}
+                            max={c.max}
+                            step={c.step}
+                            value={typeof v === "number" ? v : (c.min ?? 0) + ((c.max ?? 1) - (c.min ?? 0)) / 2}
+                            onChange={(e) => setOverride(key, Number(e.target.value))}
+                            className={styles.range}
+                          />
+                          <input
+                            className={`${styles.input} ${styles.num}`}
+                            type="number"
+                            min={c.min}
+                            max={c.max}
+                            step={c.step}
+                            value={(v as number) ?? ""}
+                            onChange={(e) => setOverride(key, e.target.value === "" ? "" : Number(e.target.value))}
+                            placeholder="–"
+                          />
+                        </span>
                       ) : (
                         <input
                           className={styles.input}

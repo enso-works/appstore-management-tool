@@ -20,6 +20,8 @@ export interface BrandTheme {
   fontFamily: string;
   /** Full CSS font-family stack (brand + fallbacks), used by the artwork root. */
   fontStack: string;
+  /** Stack for headlines when brand.headlineFont is set; otherwise undefined (inherit fontStack). */
+  headlineFontStack?: string;
   primary: string;
   onPrimary: string;
 }
@@ -36,6 +38,8 @@ export interface TemplateRenderInput<O = Record<string, unknown>> {
   brand: BrandTheme;
   overrides: O;
   mode: "preview" | "export";
+  /** Resolve a store/assets-relative path (e.g. "backgrounds/waves.png") to a URL the page can load. */
+  assetUrl: (relPath: string) => string;
 }
 
 export interface TemplateModule<S extends z.ZodTypeAny = z.ZodTypeAny> {

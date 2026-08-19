@@ -82,6 +82,7 @@ describe("editor server helpers", () => {
       {
         sourceImage: (abs) => `/api/file?raw=${path.basename(abs)}`,
         fontUrl: (abs) => `/api/file?font=${path.basename(abs)}`,
+        assetUrl: (rel) => `/api/file?asset=${rel}`,
       },
     );
     expect(r.html).toContain("data-artwork");
@@ -104,7 +105,7 @@ describe("editor server helpers", () => {
         screen: { id: "home", order: 1, template: "hero-top" },
         fields: { headline: "x" },
       },
-      { sourceImage: () => "/x", fontUrl: () => "/f" },
+      { sourceImage: () => "/x", fontUrl: () => "/f", assetUrl: () => "/a" },
     );
     expect(r.job.sourceExists).toBe(false);
     expect(r.html).toContain("data:image/svg+xml");

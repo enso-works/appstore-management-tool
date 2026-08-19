@@ -1,3 +1,5 @@
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { renderStatic } from "./ssr";
 import { getTemplateModule } from "../../templates";
 import type { BrandTheme, TemplateRenderInput } from "../../templates/types";
@@ -11,15 +13,26 @@ export interface ArtworkUrls {
   sourceImage: string;
   /** Maps an absolute font file path to a URL the page can load. */
   fontUrl: (absPath: string) => string;
+  /** Maps a store/assets-relative path to a URL the page can load. */
+  assetUrl: (relPath: string) => string;
 }
 
 export function brandThemeOf(project: Project, stack?: ResolvedFont[]): BrandTheme {
   const resolved = stack ?? resolveFontStack(project).stack;
+  const b = project.config.brand;
+  const headline = b.headlineFont?.family;
+  const headlineFirst = headline
+    ? [
+        ...resolved.filter((f) => f.family.toLowerCase() === headline.toLowerCase()),
+        ...resolved.filter((f) => f.family.toLowerCase() !== headline.toLowerCase()),
+      ]
+    : undefined;
   return {
-    fontFamily: project.config.brand.font.family,
+    fontFamily: b.font.family,
     fontStack: fontFamilyCss(resolved),
-    primary: project.config.brand.primary,
-    onPrimary: project.config.brand.onPrimary,
+    headlineFontStack: headlineFirst ? fontFamilyCss(headlineFirst) : undefined,
+    primary: b.primary,
+    onPrimary: b.onPrimary,
   };
 }
 
@@ -31,6 +44,7 @@ export function templateInputFor(
   sourceImageUrl: string,
   mode: "preview" | "export",
   stack?: ResolvedFont[],
+  assetUrl: (relPath: string) => string = (rel) => pathToFileURL(path.join(project.paths.assets, rel)).href,
 ): TemplateRenderInput {
   const mod = getTemplateModule(job.screen.template);
   if (!mod) throw new Error(`Unknown template "${job.screen.template}"`);
@@ -44,6 +58,7 @@ export function templateInputFor(
     brand: brandThemeOf(project, stack),
     overrides,
     mode,
+    assetUrl,
   };
 }
 
@@ -80,7 +95,7 @@ export function renderArtworkHtml(
       `Font "${project.config.brand.font.family}" is not available locally. Run: store-shots fonts add "${project.config.brand.font.family}" --project ${project.root}`,
     );
   }
-  const input = templateInputFor(project, job, content, urls.sourceImage, "export", stack);
+  const input = templateInputFor(project, job, content, urls.sourceImage, "export", stack, urls.assetUrl);
   const mod = getTemplateModule(job.screen.template)!;
   const body = renderStatic(mod.render(input));
   const html = [

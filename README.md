@@ -19,8 +19,10 @@ Apps are discovered by scanning the workspace root (three levels up, or `STORE_S
 Status: Phases 1-4 done — config, schemas, validation, readiness, `init`, `generate`
 (Playwright + Sharp, exact-size no-alpha PNGs), `clean`, fonts from Google Fonts, glyph
 coverage, in-page font fitting, one template (`hero-top`), the editor UI (live preview,
-copy + overrides editing, save, generate), the Store tab (readiness, metadata editor with
-limits, fastlane runner). The other two templates and the Braele pilot are Phase 6.
+copy + overrides editing with sliders, save, generate), the Store tab (readiness, metadata
+editor with limits, fastlane runner), three templates (hero-top, split-caption, full-bleed-card)
+with free phone positioning, headline font, background images/patterns. Phase 7 (hardening,
+capture helper, incremental rendering) is next.
 
 ## Requirements
 
@@ -96,7 +98,7 @@ lib/
   fastlane.ts     lane allowlist, preflight (readiness gate), spawn with streamed output; never build/submit
   server/         project lookup, atomic JSON saves with etags, HTTP error mapping
   templates/registry.ts  thin adapter over ../templates
-templates/        React templates: types, shared pieces (artwork root, device shell, text block), hero-top
+templates/        React templates: types, shared pieces (artwork root, device shell, text block, stack layout, patterns), hero-top, split-caption, full-bleed-card
 assets/fonts/     bundled Inter (OFL)
 schema/           generated JSON Schemas referenced by $schema in app files
 fixtures/demo-app two screens, en-US + ar-SA, both targets; used by tests

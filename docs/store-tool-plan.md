@@ -1,6 +1,6 @@
 # Store Tool — Screenshot Generation and Store Management Plan
 
-Status: revision 2, approved 2026-08-19; Phases 1-5 complete; Phase 6 next
+Status: revision 2, approved 2026-08-19; Phases 1-6 complete (Braele iPad/locales pending captures and copy); Phase 7 next
 Working name: **store-shots** (directory name; a rename is an open decision, see 3.2)
 Last verified against the workspace: 2026-08-19
 Executor: Claude Code, phase by phase, with human approval between phases
@@ -353,7 +353,7 @@ Each template publishes: stable id, display name, required/optional text fields,
 2. **Split Caption** — text block upper-left (upper-right in RTL), device shell entering from the opposite lower corner. Braele screen 3 (settings/health).
 3. **Full Bleed Card** — capture fills most of the canvas, headline on a high-contrast card. Braele's orb screen.
 
-Semantic controls only: background, screenshot scale, screenshot vertical offset, tilt, text alignment, light/dark shell. No x/y dragging.
+Controls (decided 2026-08-19 after reviewing Braele's hand-made store art): background colour/gradient, background image (`asset:` under `store/assets/` or built-in `pattern:waves|dots|grid`), phone scale, phone X/Y offset (fractions of canvas width so values carry across targets), tilt, text column width/side/vertical offset, text alignment, text colour, shell. Numeric values are sliders in the editor; no drag-and-drop canvas, but enough freedom to reproduce existing designs. Text overlapping the device is a warning unless `validation.failOnTextOverlap` is set.
 
 Both targets are portrait with different aspect ratios (0.46 vs 0.75); every template must declare and test its iPad layout, not just scale the phone one.
 
@@ -624,6 +624,6 @@ Recheck Apple and fastlane docs when bumping the device registry or the fastlane
 - [x] Phase 3 — localization + overflow (2026-08-19: in-page font fitting within template range, line-based overflow check, glyph coverage via opentype.js, font fallback stack, Noto Sans Arabic bundled)
 - [x] Phase 4 — editor UI (2026-08-19: app switcher, screen list with badges, live iframe preview using the export HTML, copy fields with reference locale, semantic overrides, add/remove/reorder screens, atomic save with etag conflicts, generate screen/all with log)
 - [x] Phase 5 — store management (2026-08-19: Store tab with readiness dashboard, metadata editor with limits/keyword hygiene/etag conflicts/explicit locale creation, fastlane runner with allowlist, confirmation, readiness gate and streamed log; CLI `metadata validate|show`, `lane <key> [--yes] [--override]`)
-- [ ] Phase 6 — remaining templates + Braele pilot
+- [x] Phase 6 — remaining templates + Braele pilot (2026-08-19: split-caption and full-bleed-card; free phone positioning (scale, X/Y offset, tilt), text column width/side/offset, headline font (Google Fonts), background images and built-in patterns, text colour; Braele en-US iPhone set recreated in its existing store style; Deliverfile + init for invoicer and mycv. Still open for Braele: iPad captures, the six other locales' copy, `deliver` smoke test)
 - [ ] Phase 7 — hardening
 - [ ] Phase 8 — Google Play (post-v1)

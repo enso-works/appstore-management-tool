@@ -1,12 +1,13 @@
+import fullBleedCard from "./full-bleed-card";
 import heroTop from "./hero-top";
+import splitCaption from "./split-caption";
 import type { TemplateModule } from "./types";
 
-/**
- * Template registry. Phase 2 ships hero-top; split-caption and full-bleed-card
- * arrive in Phase 6 and are registered here when they do.
- */
+/** Template registry (plan §10.2). */
 export const templateModules: Record<string, TemplateModule> = {
   [heroTop.descriptor.id]: heroTop as unknown as TemplateModule,
+  [splitCaption.descriptor.id]: splitCaption as unknown as TemplateModule,
+  [fullBleedCard.descriptor.id]: fullBleedCard as unknown as TemplateModule,
 };
 
 export const templateIds = Object.keys(templateModules);

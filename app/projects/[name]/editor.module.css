@@ -449,3 +449,13 @@
 .textareaOver {
   border-color: var(--fail);
 }
+
+.range {
+  flex: 1;
+  min-width: 60px;
+}
+
+.num {
+  width: 72px;
+  flex: none;
+}

@@ -11,6 +11,8 @@ type Ctx = { params: Promise<{ name: string }> };
 
 const MIME: Record<string, string> = {
   ".png": "image/png",
+  ".webp": "image/webp",
+  ".svg": "image/svg+xml",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
   ".ttf": "font/ttf",
@@ -24,6 +26,7 @@ const MIME: Record<string, string> = {
  * reachable (the app's store/raw and the fonts dirs) and every path is
  * resolved inside them; anything else is 404.
  *   ?kind=raw&path=iphone/en-US/01-home.png
+ *   ?kind=asset&path=backgrounds/waves.png
  *   ?kind=font&src=app|bundled&path=inter/inter-400.ttf
  */
 export async function GET(req: Request, ctx: Ctx) {
@@ -35,9 +38,10 @@ export async function GET(req: Request, ctx: Ctx) {
     const rel = url.searchParams.get("path") ?? "";
     let root: string;
     if (kind === "raw") root = project.paths.raw;
+    else if (kind === "asset") root = project.paths.assets;
     else if (kind === "font")
       root = url.searchParams.get("src") === "bundled" ? bundledFontsDir() : appFontsDir(project);
-    else throw new HttpError(400, "kind must be raw or font");
+    else throw new HttpError(400, "kind must be raw, asset or font");
     let abs: string;
     try {
       abs = resolveWithin(root, rel);

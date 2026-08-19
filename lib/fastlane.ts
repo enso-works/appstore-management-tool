@@ -60,7 +60,17 @@ export function preflightLane(project: Project, key: LaneKey): LanePreflight {
   const readiness = readinessReport(project);
   const reasons: string[] = [];
   if (!project.config.fastlane.enabled) reasons.push("fastlane.enabled is false in store-shots.config.json");
-  if (!fs.existsSync(`${project.root}/fastlane/Fastfile`)) reasons.push("fastlane/Fastfile missing");
+  const fastfile = `${project.root}/fastlane/Fastfile`;
+  if (!fs.existsSync(fastfile)) reasons.push("fastlane/Fastfile missing");
+  else {
+    const laneName = spec.args[spec.args.length - 1];
+    const text = fs.readFileSync(fastfile, "utf8");
+    if (!new RegExp(`lane\\s+:${laneName}\\b`).test(text)) {
+      reasons.push(
+        `lane "${laneName}" not found in fastlane/Fastfile (copy it from starter-template/fastlane/Fastfile)`,
+      );
+    }
+  }
   if (spec.uploads) {
     const failing = readiness.checks.filter((c) => c.status === "fail");
     if (failing.length) reasons.push(`readiness failing: ${failing.map((c) => c.id).join(", ")}`);
