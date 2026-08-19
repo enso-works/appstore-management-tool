@@ -11,6 +11,9 @@ import { displayRelative } from "../lib/paths";
 import { generateProject, type GenerationSummary } from "../lib/generate";
 import { cleanGenerated } from "../lib/generated-manifest";
 import { addGoogleFont, appFontsDir, checkFont, listFonts, resolveFont } from "../lib/fonts";
+import { listMetadataLocales, readMetadataLocale } from "../lib/metadata";
+import { METADATA_FIELDS } from "../lib/schema";
+import { LANE_KEYS, preflightLane, runLane, type LaneKey } from "../lib/fastlane";
 
 const program = new Command();
 
@@ -309,6 +312,92 @@ fonts
     console.log(`"${family}" resolved from ${font.source} (${font.dir}); ${font.files.length} file(s)`);
     for (const p of problems) console.log(`  PROBLEM ${p}`);
     process.exit(problems.length ? 1 : 0);
+  });
+
+const metadata = program
+  .command("metadata")
+  .description("Inspect fastlane/metadata/<locale>/*.txt (the UI's Store view edits them)");
+
+metadata
+  .command("validate")
+  .description("Check every locale directory against App Store character limits (same table as the Fastfile lane)")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--json", "machine-readable output")
+  .action((opts: { project?: string; json?: boolean }) => {
+    const project = openProject(opts.project);
+    const over: { locale: string; field: string; length: number; limit: number }[] = [];
+    const rows: { locale: string; field: string; length: number; limit: number; present: boolean }[] = [];
+    for (const locale of listMetadataLocales(project)) {
+      const state = readMetadataLocale(project, locale, [...METADATA_FIELDS]);
+      for (const f of state.fields) {
+        if (!f.present) continue;
+        rows.push({ locale, field: f.field, length: f.length, limit: f.limit, present: f.present });
+        if (f.overLimit) over.push({ locale, field: f.field, length: f.length, limit: f.limit });
+      }
+    }
+    if (opts.json) console.log(JSON.stringify({ ok: over.length === 0, over, fields: rows }, null, 2));
+    else {
+      for (const r of rows)
+        console.log(`${r.locale}/${r.field}: ${r.length}/${r.limit}${r.length > r.limit ? "  OVER" : ""}`);
+      console.log(over.length ? `\n${over.length} field(s) over the limit` : "\nAll metadata within App Store limits");
+    }
+    process.exit(over.length ? 1 : 0);
+  });
+
+metadata
+  .command("show")
+  .description("Print the managed fields for one locale")
+  .requiredOption("--locale <locale>", "locale directory, e.g. de-DE")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .action((opts: { project?: string; locale: string }) => {
+    const project = openProject(opts.project);
+    const state = readMetadataLocale(project, opts.locale);
+    if (!state.dirExists) {
+      console.error(`No ${project.config.paths.metadata}/${opts.locale}/ directory`);
+      process.exit(1);
+    }
+    for (const f of state.fields) {
+      console.log(
+        `--- ${f.field} (${f.length}/${f.limit}${f.overLimit ? " OVER" : ""}${f.present ? "" : ", missing"})`,
+      );
+      if (f.present) console.log(f.value.trimEnd());
+    }
+  });
+
+program
+  .command("lane <key>")
+  .description(`Run one of the app's own fastlane lanes: ${LANE_KEYS.join(" | ")} (never build/submit lanes)`)
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--yes", "confirm an upload lane (metadata, screenshots)")
+  .option("--override <reason>", "run an upload lane despite failing readiness, stating why")
+  .option("--dry-run", "print the command and preflight, do not run")
+  .action(async (key: string, opts: { project?: string; yes?: boolean; override?: string; dryRun?: boolean }) => {
+    if (!(LANE_KEYS as string[]).includes(key)) {
+      console.error(`lane must be one of ${LANE_KEYS.join(", ")}`);
+      process.exit(2);
+    }
+    const project = openProject(opts.project);
+    const pre = preflightLane(project, key as LaneKey);
+    console.log(`command: fastlane ${pre.spec.args.join(" ")}  (cwd ${project.root})`);
+    if (pre.spec.uploads) console.log("this lane UPLOADS to App Store Connect");
+    if (pre.blocked) console.log(`blocked: ${pre.reasons.join("; ")}`);
+    if (opts.dryRun) process.exit(pre.blocked ? 1 : 0);
+    if (pre.spec.uploads && !opts.yes) {
+      console.error("Refusing to run an upload lane without --yes");
+      process.exit(2);
+    }
+    try {
+      const r = await runLane(project, {
+        key: key as LaneKey,
+        confirmed: !!opts.yes,
+        overrideReason: opts.override,
+        onLine: (line, s) => (s === "stderr" ? console.error(line) : console.log(line)),
+      });
+      process.exit(r.exitCode === 0 ? 0 : 1);
+    } catch (err) {
+      console.error((err as Error).message);
+      process.exit(1);
+    }
   });
 
 program.parseAsync(process.argv).catch((err) => {

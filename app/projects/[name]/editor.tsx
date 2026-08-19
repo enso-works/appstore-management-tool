@@ -10,6 +10,7 @@ import type { InPageResult } from "@/lib/render/checks";
 import type { FitResult } from "@/lib/render/fit";
 import type { ReadinessReport } from "@/lib/readiness";
 import type { GenerationSummary } from "@/lib/generate";
+import StorePanel from "./store-panel";
 import styles from "./editor.module.css";
 
 interface Snapshot {
@@ -85,6 +86,7 @@ export default function Editor({ name }: { name: string }) {
   });
   const [showLog, setShowLog] = useState(false);
   const [newScreenId, setNewScreenId] = useState("");
+  const [view, setView] = useState<"screens" | "store">("screens");
   const canvasRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0.2);
 
@@ -390,6 +392,20 @@ export default function Editor({ name }: { name: string }) {
         </Link>
         <strong>{snap.config.projectName}</strong>
         <span className={styles.muted}>{snap.name}</span>
+        <span className={styles.tabs}>
+          <button
+            className={`${styles.tab} ${view === "screens" ? styles.tabActive : ""}`}
+            onClick={() => setView("screens")}
+          >
+            Screens
+          </button>
+          <button
+            className={`${styles.tab} ${view === "store" ? styles.tabActive : ""}`}
+            onClick={() => setView("store")}
+          >
+            Store
+          </button>
+        </span>
         <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className={styles.select}>
           {snap.targets.map((t) => (
             <option key={t.id} value={t.id}>
@@ -407,12 +423,12 @@ export default function Editor({ name }: { name: string }) {
           ))}
         </select>
         <span className={styles.spacer} />
-        <Link
-          href={`/projects/${encodeURIComponent(name)}/readiness`}
-          className={`${styles.badge} ${styles[snap.readiness.status]}`}
+        <button
+          onClick={() => setView("store")}
+          className={`${styles.badge} ${styles[snap.readiness.status]} ${styles.badgeBtn}`}
         >
           readiness: {snap.readiness.status}
-        </Link>
+        </button>
         <span className={styles.status}>{status}</span>
         <button className={styles.btn} onClick={save} disabled={!isDirty}>
           Save{isDirty ? " *" : ""}
@@ -425,255 +441,268 @@ export default function Editor({ name }: { name: string }) {
         </button>
       </header>
 
-      <aside className={styles.left}>
-        <div className={styles.sectionTitle}>
-          Screens <span className={styles.muted}>({screens.length})</span>
-        </div>
-        <ul className={styles.screens}>
-          {screens.map((s) => {
-            const st = screenStatus(s);
-            return (
-              <li key={s.id}>
-                <button
-                  className={`${styles.screenBtn} ${s.id === screenId ? styles.active : ""}`}
-                  onClick={() => setScreenId(s.id)}
-                  title={st.title}
-                >
-                  <span className={`${styles.dot} ${styles[st.level]}`} />
-                  <span className={styles.order}>{String(s.order).padStart(2, "0")}</span>
-                  <span className={styles.screenId}>{s.id}</span>
-                  {!s.enabled && <span className={styles.muted}>off</span>}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <div className={styles.addRow}>
-          <input
-            value={newScreenId}
-            onChange={(e) => setNewScreenId(e.target.value)}
-            placeholder="new screen id"
-            className={styles.input}
-            onKeyDown={(e) => e.key === "Enter" && addScreen()}
+      {view === "store" && (
+        <div className={styles.storeArea}>
+          <StorePanel
+            name={name}
+            locales={snap.config.locales}
+            readiness={snap.readiness}
+            onReadiness={(r) => setSnap((s) => (s ? { ...s, readiness: r } : s))}
           />
-          <button className={styles.btn} onClick={addScreen}>
-            Add
-          </button>
         </div>
-        <div className={styles.sectionTitle}>Fonts</div>
-        <p className={styles.small}>
-          {snap.fonts.stack.map((f) => `${f.family} (${f.source})`).join(" → ")}
-          {snap.fonts.missing.length > 0 && (
-            <span className={styles.error}> missing: {snap.fonts.missing.join(", ")}</span>
-          )}
-        </p>
-      </aside>
-
-      <main className={styles.canvas} ref={canvasRef}>
-        {!screen && <p className={styles.muted}>No screen selected. Add one on the left.</p>}
-        {screen && target && (
-          <div className={styles.frame} style={{ width: target.width * scale, height: target.height * scale }}>
-            <iframe
-              title="preview"
-              srcDoc={previewHtml}
-              sandbox="allow-scripts allow-same-origin"
-              style={{
-                width: target.width,
-                height: target.height,
-                transform: `scale(${scale})`,
-                transformOrigin: "0 0",
-                border: 0,
-                background: "#000",
-              }}
-            />
-          </div>
-        )}
-        <div className={styles.canvasInfo}>
-          {target && (
-            <span>
-              {target.width}×{target.height}
-            </span>
-          )}
-          {previewInfo.loading && <span className={styles.muted}> rendering…</span>}
-          {previewInfo.error && <span className={styles.error}> {previewInfo.error}</span>}
-          {previewProblems.map((p) => (
-            <span key={p} className={styles.error}>
-              {" "}
-              {p}
-            </span>
-          ))}
-          {fitted.map((f) => (
-            <span key={f.id} className={styles.warn}>
-              {" "}
-              {f.id} shrunk to {Math.round(f.scale * 100)}%
-            </span>
-          ))}
-          {previewInfo.checks && previewProblems.length === 0 && !previewInfo.loading && (
-            <span className={styles.ok}> fits</span>
-          )}
-        </div>
-      </main>
-
-      <aside className={styles.right}>
-        {screen && (
-          <>
+      )}
+      {view === "screens" && (
+        <>
+          <aside className={styles.left}>
             <div className={styles.sectionTitle}>
-              Screen <code>{screen.id}</code>
+              Screens <span className={styles.muted}>({screens.length})</span>
             </div>
-            <label className={styles.row}>
-              <span>Template</span>
-              <select
-                value={screen.template}
-                onChange={(e) => updateScreen({ template: e.target.value })}
-                className={styles.select}
-              >
-                {snap.templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className={styles.row}>
-              <span>Enabled</span>
-              <input
-                type="checkbox"
-                checked={screen.enabled}
-                onChange={(e) => updateScreen({ enabled: e.target.checked })}
-              />
-            </label>
-            <label className={styles.row}>
-              <span>Order</span>
-              <span className={styles.inline}>
-                <button className={styles.btnSmall} onClick={() => moveScreen(-1)}>
-                  ↑
-                </button>
-                <button className={styles.btnSmall} onClick={() => moveScreen(1)}>
-                  ↓
-                </button>
-                <span className={styles.muted}>{screen.order}</span>
-              </span>
-            </label>
-            <label className={styles.row}>
-              <span>Raw capture</span>
-              <input
-                className={styles.input}
-                value={screen.source.filePattern}
-                onChange={(e) => updateScreen({ source: { ...screen.source, filePattern: e.target.value } })}
-              />
-            </label>
-            <label className={styles.row}>
-              <span>Localized captures</span>
-              <input
-                type="checkbox"
-                checked={screen.source.localized}
-                onChange={(e) => updateScreen({ source: { ...screen.source, localized: e.target.checked } })}
-              />
-            </label>
-            <p className={styles.small}>
-              store/raw/{target?.family}/{screen.source.localized ? locale : refLocale}/
-              {screen.source.filePattern
-                .replaceAll("{order}", String(screen.order).padStart(2, "0"))
-                .replaceAll("{id}", screen.id)}
-              {previewInfo.checks && previewInfo.checks.missingImages.length > 0 && (
-                <span className={styles.error}> (missing)</span>
-              )}
-            </p>
-
-            <div className={styles.sectionTitle}>
-              Copy <span className={styles.muted}>{locale}</span>
-            </div>
-            {template?.requiredFields.concat(template.optionalFields).map((f) => {
-              const required = template.requiredFields.includes(f);
-              const value = fields[f];
-              const ref = refFields[f];
-              return (
-                <div key={f} className={styles.field}>
-                  <div className={styles.fieldHead}>
-                    <span>
-                      {f}
-                      {required && <span className={styles.req}> *</span>}
-                    </span>
-                    <span className={styles.muted}>{typeof value === "string" ? value.length : 0}</span>
-                    {!required && (
-                      <button
-                        className={styles.link}
-                        onClick={() => setField(f, value === null ? "" : null)}
-                        title="null = intentionally empty"
-                      >
-                        {value === null ? "empty (null)" : "set empty"}
-                      </button>
-                    )}
-                  </div>
-                  <textarea
-                    className={styles.textarea}
-                    rows={f === "headline" ? 2 : 2}
-                    value={value ?? ""}
-                    disabled={value === null}
-                    dir={content[locale]?.direction ?? "auto"}
-                    onChange={(e) => setField(f, e.target.value)}
-                    placeholder={required ? "required" : "optional"}
-                  />
-                  {locale !== refLocale && ref && (
-                    <div className={styles.ref}>
-                      {refLocale}: {ref}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-            <div className={styles.sectionTitle}>Style overrides</div>
-            {(template?.overrideKeys ?? []).map((key) => {
-              const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
-              const v = screen.overrides[key];
-              return (
-                <label key={key} className={styles.row}>
-                  <span title={c.hint}>{c.label}</span>
-                  {c.kind === "select" ? (
-                    <select
-                      className={styles.select}
-                      value={(v as string) ?? ""}
-                      onChange={(e) => setOverride(key, e.target.value)}
+            <ul className={styles.screens}>
+              {screens.map((s) => {
+                const st = screenStatus(s);
+                return (
+                  <li key={s.id}>
+                    <button
+                      className={`${styles.screenBtn} ${s.id === screenId ? styles.active : ""}`}
+                      onClick={() => setScreenId(s.id)}
+                      title={st.title}
                     >
-                      <option value="">default</option>
-                      {c.options!.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
-                  ) : c.kind === "number" ? (
-                    <input
-                      className={styles.input}
-                      type="number"
-                      min={c.min}
-                      max={c.max}
-                      step={c.step}
-                      value={(v as number) ?? ""}
-                      onChange={(e) => setOverride(key, e.target.value === "" ? "" : Number(e.target.value))}
-                      placeholder="default"
-                    />
-                  ) : (
-                    <input
-                      className={styles.input}
-                      value={(v as string) ?? ""}
-                      onChange={(e) => setOverride(key, e.target.value)}
-                      placeholder="default"
-                    />
-                  )}
-                </label>
-              );
-            })}
-            <div className={styles.dangerRow}>
-              <button className={styles.btnDanger} onClick={removeScreen}>
-                Remove screen
+                      <span className={`${styles.dot} ${styles[st.level]}`} />
+                      <span className={styles.order}>{String(s.order).padStart(2, "0")}</span>
+                      <span className={styles.screenId}>{s.id}</span>
+                      {!s.enabled && <span className={styles.muted}>off</span>}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className={styles.addRow}>
+              <input
+                value={newScreenId}
+                onChange={(e) => setNewScreenId(e.target.value)}
+                placeholder="new screen id"
+                className={styles.input}
+                onKeyDown={(e) => e.key === "Enter" && addScreen()}
+              />
+              <button className={styles.btn} onClick={addScreen}>
+                Add
               </button>
             </div>
-          </>
-        )}
-      </aside>
+            <div className={styles.sectionTitle}>Fonts</div>
+            <p className={styles.small}>
+              {snap.fonts.stack.map((f) => `${f.family} (${f.source})`).join(" → ")}
+              {snap.fonts.missing.length > 0 && (
+                <span className={styles.error}> missing: {snap.fonts.missing.join(", ")}</span>
+              )}
+            </p>
+          </aside>
 
+          <main className={styles.canvas} ref={canvasRef}>
+            {!screen && <p className={styles.muted}>No screen selected. Add one on the left.</p>}
+            {screen && target && (
+              <div className={styles.frame} style={{ width: target.width * scale, height: target.height * scale }}>
+                <iframe
+                  title="preview"
+                  srcDoc={previewHtml}
+                  sandbox="allow-scripts allow-same-origin"
+                  style={{
+                    width: target.width,
+                    height: target.height,
+                    transform: `scale(${scale})`,
+                    transformOrigin: "0 0",
+                    border: 0,
+                    background: "#000",
+                  }}
+                />
+              </div>
+            )}
+            <div className={styles.canvasInfo}>
+              {target && (
+                <span>
+                  {target.width}×{target.height}
+                </span>
+              )}
+              {previewInfo.loading && <span className={styles.muted}> rendering…</span>}
+              {previewInfo.error && <span className={styles.error}> {previewInfo.error}</span>}
+              {previewProblems.map((p) => (
+                <span key={p} className={styles.error}>
+                  {" "}
+                  {p}
+                </span>
+              ))}
+              {fitted.map((f) => (
+                <span key={f.id} className={styles.warn}>
+                  {" "}
+                  {f.id} shrunk to {Math.round(f.scale * 100)}%
+                </span>
+              ))}
+              {previewInfo.checks && previewProblems.length === 0 && !previewInfo.loading && (
+                <span className={styles.ok}> fits</span>
+              )}
+            </div>
+          </main>
+
+          <aside className={styles.right}>
+            {screen && (
+              <>
+                <div className={styles.sectionTitle}>
+                  Screen <code>{screen.id}</code>
+                </div>
+                <label className={styles.row}>
+                  <span>Template</span>
+                  <select
+                    value={screen.template}
+                    onChange={(e) => updateScreen({ template: e.target.value })}
+                    className={styles.select}
+                  >
+                    {snap.templates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className={styles.row}>
+                  <span>Enabled</span>
+                  <input
+                    type="checkbox"
+                    checked={screen.enabled}
+                    onChange={(e) => updateScreen({ enabled: e.target.checked })}
+                  />
+                </label>
+                <label className={styles.row}>
+                  <span>Order</span>
+                  <span className={styles.inline}>
+                    <button className={styles.btnSmall} onClick={() => moveScreen(-1)}>
+                      ↑
+                    </button>
+                    <button className={styles.btnSmall} onClick={() => moveScreen(1)}>
+                      ↓
+                    </button>
+                    <span className={styles.muted}>{screen.order}</span>
+                  </span>
+                </label>
+                <label className={styles.row}>
+                  <span>Raw capture</span>
+                  <input
+                    className={styles.input}
+                    value={screen.source.filePattern}
+                    onChange={(e) => updateScreen({ source: { ...screen.source, filePattern: e.target.value } })}
+                  />
+                </label>
+                <label className={styles.row}>
+                  <span>Localized captures</span>
+                  <input
+                    type="checkbox"
+                    checked={screen.source.localized}
+                    onChange={(e) => updateScreen({ source: { ...screen.source, localized: e.target.checked } })}
+                  />
+                </label>
+                <p className={styles.small}>
+                  store/raw/{target?.family}/{screen.source.localized ? locale : refLocale}/
+                  {screen.source.filePattern
+                    .replaceAll("{order}", String(screen.order).padStart(2, "0"))
+                    .replaceAll("{id}", screen.id)}
+                  {previewInfo.checks && previewInfo.checks.missingImages.length > 0 && (
+                    <span className={styles.error}> (missing)</span>
+                  )}
+                </p>
+
+                <div className={styles.sectionTitle}>
+                  Copy <span className={styles.muted}>{locale}</span>
+                </div>
+                {template?.requiredFields.concat(template.optionalFields).map((f) => {
+                  const required = template.requiredFields.includes(f);
+                  const value = fields[f];
+                  const ref = refFields[f];
+                  return (
+                    <div key={f} className={styles.field}>
+                      <div className={styles.fieldHead}>
+                        <span>
+                          {f}
+                          {required && <span className={styles.req}> *</span>}
+                        </span>
+                        <span className={styles.muted}>{typeof value === "string" ? value.length : 0}</span>
+                        {!required && (
+                          <button
+                            className={styles.link}
+                            onClick={() => setField(f, value === null ? "" : null)}
+                            title="null = intentionally empty"
+                          >
+                            {value === null ? "empty (null)" : "set empty"}
+                          </button>
+                        )}
+                      </div>
+                      <textarea
+                        className={styles.textarea}
+                        rows={f === "headline" ? 2 : 2}
+                        value={value ?? ""}
+                        disabled={value === null}
+                        dir={content[locale]?.direction ?? "auto"}
+                        onChange={(e) => setField(f, e.target.value)}
+                        placeholder={required ? "required" : "optional"}
+                      />
+                      {locale !== refLocale && ref && (
+                        <div className={styles.ref}>
+                          {refLocale}: {ref}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div className={styles.sectionTitle}>Style overrides</div>
+                {(template?.overrideKeys ?? []).map((key) => {
+                  const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
+                  const v = screen.overrides[key];
+                  return (
+                    <label key={key} className={styles.row}>
+                      <span title={c.hint}>{c.label}</span>
+                      {c.kind === "select" ? (
+                        <select
+                          className={styles.select}
+                          value={(v as string) ?? ""}
+                          onChange={(e) => setOverride(key, e.target.value)}
+                        >
+                          <option value="">default</option>
+                          {c.options!.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </select>
+                      ) : c.kind === "number" ? (
+                        <input
+                          className={styles.input}
+                          type="number"
+                          min={c.min}
+                          max={c.max}
+                          step={c.step}
+                          value={(v as number) ?? ""}
+                          onChange={(e) => setOverride(key, e.target.value === "" ? "" : Number(e.target.value))}
+                          placeholder="default"
+                        />
+                      ) : (
+                        <input
+                          className={styles.input}
+                          value={(v as string) ?? ""}
+                          onChange={(e) => setOverride(key, e.target.value)}
+                          placeholder="default"
+                        />
+                      )}
+                    </label>
+                  );
+                })}
+                <div className={styles.dangerRow}>
+                  <button className={styles.btnDanger} onClick={removeScreen}>
+                    Remove screen
+                  </button>
+                </div>
+              </>
+            )}
+          </aside>
+        </>
+      )}
       <footer className={`${styles.log} ${showLog ? styles.logOpen : ""}`}>
         <button className={styles.logToggle} onClick={() => setShowLog((v) => !v)}>
           {gen.running

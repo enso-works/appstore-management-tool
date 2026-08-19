@@ -19,8 +19,8 @@ Apps are discovered by scanning the workspace root (three levels up, or `STORE_S
 Status: Phases 1-4 done — config, schemas, validation, readiness, `init`, `generate`
 (Playwright + Sharp, exact-size no-alpha PNGs), `clean`, fonts from Google Fonts, glyph
 coverage, in-page font fitting, one template (`hero-top`), the editor UI (live preview,
-copy + overrides editing, save, generate). Metadata editing, the fastlane runner, the other
-two templates and the Braele pilot arrive in Phases 5-6.
+copy + overrides editing, save, generate), the Store tab (readiness, metadata editor with
+limits, fastlane runner). The other two templates and the Braele pilot are Phase 6.
 
 ## Requirements
 
@@ -45,6 +45,8 @@ npx store-shots generate  --project ../../breathe [--locale en-US] [--screen hom
 npx store-shots clean     --project ../../breathe # delete only files listed in .store-shots-manifest.json
 npx store-shots fonts add "Space Grotesk" --project ../../breathe   # download once from Google Fonts into store/assets/fonts/
 npx store-shots fonts list|check --project ../../breathe
+npx store-shots metadata validate|show --locale de-DE --project ../../breathe
+npx store-shots lane validate|metadata|screenshots --project ../../breathe [--yes] [--override "<reason>"] [--dry-run]
 npm run dev                                       # UI at http://localhost:3000
 ```
 
@@ -91,6 +93,8 @@ lib/
   render/html.tsx render a template to a self-contained HTML document (fonts + image via file:// or /api URLs)
   render/checks.ts in-page checks (fonts loaded, images decoded, text overflow, text/device overlap)
   render/export.ts Playwright Chromium worker + Sharp flatten/inspect
+  fastlane.ts     lane allowlist, preflight (readiness gate), spawn with streamed output; never build/submit
+  server/         project lookup, atomic JSON saves with etags, HTTP error mapping
   templates/registry.ts  thin adapter over ../templates
 templates/        React templates: types, shared pieces (artwork root, device shell, text block), hero-top
 assets/fonts/     bundled Inter (OFL)

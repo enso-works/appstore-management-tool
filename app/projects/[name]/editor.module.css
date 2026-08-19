@@ -347,3 +347,105 @@
 .skip {
   color: var(--skip);
 }
+
+.tabs {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-left: 6px;
+}
+
+.tab {
+  font: inherit;
+  font-size: 13px;
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.tabActive {
+  background: rgba(127, 127, 127, 0.2);
+  font-weight: 600;
+}
+
+.badgeBtn {
+  cursor: pointer;
+  background: none;
+  font: inherit;
+}
+
+.storeArea {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  overflow: auto;
+  padding: 16px 20px;
+}
+
+.store {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(420px, 1.4fr);
+  gap: 28px;
+  max-width: 1400px;
+}
+
+.storeCol {
+  min-width: 0;
+}
+
+.checks {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.details {
+  margin: 2px 0 0 16px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.laneRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.btnDangerSolid {
+  font: inherit;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--fail);
+  background: var(--fail);
+  color: #fff;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.btnDangerSolid:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.laneLog {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.textareaOver {
+  border-color: var(--fail);
+}

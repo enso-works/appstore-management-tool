@@ -1,6 +1,6 @@
 # Store Tool — Screenshot Generation and Store Management Plan
 
-Status: revision 2, approved 2026-08-19; Phases 1-4 complete; Phase 5 next
+Status: revision 2, approved 2026-08-19; Phases 1-5 complete; Phase 6 next
 Working name: **store-shots** (directory name; a rename is an open decision, see 3.2)
 Last verified against the workspace: 2026-08-19
 Executor: Claude Code, phase by phase, with human approval between phases
@@ -623,7 +623,7 @@ Recheck Apple and fastlane docs when bumping the device registry or the fastlane
 - [x] Phase 2 — hero-top + exact export (2026-08-19: Playwright + Sharp, `generate`/`clean`, `fonts add|list|check` from Google Fonts, Inter bundled; Braele en-US iPhone set generated from its existing captures)
 - [x] Phase 3 — localization + overflow (2026-08-19: in-page font fitting within template range, line-based overflow check, glyph coverage via opentype.js, font fallback stack, Noto Sans Arabic bundled)
 - [x] Phase 4 — editor UI (2026-08-19: app switcher, screen list with badges, live iframe preview using the export HTML, copy fields with reference locale, semantic overrides, add/remove/reorder screens, atomic save with etag conflicts, generate screen/all with log)
-- [ ] Phase 5 — store management
+- [x] Phase 5 — store management (2026-08-19: Store tab with readiness dashboard, metadata editor with limits/keyword hygiene/etag conflicts/explicit locale creation, fastlane runner with allowlist, confirmation, readiness gate and streamed log; CLI `metadata validate|show`, `lane <key> [--yes] [--override]`)
 - [ ] Phase 6 — remaining templates + Braele pilot
 - [ ] Phase 7 — hardening
 - [ ] Phase 8 — Google Play (post-v1)
