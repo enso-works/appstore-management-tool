@@ -11,6 +11,8 @@ export interface CanvasItem {
   order: number;
   /** Panorama slices (1 = normal). The artwork is slices x target.width wide and shown as that many frames. */
   slices?: number;
+  /** Label text instead of "NN id" (locale grid shows the locale). */
+  label?: string;
   /** ok | warn | error for the little badge under the frame. */
   status?: "ok" | "warn" | "error";
   statusText?: string;
@@ -21,8 +23,8 @@ export interface PreviewCanvasProps {
   items: CanvasItem[];
   selectedId?: string;
   onSelect: (id: string) => void;
-  /** "single": only the selected item; "strip": every item side by side, App Store style. */
-  mode: "single" | "strip";
+  /** "single": only the selected item; "strip"/"locales": every item side by side, App Store style. */
+  mode: "single" | "strip" | "locales";
   storeLook: boolean;
   /** Extra status line rendered bottom-left (fits / problems). */
   footer?: React.ReactNode;
@@ -236,7 +238,7 @@ export default function PreviewCanvas({
             <div
               key={key}
               data-frame-id={item.id}
-              className={`${styles.frameWrap} ${item.id === selectedId && mode === "strip" ? styles.frameSelected : ""}`}
+              className={`${styles.frameWrap} ${item.id === selectedId && mode !== "single" ? styles.frameSelected : ""}`}
               style={{ width: target.width, height: target.height, borderRadius: radius }}
             >
               {item.html ? (
@@ -259,16 +261,17 @@ export default function PreviewCanvas({
                   rendering…
                 </div>
               )}
-              {mode === "strip" && (
+              {mode !== "single" && (
                 <div
                   className={styles.frameLabel}
                   style={{
                     fontSize: Math.round(target.width * 0.045),
-                    top: target.height + Math.round(target.width * 0.02),
+                    bottom: Math.round(target.width * 0.02),
+                    left: Math.round(target.width * 0.02),
                   }}
                 >
                   <span className={`${styles.dot} ${styles[item.status ?? "ok"]}`} />{" "}
-                  {String(item.order + slice).padStart(2, "0")} {item.id}
+                  {item.label ?? `${String(item.order + slice).padStart(2, "0")} ${item.id}`}
                   {slices > 1 ? ` (${slice + 1}/${slices})` : ""}
                   {item.statusText && slice === 0 ? <span className={styles.muted}> — {item.statusText}</span> : null}
                 </div>

@@ -121,12 +121,13 @@ export default function Editor({ name }: { name: string }) {
   const [showLog, setShowLog] = useState(false);
   const [newScreenId, setNewScreenId] = useState("");
   const [view, setView] = useState<"screens" | "store">("screens");
-  const [canvasMode, setCanvasMode] = useState<"single" | "strip">("single");
+  const [canvasMode, setCanvasMode] = useState<"single" | "strip" | "locales">("single");
   const [storeLook, setStoreLook] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
-  /** Strip mode: artwork HTML per screen id, keyed by a cache key of its inputs. */
-  const [stripHtml, setStripHtml] = useState<Record<string, { key: string; html: string; sourceExists?: boolean }>>({});
-  const [checksById, setChecksById] = useState<Record<string, { checks: InPageResult; fits: FitResult[] }>>({});
+  /** Grid modes (strip / locales): artwork HTML per item id, keyed by a cache key of its inputs. */
+  const [gridHtml, setGridHtml] = useState<Record<string, { key: string; html: string; sourceExists?: boolean }>>({});
+  /** In-page check results per job key (<target>/<locale>/<screen>). */
+  const [checksByKey, setChecksByKey] = useState<Record<string, { checks: InPageResult; fits: FitResult[] }>>({});
   const stripAbort = useRef<AbortController | null>(null);
 
   // ---- load --------------------------------------------------------------
@@ -247,34 +248,59 @@ export default function Editor({ name }: { name: string }) {
       const checks = ev.data.checks as InPageResult;
       const fits = ev.data.fits as FitResult[];
       const key = ev.data.key as string | undefined; // <target>/<locale>/<screen>
-      const sid = key?.split("/")[2];
-      if (sid) setChecksById((m) => ({ ...m, [sid]: { checks, fits } }));
-      if (!sid || sid === screenId) setPreviewInfo((p) => ({ ...p, checks, fits }));
+      if (key) setChecksByKey((m) => ({ ...m, [key]: { checks, fits } }));
+      const parts = key?.split("/") ?? [];
+      if (!key || (parts[2] === screenId && parts[1] === locale)) setPreviewInfo((p) => ({ ...p, checks, fits }));
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [screenId]);
+  }, [screenId, locale]);
 
-  // Strip mode: render every enabled screen of the current locale/target (drafts included).
-  const stripInputsKey = JSON.stringify([
-    targetId,
-    locale,
-    direction,
-    screens.map((s) => [s, content[locale]?.screens[s.id] ?? {}]),
-  ]);
+  // Grid modes: strip = every enabled screen of the current locale; locales = the current screen in every locale.
+  interface GridJob {
+    id: string;
+    locale: string;
+    screen: ScreenDefinition;
+    fields: Fields;
+    order: number;
+    key: string;
+  }
+  const gridJobs: GridJob[] =
+    canvasMode === "strip"
+      ? screens
+          .filter((s) => s.enabled)
+          .map((s) => {
+            const f = (content[locale]?.screens[s.id] as Fields | undefined) ?? {};
+            return {
+              id: s.id,
+              locale,
+              screen: s,
+              fields: f,
+              order: s.order,
+              key: JSON.stringify([targetId, locale, content[locale]?.direction, s, f]),
+            };
+          })
+      : canvasMode === "locales" && screen
+        ? (snap?.config.locales ?? []).map((l, i) => {
+            const f = (content[l]?.screens[screen.id] as Fields | undefined) ?? {};
+            return {
+              id: l,
+              locale: l,
+              screen,
+              fields: f,
+              order: i + 1,
+              key: JSON.stringify([targetId, l, content[l]?.direction, screen, f]),
+            };
+          })
+        : [];
+  const gridInputsKey = JSON.stringify(gridJobs.map((j) => [j.id, j.key]));
   useEffect(() => {
-    if (canvasMode !== "strip" || !snap || !target) return;
+    if (canvasMode === "single" || !snap || !target) return;
     stripAbort.current?.abort();
     const controller = new AbortController();
     stripAbort.current = controller;
     const handle = setTimeout(async () => {
-      const jobs = screens
-        .filter((s) => s.enabled)
-        .map((s) => {
-          const f = (content[locale]?.screens[s.id] as Fields | undefined) ?? {};
-          return { screen: s, fields: f, key: JSON.stringify([targetId, locale, direction, s, f]) };
-        });
-      const need = jobs.filter((j) => stripHtml[j.screen.id]?.key !== j.key);
+      const need = gridJobs.filter((j) => gridHtml[j.id]?.key !== j.key);
       if (!need.length) return;
       const results = await Promise.all(
         need.map(async (j) => {
@@ -282,10 +308,16 @@ export default function Editor({ name }: { name: string }) {
             const res = await fetch(`/api/projects/${encodeURIComponent(name)}/preview`, {
               method: "POST",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify({ targetId, locale, screen: j.screen, fields: j.fields, direction }),
+              body: JSON.stringify({
+                targetId,
+                locale: j.locale,
+                screen: j.screen,
+                fields: j.fields,
+                direction: content[j.locale]?.direction,
+              }),
               signal: controller.signal,
             });
-            if (!res.ok) return { id: j.screen.id, key: j.key, html: "" };
+            if (!res.ok) return { id: j.id, key: j.key, html: "" };
             const sidecar = res.headers.get("x-store-shots-job");
             let sourceExists: boolean | undefined;
             try {
@@ -295,14 +327,14 @@ export default function Editor({ name }: { name: string }) {
             } catch {
               sourceExists = undefined;
             }
-            return { id: j.screen.id, key: j.key, html: await res.text(), sourceExists };
+            return { id: j.id, key: j.key, html: await res.text(), sourceExists };
           } catch {
             return null;
           }
         }),
       );
       if (controller.signal.aborted) return;
-      setStripHtml((m) => {
+      setGridHtml((m) => {
         const next = { ...m };
         for (const r of results) if (r) next[r.id] = { key: r.key, html: r.html, sourceExists: r.sourceExists };
         return next;
@@ -313,7 +345,7 @@ export default function Editor({ name }: { name: string }) {
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canvasMode, snap, name, stripInputsKey]);
+  }, [canvasMode, snap, name, targetId, gridInputsKey]);
 
   // ---- editing -----------------------------------------------------------
   function setField(field: string, value: string | null) {
@@ -522,10 +554,17 @@ export default function Editor({ name }: { name: string }) {
     : [];
   const fitted = (previewInfo.fits ?? []).filter((f) => f.scale < 1 && f.fits);
 
-  function statusFor(id: string): { status: "ok" | "warn" | "error"; text?: string } {
-    const s = screens.find((x) => x.id === id);
-    const base = s ? screenStatus(s) : { level: "ok" as const, title: "" };
-    const c = checksById[id];
+  function statusForJob(j: GridJob): { status: "ok" | "warn" | "error"; text?: string } {
+    const keys = new Set([
+      j.screen.id,
+      `${j.locale}/${j.screen.id}`,
+      `${targetId}/${j.locale}/${j.screen.id}`,
+      j.locale,
+    ]);
+    const hits = issues.filter((i) => i.key && keys.has(i.key));
+    const baseErr = hits.find((i) => i.level === "error");
+    const baseWarn = hits.find((i) => i.level === "warn");
+    const c = checksByKey[`${targetId}/${j.locale}/${j.screen.id}`];
     const problems: string[] = [];
     const warns: string[] = [];
     if (c) {
@@ -533,30 +572,33 @@ export default function Editor({ name }: { name: string }) {
       for (const o of c.checks.textOverlapsDevice) (failOnOverlap ? problems : warns).push(`${o} overlaps device`);
       for (const f of c.fits) if (f.scale < 1 && f.fits) warns.push(`${f.id} ${Math.round(f.scale * 100)}%`);
     }
-    if (stripHtml[id]?.sourceExists === false) problems.push("capture missing");
-    if (base.level === "error" || problems.length)
-      return {
-        status: "error",
-        text: [base.level === "error" ? base.title : "", ...problems].filter(Boolean).join(", "),
-      };
-    if (base.level === "warn" || warns.length)
-      return { status: "warn", text: [base.level === "warn" ? base.title : "", ...warns].filter(Boolean).join(", ") };
+    if (gridHtml[j.id]?.sourceExists === false) problems.push("capture missing");
+    if (!j.screen.enabled) warns.push("disabled");
+    if (baseErr || problems.length)
+      return { status: "error", text: [baseErr?.message ?? "", ...problems].filter(Boolean).join(", ") };
+    if (baseWarn || warns.length)
+      return { status: "warn", text: [baseWarn?.message ?? "", ...warns].filter(Boolean).join(", ") };
     return { status: "ok" };
   }
   const canvasItems: CanvasItem[] =
     canvasMode === "single"
       ? screen
-        ? [{ id: screen.id, html: previewHtml, order: screen.order }]
+        ? [{ id: screen.id, html: previewHtml, order: screen.order, slices: screen.panorama?.slices ?? 1 }]
         : []
-      : screens
-          .filter((s) => s.enabled)
-          .map((s) => ({
-            id: s.id,
-            html: stripHtml[s.id]?.html ?? "",
-            order: s.order,
-            ...statusFor(s.id),
-            statusText: statusFor(s.id).text,
-          }));
+      : gridJobs.map((j) => {
+          const st = statusForJob(j);
+          return {
+            id: j.id,
+            html: gridHtml[j.id]?.html ?? "",
+            order: j.order,
+            slices: j.screen.panorama?.slices ?? 1,
+            label: canvasMode === "locales" ? j.locale : undefined,
+            status: st.status,
+            statusText: st.text,
+          };
+        });
+  const canvasSelectedId = canvasMode === "locales" ? locale : screenId;
+  const onCanvasSelect = (id: string) => (canvasMode === "locales" ? setLocale(id) : setScreenId(id));
 
   if (loadError)
     return (
@@ -610,6 +652,13 @@ export default function Editor({ name }: { name: string }) {
                 title="every screen side by side, as on the store"
               >
                 Strip
+              </button>
+              <button
+                className={`${styles.tab} ${canvasMode === "locales" ? styles.tabActive : ""}`}
+                onClick={() => setCanvasMode("locales")}
+                title="this screen in every locale"
+              >
+                Locales
               </button>
             </span>
             <label className={styles.check} title="App Store look: dark page, rounded corners, store spacing">
@@ -742,8 +791,8 @@ export default function Editor({ name }: { name: string }) {
               <PreviewCanvas
                 target={target}
                 items={canvasItems}
-                selectedId={screenId}
-                onSelect={setScreenId}
+                selectedId={canvasSelectedId}
+                onSelect={onCanvasSelect}
                 mode={canvasMode}
                 storeLook={storeLook}
                 interactive
@@ -753,7 +802,9 @@ export default function Editor({ name }: { name: string }) {
                       {target.width}×{target.height}
                       {canvasMode === "strip"
                         ? ` · ${canvasItems.length} screens · ${locale}`
-                        : " · drag phone to move, ⌥ tilt, ⇧ scale"}
+                        : canvasMode === "locales"
+                          ? ` · ${screenId} · ${canvasItems.length} locales`
+                          : " · drag phone to move, ⌥ tilt, ⇧ scale"}
                     </span>
                     {previewInfo.loading && <span className={styles.muted}> rendering…</span>}
                     {previewInfo.error && <span className={styles.error}> {previewInfo.error}</span>}
