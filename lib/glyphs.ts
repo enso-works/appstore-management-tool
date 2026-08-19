@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import opentype from "opentype.js";
+import * as opentype from "opentype.js";
 import type { ResolvedFont } from "./fonts";
 
 /**

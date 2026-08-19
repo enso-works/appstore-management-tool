@@ -1,0 +1,349 @@
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr 340px;
+  grid-template-rows: 48px 1fr auto;
+  grid-template-areas:
+    "top top top"
+    "left canvas right"
+    "log log log";
+  height: 100vh;
+  overflow: hidden;
+}
+
+.center {
+  padding: 40px;
+}
+
+.topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+  font-size: 14px;
+}
+
+.back {
+  text-decoration: none;
+  font-size: 18px;
+  padding: 0 6px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.status {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.left,
+.right {
+  overflow-y: auto;
+  background: var(--card);
+  font-size: 13px;
+  padding: 12px;
+}
+
+.left {
+  grid-area: left;
+  border-right: 1px solid var(--line);
+}
+
+.right {
+  grid-area: right;
+  border-left: 1px solid var(--line);
+}
+
+.canvas {
+  grid-area: canvas;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(
+      45deg,
+      rgba(127, 127, 127, 0.08) 25%,
+      transparent 25%,
+      transparent 75%,
+      rgba(127, 127, 127, 0.08) 75%
+    ),
+    linear-gradient(
+      45deg,
+      rgba(127, 127, 127, 0.08) 25%,
+      transparent 25%,
+      transparent 75%,
+      rgba(127, 127, 127, 0.08) 75%
+    );
+  background-size: 24px 24px;
+  background-position:
+    0 0,
+    12px 12px;
+  overflow: hidden;
+}
+
+.frame {
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  background: #000;
+}
+
+.canvasInfo {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  max-width: calc(100% - 24px);
+}
+
+.log {
+  grid-area: log;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  font-size: 13px;
+}
+
+.logToggle {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 8px 14px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.logBody {
+  max-height: 220px;
+  overflow: auto;
+  margin: 0;
+  padding: 0 14px 12px;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.sectionTitle {
+  font-weight: 600;
+  margin: 12px 0 6px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.sectionTitle:first-child {
+  margin-top: 0;
+}
+
+.screens {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.screenBtn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.screenBtn:hover {
+  background: rgba(127, 127, 127, 0.12);
+}
+
+.active {
+  background: rgba(127, 127, 127, 0.18) !important;
+}
+
+.order {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.screenId {
+  flex: 1;
+}
+
+.addRow {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.inline {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.field {
+  margin: 8px 0 10px;
+}
+
+.fieldHead {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.fieldHead > span:first-child {
+  flex: 1;
+  font-weight: 500;
+}
+
+.req {
+  color: var(--fail);
+}
+
+.ref {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 44px;
+}
+
+.select {
+  width: auto;
+  max-width: 100%;
+}
+
+.btn,
+.btnPrimary,
+.btnDanger,
+.btnSmall {
+  font: inherit;
+  font-size: 13px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: inherit;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.btn:disabled,
+.btnPrimary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btnPrimary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.btnDanger {
+  color: var(--fail);
+}
+
+.btnSmall {
+  padding: 2px 8px;
+}
+
+.dangerRow {
+  margin-top: 20px;
+}
+
+.link {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.badge {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  text-decoration: none;
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.error,
+.fail {
+  color: var(--fail);
+}
+
+.warn {
+  color: var(--warn);
+}
+
+.ok,
+.pass {
+  color: var(--pass);
+}
+
+.skip {
+  color: var(--skip);
+}

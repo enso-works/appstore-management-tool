@@ -1,4 +1,4 @@
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderStatic } from "./ssr";
 import { getTemplateModule } from "../../templates";
 import type { BrandTheme, TemplateRenderInput } from "../../templates/types";
 import type { Project } from "../config";
@@ -82,7 +82,7 @@ export function renderArtworkHtml(
   }
   const input = templateInputFor(project, job, content, urls.sourceImage, "export", stack);
   const mod = getTemplateModule(job.screen.template)!;
-  const body = renderToStaticMarkup(mod.render(input));
+  const body = renderStatic(mod.render(input));
   const html = [
     "<!doctype html>",
     `<html lang="${job.locale}" dir="${input.direction}">`,

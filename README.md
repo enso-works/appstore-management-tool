@@ -16,10 +16,11 @@ The workspace folder itself is not a repo; it only groups repos (and may hold un
 
 Apps are discovered by scanning the workspace root (three levels up, or `STORE_SHOTS_WORKSPACE`).
 
-Status: Phases 1-2 done — config, schemas, validation, readiness, `init`, `generate`
-(Playwright + Sharp, exact-size no-alpha PNGs), `clean`, fonts from Google Fonts, one
-template (`hero-top`), fixture, tests, read-only UI. Editor UI, overflow fitting, metadata
-editing and the fastlane runner arrive in the next phases.
+Status: Phases 1-4 done — config, schemas, validation, readiness, `init`, `generate`
+(Playwright + Sharp, exact-size no-alpha PNGs), `clean`, fonts from Google Fonts, glyph
+coverage, in-page font fitting, one template (`hero-top`), the editor UI (live preview,
+copy + overrides editing, save, generate). Metadata editing, the fastlane runner, the other
+two templates and the Braele pilot arrive in Phases 5-6.
 
 ## Requirements
 
@@ -69,7 +70,7 @@ npm run fixtures    # regenerate fixtures/demo-app
 ## Layout
 
 ```text
-app/              Next.js UI (App Router) — project list + readiness/validation views
+app/              Next.js UI: project list, /projects/<name> editor (live preview, edit, save, generate), /projects/<name>/readiness; /api/projects/* route handlers
 cli/index.ts      commander CLI
 lib/
   schema.ts       Zod schemas: project config, manifest, locale content, generated manifest, fonts lock

@@ -1,0 +1,705 @@
+"use client";
+
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Issue } from "@/lib/issues";
+import type { LocaleContent, Manifest, ProjectConfig, ScreenDefinition } from "@/lib/schema";
+import type { TargetProfile } from "@/lib/targets";
+import type { TemplateDescriptor } from "@/templates/types";
+import type { InPageResult } from "@/lib/render/checks";
+import type { FitResult } from "@/lib/render/fit";
+import type { ReadinessReport } from "@/lib/readiness";
+import type { GenerationSummary } from "@/lib/generate";
+import styles from "./editor.module.css";
+
+interface Snapshot {
+  name: string;
+  root: string;
+  config: ProjectConfig;
+  manifest?: Manifest;
+  manifestEtag: string;
+  content: Record<string, LocaleContent>;
+  contentEtags: Record<string, string>;
+  validation: { issues: Issue[]; planKeys: string[] };
+  readiness: ReadinessReport;
+  templates: TemplateDescriptor[];
+  targets: TargetProfile[];
+  fonts: { stack: { family: string; source: string }[]; missing: string[] };
+}
+
+type Fields = Record<string, string | null>;
+
+const OVERRIDE_CONTROLS: Record<
+  string,
+  {
+    label: string;
+    kind: "text" | "number" | "select";
+    min?: number;
+    max?: number;
+    step?: number;
+    options?: string[];
+    hint?: string;
+  }
+> = {
+  background: { label: "Background", kind: "text", hint: "any CSS background; empty = brand gradient" },
+  screenshotScale: { label: "Screenshot scale", kind: "number", min: 0.4, max: 1.2, step: 0.02 },
+  screenshotOffsetY: { label: "Screenshot offset Y", kind: "number", min: -0.5, max: 0.8, step: 0.02 },
+  deviceTilt: { label: "Device tilt (deg)", kind: "number", min: -15, max: 15, step: 1 },
+  textAlign: { label: "Text align", kind: "select", options: ["start", "center", "end"] },
+  shell: { label: "Device shell", kind: "select", options: ["dark", "light", "none"] },
+  textSide: { label: "Text side", kind: "select", options: ["start", "end"] },
+  cardPosition: { label: "Card position", kind: "select", options: ["top", "bottom"] },
+};
+
+function emptyContent(locale: string): LocaleContent {
+  return { locale, screens: {} };
+}
+
+export default function Editor({ name }: { name: string }) {
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [targetId, setTargetId] = useState<string>("");
+  const [locale, setLocale] = useState<string>("");
+  const [screenId, setScreenId] = useState<string>("");
+  const [content, setContent] = useState<Record<string, LocaleContent>>({});
+  const [manifest, setManifest] = useState<Manifest>({ screens: [] });
+  const [etags, setEtags] = useState<{ manifest: string; content: Record<string, string> }>({
+    manifest: "",
+    content: {},
+  });
+  const [dirty, setDirty] = useState<{ manifest: boolean; content: Set<string> }>({
+    manifest: false,
+    content: new Set(),
+  });
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [previewHtml, setPreviewHtml] = useState<string>("");
+  const [previewInfo, setPreviewInfo] = useState<{
+    checks?: InPageResult;
+    fits?: FitResult[];
+    error?: string;
+    loading: boolean;
+  }>({ loading: false });
+  const [status, setStatus] = useState<string>("");
+  const [gen, setGen] = useState<{ running: boolean; summary?: GenerationSummary & { log: string[] } }>({
+    running: false,
+  });
+  const [showLog, setShowLog] = useState(false);
+  const [newScreenId, setNewScreenId] = useState("");
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.2);
+
+  // ---- load --------------------------------------------------------------
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/projects/${encodeURIComponent(name)}`, { cache: "no-store" });
+    if (!res.ok) {
+      setLoadError((await res.json().catch(() => ({ error: res.statusText }))).error);
+      return;
+    }
+    const data = (await res.json()) as Snapshot;
+    setLoadError(null);
+    setSnap(data);
+    const c: Record<string, LocaleContent> = {};
+    for (const l of data.config.locales) c[l] = data.content[l] ?? emptyContent(l);
+    setContent(c);
+    setManifest(data.manifest ?? { screens: [] });
+    setEtags({ manifest: data.manifestEtag, content: data.contentEtags });
+    setDirty({ manifest: false, content: new Set() });
+    setIssues(data.validation.issues);
+    setTargetId((t) => t || data.config.targets[0]);
+    setLocale((l) => l || data.config.defaultLocale);
+    const first = [...(data.manifest?.screens ?? [])].sort((a, b) => a.order - b.order)[0];
+    setScreenId((s) => s || first?.id || "");
+  }, [name]);
+
+  useEffect(() => {
+    // Deferred so the fetch (and its later setState calls) never run synchronously inside the effect.
+    const t = setTimeout(() => void load(), 0);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  // ---- derived -----------------------------------------------------------
+  const screens = useMemo(
+    () => [...manifest.screens].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)),
+    [manifest],
+  );
+  const screen = screens.find((s) => s.id === screenId);
+  const target = snap?.targets.find((t) => t.id === targetId);
+  const template = snap?.templates.find((t) => t.id === screen?.template);
+  const fields: Fields = (content[locale]?.screens[screenId] as Fields | undefined) ?? {};
+  const refLocale = snap?.config.defaultLocale ?? "";
+  const refFields: Fields = (content[refLocale]?.screens[screenId] as Fields | undefined) ?? {};
+  const isDirty = dirty.manifest || dirty.content.size > 0;
+
+  // ---- preview -----------------------------------------------------------
+  const screenKey = JSON.stringify(screen);
+  const fieldsKey = JSON.stringify(fields);
+  const direction = content[locale]?.direction;
+  useEffect(() => {
+    if (!snap || !screen || !target || !locale) return;
+    const controller = new AbortController();
+    const handle = setTimeout(async () => {
+      setPreviewInfo((p) => ({ ...p, loading: true, error: undefined }));
+      try {
+        const res = await fetch(`/api/projects/${encodeURIComponent(name)}/preview`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ targetId, locale, screen, fields, direction }),
+          signal: controller.signal,
+        });
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({ error: res.statusText }))).error as string;
+          setPreviewInfo({ loading: false, error: err });
+          setPreviewHtml("");
+          return;
+        }
+        setPreviewHtml(await res.text());
+        setPreviewInfo({ loading: false });
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") setPreviewInfo({ loading: false, error: (err as Error).message });
+      }
+    }, 250);
+    return () => {
+      clearTimeout(handle);
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap, name, targetId, locale, screenId, screenKey, fieldsKey, direction]);
+
+  useEffect(() => {
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.data?.type === "store-shots-preview") {
+        setPreviewInfo((p) => ({ ...p, checks: ev.data.checks as InPageResult, fits: ev.data.fits as FitResult[] }));
+      }
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el || !target) return;
+    const ro = new ResizeObserver(() => {
+      const pad = 24;
+      const s = Math.min((el.clientWidth - pad) / target.width, (el.clientHeight - pad) / target.height);
+      setScale(Math.max(0.05, Math.min(1, s)));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [target]);
+
+  // ---- editing -----------------------------------------------------------
+  function setField(field: string, value: string | null) {
+    setContent((c) => {
+      const lc = c[locale] ?? emptyContent(locale);
+      const next: LocaleContent = {
+        ...lc,
+        screens: { ...lc.screens, [screenId]: { ...(lc.screens[screenId] ?? {}), [field]: value } },
+      };
+      return { ...c, [locale]: next };
+    });
+    setDirty((d) => ({ ...d, content: new Set(d.content).add(locale) }));
+  }
+
+  function updateScreen(patch: Partial<ScreenDefinition>) {
+    setManifest((m) => ({ ...m, screens: m.screens.map((s) => (s.id === screenId ? { ...s, ...patch } : s)) }));
+    setDirty((d) => ({ ...d, manifest: true }));
+  }
+
+  function setOverride(key: string, value: unknown) {
+    if (!screen) return;
+    const overrides = { ...screen.overrides };
+    if (value === "" || value === undefined || value === null || (typeof value === "number" && Number.isNaN(value)))
+      delete overrides[key];
+    else overrides[key] = value;
+    updateScreen({ overrides });
+  }
+
+  function addScreen() {
+    const id = newScreenId
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-|-$/g, "");
+    if (!id || manifest.screens.some((s) => s.id === id)) return;
+    const order = Math.max(0, ...manifest.screens.map((s) => s.order)) + 1;
+    const s: ScreenDefinition = {
+      id,
+      order,
+      enabled: true,
+      template: snap?.templates[0]?.id ?? "hero-top",
+      source: { filePattern: "{order}-{id}.png", localized: true },
+      overrides: {},
+    };
+    setManifest((m) => ({ ...m, screens: [...m.screens, s] }));
+    setDirty((d) => ({ ...d, manifest: true }));
+    setScreenId(id);
+    setNewScreenId("");
+  }
+
+  function removeScreen() {
+    if (
+      !screen ||
+      !confirm(
+        `Remove screen "${screen.id}" from the manifest? Its copy stays in the content files until you delete it.`,
+      )
+    )
+      return;
+    setManifest((m) => ({ ...m, screens: m.screens.filter((s) => s.id !== screen.id) }));
+    setDirty((d) => ({ ...d, manifest: true }));
+    setScreenId(screens.find((s) => s.id !== screen.id)?.id ?? "");
+  }
+
+  function moveScreen(dir: -1 | 1) {
+    if (!screen) return;
+    const idx = screens.findIndex((s) => s.id === screen.id);
+    const other = screens[idx + dir];
+    if (!other) return;
+    setManifest((m) => ({
+      ...m,
+      screens: m.screens.map((s) =>
+        s.id === screen.id ? { ...s, order: other.order } : s.id === other.id ? { ...s, order: screen.order } : s,
+      ),
+    }));
+    setDirty((d) => ({ ...d, manifest: true }));
+  }
+
+  // ---- save --------------------------------------------------------------
+  async function save() {
+    if (!snap) return;
+    setStatus("Saving…");
+    try {
+      let latestIssues = issues;
+      if (dirty.manifest) {
+        const res = await fetch(`/api/projects/${encodeURIComponent(name)}/manifest`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ manifest, ifMatch: etags.manifest }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error + (body.details ? `: ${(body.details as string[]).join("; ")}` : ""));
+        setEtags((e) => ({ ...e, manifest: body.etag }));
+        latestIssues = body.issues;
+      }
+      for (const l of dirty.content) {
+        const res = await fetch(`/api/projects/${encodeURIComponent(name)}/content/${encodeURIComponent(l)}`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ content: content[l], ifMatch: etags.content[l] }),
+        });
+        const body = await res.json();
+        if (!res.ok)
+          throw new Error(`${l}: ${body.error}${body.details ? `: ${(body.details as string[]).join("; ")}` : ""}`);
+        setEtags((e) => ({ ...e, content: { ...e.content, [l]: body.etag } }));
+        latestIssues = body.issues;
+      }
+      setIssues(latestIssues);
+      setDirty({ manifest: false, content: new Set() });
+      setStatus("Saved");
+      setTimeout(() => setStatus(""), 1500);
+    } catch (err) {
+      setStatus(`Save failed: ${(err as Error).message}`);
+    }
+  }
+
+  // ---- generate ----------------------------------------------------------
+  async function generate(scope: "screen" | "locale" | "all") {
+    if (isDirty && !confirm("You have unsaved edits. Generate from the files on disk anyway?")) return;
+    setGen({ running: true });
+    setShowLog(true);
+    const filter =
+      scope === "screen"
+        ? { screens: [screenId], locales: [locale] }
+        : scope === "locale"
+          ? { locales: [locale] }
+          : undefined;
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(name)}/generate`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ filter }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error);
+      setGen({ running: false, summary: body });
+      const r = await fetch(`/api/projects/${encodeURIComponent(name)}/readiness`, { cache: "no-store" });
+      if (r.ok) {
+        const data = await r.json();
+        setSnap((s) => (s ? { ...s, readiness: data.readiness } : s));
+      }
+    } catch (err) {
+      setGen({
+        running: false,
+        summary: {
+          project: name,
+          planned: 0,
+          rendered: 0,
+          failed: 0,
+          skipped: 0,
+          aborted: true,
+          issues: [{ level: "error", code: "ui", message: (err as Error).message }],
+          jobs: [],
+          filesWritten: [],
+          durationMs: 0,
+          log: [],
+        },
+      });
+    }
+  }
+
+  // ---- badges ------------------------------------------------------------
+  function screenStatus(s: ScreenDefinition): { level: "ok" | "warn" | "error"; title: string } {
+    const keys = new Set([`${locale}/${s.id}`, `${targetId}/${locale}/${s.id}`]);
+    const hits = issues.filter((i) => i.key && keys.has(i.key));
+    const err = hits.find((i) => i.level === "error");
+    if (err) return { level: "error", title: err.message };
+    const warn = hits.find((i) => i.level === "warn");
+    if (warn) return { level: "warn", title: warn.message };
+    if (!s.enabled) return { level: "warn", title: "disabled" };
+    return { level: "ok", title: "ready" };
+  }
+
+  const previewProblems: string[] = [];
+  if (previewInfo.checks) {
+    for (const o of previewInfo.checks.overflow) previewProblems.push(`"${o.id}" overflows even at the minimum size`);
+    for (const id of previewInfo.checks.textOverlapsDevice) previewProblems.push(`"${id}" overlaps the device`);
+    if (previewInfo.checks.missingImages.length) previewProblems.push("raw capture did not load");
+    if (previewInfo.checks.fontsFailed.length)
+      previewProblems.push(`font failed: ${previewInfo.checks.fontsFailed.join(", ")}`);
+  }
+  const fitted = (previewInfo.fits ?? []).filter((f) => f.scale < 1 && f.fits);
+
+  if (loadError)
+    return (
+      <main className={styles.center}>
+        <p className={styles.error}>{loadError}</p>
+        <Link href="/">← all projects</Link>
+      </main>
+    );
+  if (!snap)
+    return (
+      <main className={styles.center}>
+        <p>Loading…</p>
+      </main>
+    );
+
+  return (
+    <div className={styles.app}>
+      <header className={styles.topbar}>
+        <Link href="/" className={styles.back}>
+          ←
+        </Link>
+        <strong>{snap.config.projectName}</strong>
+        <span className={styles.muted}>{snap.name}</span>
+        <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className={styles.select}>
+          {snap.targets.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.family} {t.displayClass} · {t.width}×{t.height}
+            </option>
+          ))}
+        </select>
+        <select value={locale} onChange={(e) => setLocale(e.target.value)} className={styles.select}>
+          {snap.config.locales.map((l) => (
+            <option key={l} value={l}>
+              {l}
+              {l === refLocale ? " (default)" : ""}
+              {dirty.content.has(l) ? " *" : ""}
+            </option>
+          ))}
+        </select>
+        <span className={styles.spacer} />
+        <Link
+          href={`/projects/${encodeURIComponent(name)}/readiness`}
+          className={`${styles.badge} ${styles[snap.readiness.status]}`}
+        >
+          readiness: {snap.readiness.status}
+        </Link>
+        <span className={styles.status}>{status}</span>
+        <button className={styles.btn} onClick={save} disabled={!isDirty}>
+          Save{isDirty ? " *" : ""}
+        </button>
+        <button className={styles.btnPrimary} onClick={() => generate("screen")} disabled={gen.running || !screen}>
+          Generate screen
+        </button>
+        <button className={styles.btnPrimary} onClick={() => generate("all")} disabled={gen.running}>
+          Generate all
+        </button>
+      </header>
+
+      <aside className={styles.left}>
+        <div className={styles.sectionTitle}>
+          Screens <span className={styles.muted}>({screens.length})</span>
+        </div>
+        <ul className={styles.screens}>
+          {screens.map((s) => {
+            const st = screenStatus(s);
+            return (
+              <li key={s.id}>
+                <button
+                  className={`${styles.screenBtn} ${s.id === screenId ? styles.active : ""}`}
+                  onClick={() => setScreenId(s.id)}
+                  title={st.title}
+                >
+                  <span className={`${styles.dot} ${styles[st.level]}`} />
+                  <span className={styles.order}>{String(s.order).padStart(2, "0")}</span>
+                  <span className={styles.screenId}>{s.id}</span>
+                  {!s.enabled && <span className={styles.muted}>off</span>}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <div className={styles.addRow}>
+          <input
+            value={newScreenId}
+            onChange={(e) => setNewScreenId(e.target.value)}
+            placeholder="new screen id"
+            className={styles.input}
+            onKeyDown={(e) => e.key === "Enter" && addScreen()}
+          />
+          <button className={styles.btn} onClick={addScreen}>
+            Add
+          </button>
+        </div>
+        <div className={styles.sectionTitle}>Fonts</div>
+        <p className={styles.small}>
+          {snap.fonts.stack.map((f) => `${f.family} (${f.source})`).join(" → ")}
+          {snap.fonts.missing.length > 0 && (
+            <span className={styles.error}> missing: {snap.fonts.missing.join(", ")}</span>
+          )}
+        </p>
+      </aside>
+
+      <main className={styles.canvas} ref={canvasRef}>
+        {!screen && <p className={styles.muted}>No screen selected. Add one on the left.</p>}
+        {screen && target && (
+          <div className={styles.frame} style={{ width: target.width * scale, height: target.height * scale }}>
+            <iframe
+              title="preview"
+              srcDoc={previewHtml}
+              sandbox="allow-scripts allow-same-origin"
+              style={{
+                width: target.width,
+                height: target.height,
+                transform: `scale(${scale})`,
+                transformOrigin: "0 0",
+                border: 0,
+                background: "#000",
+              }}
+            />
+          </div>
+        )}
+        <div className={styles.canvasInfo}>
+          {target && (
+            <span>
+              {target.width}×{target.height}
+            </span>
+          )}
+          {previewInfo.loading && <span className={styles.muted}> rendering…</span>}
+          {previewInfo.error && <span className={styles.error}> {previewInfo.error}</span>}
+          {previewProblems.map((p) => (
+            <span key={p} className={styles.error}>
+              {" "}
+              {p}
+            </span>
+          ))}
+          {fitted.map((f) => (
+            <span key={f.id} className={styles.warn}>
+              {" "}
+              {f.id} shrunk to {Math.round(f.scale * 100)}%
+            </span>
+          ))}
+          {previewInfo.checks && previewProblems.length === 0 && !previewInfo.loading && (
+            <span className={styles.ok}> fits</span>
+          )}
+        </div>
+      </main>
+
+      <aside className={styles.right}>
+        {screen && (
+          <>
+            <div className={styles.sectionTitle}>
+              Screen <code>{screen.id}</code>
+            </div>
+            <label className={styles.row}>
+              <span>Template</span>
+              <select
+                value={screen.template}
+                onChange={(e) => updateScreen({ template: e.target.value })}
+                className={styles.select}
+              >
+                {snap.templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.row}>
+              <span>Enabled</span>
+              <input
+                type="checkbox"
+                checked={screen.enabled}
+                onChange={(e) => updateScreen({ enabled: e.target.checked })}
+              />
+            </label>
+            <label className={styles.row}>
+              <span>Order</span>
+              <span className={styles.inline}>
+                <button className={styles.btnSmall} onClick={() => moveScreen(-1)}>
+                  ↑
+                </button>
+                <button className={styles.btnSmall} onClick={() => moveScreen(1)}>
+                  ↓
+                </button>
+                <span className={styles.muted}>{screen.order}</span>
+              </span>
+            </label>
+            <label className={styles.row}>
+              <span>Raw capture</span>
+              <input
+                className={styles.input}
+                value={screen.source.filePattern}
+                onChange={(e) => updateScreen({ source: { ...screen.source, filePattern: e.target.value } })}
+              />
+            </label>
+            <label className={styles.row}>
+              <span>Localized captures</span>
+              <input
+                type="checkbox"
+                checked={screen.source.localized}
+                onChange={(e) => updateScreen({ source: { ...screen.source, localized: e.target.checked } })}
+              />
+            </label>
+            <p className={styles.small}>
+              store/raw/{target?.family}/{screen.source.localized ? locale : refLocale}/
+              {screen.source.filePattern
+                .replaceAll("{order}", String(screen.order).padStart(2, "0"))
+                .replaceAll("{id}", screen.id)}
+              {previewInfo.checks && previewInfo.checks.missingImages.length > 0 && (
+                <span className={styles.error}> (missing)</span>
+              )}
+            </p>
+
+            <div className={styles.sectionTitle}>
+              Copy <span className={styles.muted}>{locale}</span>
+            </div>
+            {template?.requiredFields.concat(template.optionalFields).map((f) => {
+              const required = template.requiredFields.includes(f);
+              const value = fields[f];
+              const ref = refFields[f];
+              return (
+                <div key={f} className={styles.field}>
+                  <div className={styles.fieldHead}>
+                    <span>
+                      {f}
+                      {required && <span className={styles.req}> *</span>}
+                    </span>
+                    <span className={styles.muted}>{typeof value === "string" ? value.length : 0}</span>
+                    {!required && (
+                      <button
+                        className={styles.link}
+                        onClick={() => setField(f, value === null ? "" : null)}
+                        title="null = intentionally empty"
+                      >
+                        {value === null ? "empty (null)" : "set empty"}
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    className={styles.textarea}
+                    rows={f === "headline" ? 2 : 2}
+                    value={value ?? ""}
+                    disabled={value === null}
+                    dir={content[locale]?.direction ?? "auto"}
+                    onChange={(e) => setField(f, e.target.value)}
+                    placeholder={required ? "required" : "optional"}
+                  />
+                  {locale !== refLocale && ref && (
+                    <div className={styles.ref}>
+                      {refLocale}: {ref}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            <div className={styles.sectionTitle}>Style overrides</div>
+            {(template?.overrideKeys ?? []).map((key) => {
+              const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
+              const v = screen.overrides[key];
+              return (
+                <label key={key} className={styles.row}>
+                  <span title={c.hint}>{c.label}</span>
+                  {c.kind === "select" ? (
+                    <select
+                      className={styles.select}
+                      value={(v as string) ?? ""}
+                      onChange={(e) => setOverride(key, e.target.value)}
+                    >
+                      <option value="">default</option>
+                      {c.options!.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </select>
+                  ) : c.kind === "number" ? (
+                    <input
+                      className={styles.input}
+                      type="number"
+                      min={c.min}
+                      max={c.max}
+                      step={c.step}
+                      value={(v as number) ?? ""}
+                      onChange={(e) => setOverride(key, e.target.value === "" ? "" : Number(e.target.value))}
+                      placeholder="default"
+                    />
+                  ) : (
+                    <input
+                      className={styles.input}
+                      value={(v as string) ?? ""}
+                      onChange={(e) => setOverride(key, e.target.value)}
+                      placeholder="default"
+                    />
+                  )}
+                </label>
+              );
+            })}
+            <div className={styles.dangerRow}>
+              <button className={styles.btnDanger} onClick={removeScreen}>
+                Remove screen
+              </button>
+            </div>
+          </>
+        )}
+      </aside>
+
+      <footer className={`${styles.log} ${showLog ? styles.logOpen : ""}`}>
+        <button className={styles.logToggle} onClick={() => setShowLog((v) => !v)}>
+          {gen.running
+            ? "Generating…"
+            : gen.summary
+              ? `Last run: ${gen.summary.rendered} rendered, ${gen.summary.failed} failed, ${gen.summary.skipped} skipped, ${gen.summary.filesWritten.length} file(s) in ${(gen.summary.durationMs / 1000).toFixed(1)} s`
+              : "Generation log"}
+          <span className={styles.muted}> {showLog ? "▾" : "▸"}</span>
+        </button>
+        {showLog && (
+          <pre className={styles.logBody}>
+            {gen.summary?.aborted && "ABORTED — nothing written\n"}
+            {(gen.summary?.log ?? []).join("\n")}
+            {gen.summary &&
+              gen.summary.issues.length > 0 &&
+              "\n\n" +
+                gen.summary.issues
+                  .map(
+                    (i) =>
+                      `${i.level.toUpperCase()} ${i.key ? `[${i.key}] ` : ""}${i.message}${i.hint ? `\n      hint: ${i.hint}` : ""}`,
+                  )
+                  .join("\n")}
+            {!gen.summary && !gen.running && "No generation run yet in this session."}
+          </pre>
+        )}
+      </footer>
+    </div>
+  );
+}
