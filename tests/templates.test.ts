@@ -36,7 +36,9 @@ describe("template contracts", () => {
         it(`renders an exact-size artwork root for ${targetId} in LTR and RTL`, () => {
           for (const direction of ["ltr", "rtl"] as const) {
             const html = renderStatic(
-              mod.render(input(targetId, { direction, overrides: mod.overridesSchema.parse({}) })),
+              mod.render(
+                input(targetId, { direction, overrides: mod.overridesSchema.parse({}) as Record<string, unknown> }),
+              ),
             );
             const t = targetProfiles[targetId];
             expect(html).toContain("data-artwork");
@@ -59,7 +61,7 @@ describe("template contracts", () => {
                 patternColor: "#ff0000",
                 textColor: "#123456",
                 background: "#F4F0E7",
-              }),
+              }) as Record<string, unknown>,
             }),
           ),
         );
