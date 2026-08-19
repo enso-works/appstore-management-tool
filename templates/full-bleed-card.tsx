@@ -24,6 +24,14 @@ export const descriptor = {
   families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
   orientations: ["portrait"] as "portrait"[],
   overrideKeys: [...COMMON_OVERRIDE_KEYS, "cardPosition", "cardColor"],
+  fieldBudget: (field: string, target: { width: number; family: string }) => {
+    const W = target.width;
+    const k = target.family === "ipad" ? 0.78 : 1;
+    const usable = W - 2 * Math.round(W * 0.07) - 2 * Math.round(W * 0.05);
+    if (field === "headline") return Math.floor((usable / (Math.round(W * 0.07 * k) * 0.52)) * 3);
+    if (field === "caption") return Math.floor((usable / (Math.round(W * 0.036 * k) * 0.5)) * 3);
+    return undefined;
+  },
 };
 
 export function render(input: TemplateRenderInput<Overrides>): ReactElement {

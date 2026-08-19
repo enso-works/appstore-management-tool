@@ -13,6 +13,11 @@ export interface TemplateDescriptor {
   orientations: Orientation[];
   /** Allowed keys in screen.overrides; values validated by `overridesSchema`. */
   overrideKeys: string[];
+  /**
+   * Rough character budget for a field at the given target/overrides: how many
+   * characters fit before the in-page fitter starts shrinking. Optional.
+   */
+  fieldBudget?: (field: string, target: TargetProfile, overrides: Record<string, unknown>) => number | undefined;
 }
 
 export interface BrandTheme {

@@ -20,6 +20,37 @@ import type { TemplateModule, TemplateRenderInput } from "./types";
  */
 export const overridesSchema = commonOverridesSchema;
 
+/**
+ * Rough budget: usable text width / average glyph width x max lines. Average
+ * glyph width ~= 0.52 em for Inter-like faces at 700, 0.5 at 400. Used only
+ * for editor hints, never for validation.
+ */
+export function stackFieldBudget(
+  field: string,
+  target: { width: number; family: string },
+  overrides: Record<string, unknown>,
+  defaults: { textWidth: number },
+): number | undefined {
+  const W = target.width;
+  const k = target.family === "ipad" ? 0.78 : 1;
+  const textWidth = typeof overrides.textWidth === "number" ? overrides.textWidth : defaults.textWidth;
+  const narrow = textWidth < 0.999;
+  const usable = (W - 2 * Math.round(W * 0.07)) * textWidth;
+  if (field === "headline") {
+    const size = Math.round(W * 0.082 * k * (narrow ? 0.85 : 1));
+    return Math.floor((usable / (size * 0.52)) * (narrow ? 4 : 3));
+  }
+  if (field === "caption") {
+    const size = Math.round(W * 0.04 * k);
+    return Math.floor((usable / (size * 0.5)) * 3);
+  }
+  if (field === "eyebrow") {
+    const size = Math.round(W * 0.03 * k);
+    return Math.floor(usable / (size * 0.62)); // uppercase + letterspacing
+  }
+  return undefined;
+}
+
 export const descriptor = {
   id: "hero-top",
   name: "Hero Top",
@@ -28,6 +59,8 @@ export const descriptor = {
   families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
   orientations: ["portrait"] as "portrait"[],
   overrideKeys: COMMON_OVERRIDE_KEYS,
+  fieldBudget: (field: string, target: { width: number; family: string }, overrides: Record<string, unknown>) =>
+    stackFieldBudget(field, target, overrides, { textWidth: 1 }),
 };
 
 /** Shared by hero-top and split-caption: the text stack (eyebrow / headline / caption) + device. */

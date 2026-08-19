@@ -115,6 +115,7 @@ export default function Editor({ name }: { name: string }) {
     error?: string;
     loading: boolean;
     sourceExists?: boolean;
+    budgets?: Record<string, number>;
   }>({ loading: false });
   const [status, setStatus] = useState<string>("");
   const [gen, setGen] = useState<{ running: boolean; summary?: GenerationSummary & { log: string[] } }>({
@@ -207,15 +208,18 @@ export default function Editor({ name }: { name: string }) {
         }
         const sidecar = res.headers.get("x-store-shots-job");
         let sourceExists: boolean | undefined;
+        let budgets: Record<string, number> | undefined;
         try {
-          sourceExists = sidecar
-            ? (JSON.parse(decodeURIComponent(sidecar)) as { sourceExists: boolean }).sourceExists
+          const parsed = sidecar
+            ? (JSON.parse(decodeURIComponent(sidecar)) as { sourceExists: boolean; budgets?: Record<string, number> })
             : undefined;
+          sourceExists = parsed?.sourceExists;
+          budgets = parsed?.budgets;
         } catch {
           sourceExists = undefined;
         }
         setPreviewHtml(await res.text());
-        setPreviewInfo({ loading: false, sourceExists });
+        setPreviewInfo({ loading: false, sourceExists, budgets });
       } catch (err) {
         if ((err as Error).name !== "AbortError") setPreviewInfo({ loading: false, error: (err as Error).message });
       }
@@ -1002,7 +1006,32 @@ export default function Editor({ name }: { name: string }) {
                           {f}
                           {required && <span className={styles.req}> *</span>}
                         </span>
-                        <span className={styles.muted}>{typeof value === "string" ? value.length : 0}</span>
+                        {locale !== refLocale && typeof ref === "string" && !value && (
+                          <button
+                            className={styles.link}
+                            onClick={() => setField(f, ref)}
+                            title={`copy the ${refLocale} text as a starting point`}
+                          >
+                            prefill {refLocale}
+                          </button>
+                        )}
+                        <span
+                          className={
+                            previewInfo.budgets?.[f] &&
+                            typeof value === "string" &&
+                            value.length > previewInfo.budgets[f]
+                              ? styles.warn
+                              : styles.muted
+                          }
+                          title={
+                            previewInfo.budgets?.[f]
+                              ? `~${previewInfo.budgets[f]} characters fit before the text shrinks`
+                              : undefined
+                          }
+                        >
+                          {typeof value === "string" ? value.length : 0}
+                          {previewInfo.budgets?.[f] ? `/~${previewInfo.budgets[f]}` : ""}
+                        </span>
                         {!required && (
                           <button
                             className={styles.link}

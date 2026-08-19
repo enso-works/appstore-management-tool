@@ -22,7 +22,7 @@ export interface PreviewRequest {
 
 export interface PreviewResult {
   html: string;
-  job: { key: string; sourceExists: boolean; sourceRelPath: string };
+  job: { key: string; sourceExists: boolean; sourceRelPath: string; budgets: Record<string, number> };
 }
 
 /**
@@ -70,9 +70,17 @@ export function previewHtml(
 })();
 </script>`;
   const dragScript = req.interactive ? DRAG_SCRIPT.replace("__KEY__", JSON.stringify(job.key)) : "";
+  const mod = getTemplateModule(screen.template);
+  const budgets: Record<string, number> = {};
+  if (mod?.descriptor.fieldBudget) {
+    for (const f of [...mod.descriptor.requiredFields, ...mod.descriptor.optionalFields]) {
+      const b = mod.descriptor.fieldBudget(f, job.target, screen.overrides);
+      if (b) budgets[f] = b;
+    }
+  }
   return {
     html: html.replace("</body></html>", `${script}\n${dragScript}\n</body></html>`),
-    job: { key: job.key, sourceExists, sourceRelPath: job.sourcePath.slice(project.paths.raw.length + 1) },
+    job: { key: job.key, sourceExists, sourceRelPath: job.sourcePath.slice(project.paths.raw.length + 1), budgets },
   };
 }
 
