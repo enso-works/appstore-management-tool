@@ -87,6 +87,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
           maxLines={headlineMaxLines}
           weight={700}
           align={align}
+          fitMinScale={0.7}
           style={{ letterSpacing: -Math.round(headlineSize * 0.02) }}
         />
         <TextBlock
@@ -97,6 +98,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
           maxLines={2}
           weight={400}
           align={align}
+          fitMinScale={0.8}
           style={{ opacity: 0.88, marginTop: Math.round(W * 0.02) }}
         />
       </div>

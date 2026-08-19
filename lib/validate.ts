@@ -10,6 +10,8 @@ import { getTarget } from "./targets";
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
 import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
+import { resolveFontStack } from "./fonts";
+import { GlyphChecker, suggestFamilyFor } from "./glyphs";
 
 export interface ValidationResult {
   issues: IssueList;
@@ -47,6 +49,7 @@ export function validateProject(project: Project): ValidationResult {
 
   validateManifest(project, manifest, issues);
   validateContent(project, manifest, content, issues);
+  validateGlyphs(project, manifest, content, issues);
 
   const plan = buildRenderPlan(project, manifest);
   validateSources(project, plan, issues);
@@ -265,6 +268,52 @@ function validateCounts(project: Project, plan: RenderJob[], issues: IssueList) 
           key: k,
           file: displayRelative(project.root, project.paths.manifest),
         });
+      }
+    }
+  }
+}
+
+/** Every character of every field must exist in the local font stack (plan §12.3). */
+function validateGlyphs(project: Project, manifest: Manifest, content: Map<string, LocaleContent>, issues: IssueList) {
+  const { stack, missing } = resolveFontStack(project);
+  for (const m of missing) {
+    const isBrand = m === project.config.brand.font.family;
+    issues[isBrand ? "error" : "warn"](
+      isBrand ? "font.missing" : "font.fallback-missing",
+      `Font "${m}" is not available locally`,
+      {
+        file: CONFIG_FILENAME,
+        hint: `store-shots fonts add "${m}"`,
+      },
+    );
+  }
+  if (stack.length === 0) return;
+  let checker: GlyphChecker;
+  try {
+    checker = new GlyphChecker(stack);
+  } catch (err) {
+    issues.warn("font.unreadable", `Could not read font files for glyph check: ${(err as Error).message}`);
+    return;
+  }
+  const enabled = manifest.screens.filter((s) => s.enabled);
+  for (const [locale, lc] of content) {
+    const file = displayRelative(project.root, `${project.paths.content}/${locale}.json`);
+    for (const screen of enabled) {
+      const fields = lc.screens[screen.id] ?? {};
+      for (const [field, value] of Object.entries(fields)) {
+        if (typeof value !== "string") continue;
+        const miss = checker.missing(value);
+        if (miss.length) {
+          issues.error(
+            "content.glyph-missing",
+            `${locale} ${screen.id}.${field} uses characters no local font covers: ${miss.map((c) => `"${c}"`).join(" ")}`,
+            {
+              key: `${locale}/${screen.id}`,
+              file,
+              hint: `store-shots fonts add "${suggestFamilyFor(miss[0])}" and add it to brand.font.fallbacks`,
+            },
+          );
+        }
       }
     }
   }

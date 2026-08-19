@@ -60,7 +60,7 @@ export function Artwork({
         overflow: "hidden",
         background: background ?? input.overrides.background ?? defaultBackground(brand.primary),
         color: brand.onPrimary,
-        fontFamily: `"${brand.fontFamily}", "Noto Sans", system-ui, sans-serif`,
+        fontFamily: brand.fontStack,
         direction,
         boxSizing: "border-box",
         ...style,
@@ -146,6 +146,7 @@ export function TextBlock({
   weight,
   style,
   align,
+  fitMinScale = 1,
 }: {
   id: string;
   text: string | null | undefined;
@@ -155,12 +156,24 @@ export function TextBlock({
   weight: number;
   style?: CSSProperties;
   align: "start" | "center" | "end";
+  /**
+   * Lowest font-size scale the in-page fitter may shrink to (plan §12.2:
+   * "only within a template-defined range"). 1 = no shrinking allowed.
+   */
+  fitMinScale?: number;
 }): ReactElement | null {
   if (!text) return null;
   const lh = Math.round(fontSize * lineHeight);
   return (
     <div
-      {...{ "data-check": id, "data-line-height": lh, "data-max-lines": maxLines }}
+      {...{
+        "data-check": id,
+        "data-line-height": lh,
+        "data-max-lines": maxLines,
+        "data-font-size": fontSize,
+        "data-line-ratio": lineHeight,
+        "data-fit-min": fitMinScale,
+      }}
       style={{
         fontSize,
         lineHeight: `${lh}px`,

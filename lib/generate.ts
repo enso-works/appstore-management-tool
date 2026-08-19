@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { readAppJson, type Project } from "./config";
-import { resolveFont, sha256File } from "./fonts";
+import { resolveFontStack, sha256File } from "./fonts";
 import { cleanGenerated, readGeneratedManifest, writeGeneratedManifest } from "./generated-manifest";
 import { IssueList, type Issue } from "./issues";
 import { displayRelative } from "./paths";
@@ -86,7 +86,14 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
     durationMs: 0,
   };
 
-  const font = resolveFont(project, project.config.brand.font.family);
+  const { stack: fontStack, missing: missingFonts } = resolveFontStack(project);
+  const font = fontStack.find((f) => f.family.toLowerCase() === project.config.brand.font.family.toLowerCase());
+  for (const m of missingFonts.filter((x) => x !== project.config.brand.font.family)) {
+    issues.warn("font.fallback-missing", `Fallback font "${m}" is not available locally; it will be skipped`, {
+      file: "store-shots.config.json",
+      hint: `store-shots fonts add "${m}"`,
+    });
+  }
   if (!font) {
     issues.error("font.missing", `Font "${project.config.brand.font.family}" is not available locally`, {
       file: "store-shots.config.json",
@@ -174,8 +181,19 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
           jobIssues.error("render.missing-image", `Image(s) did not load: ${c.missingImages.join(", ")}`, {
             key: job.key,
           });
+        for (const f of result.fits) {
+          if (f.scale < 1 && f.fits) {
+            jobIssues.info(
+              "render.fitted",
+              `"${f.id}" shrunk to ${Math.round(f.scale * 100)}% (${f.fromPx}px -> ${f.toPx}px) to fit`,
+              { key: job.key },
+            );
+          }
+        }
         for (const o of c.overflow) {
-          const msg = `"${o.id}" overflows its box (${o.scrollWidth}x${o.scrollHeight} in ${o.clientWidth}x${o.clientHeight})`;
+          const fit = result.fits.find((f) => f.id === o.id);
+          const atMin = fit && fit.scale < 1 ? ` even at the minimum allowed size (${fit.toPx}px)` : "";
+          const msg = `"${o.id}" overflows its box${atMin} (${o.scrollWidth}x${o.scrollHeight} in ${o.clientWidth}x${o.clientHeight})`;
           const extra = {
             key: job.key,
             file: displayRelative(project.root, path.join(project.paths.content, `${job.locale}.json`)),
@@ -230,7 +248,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
                 job,
                 content.screens[job.screen.id] ?? {},
                 toolVersion,
-                font!.files.map((f) => f.sha256),
+                fontStack.flatMap((f) => f.files.map((x) => x.sha256)),
               ),
             });
             summary.filesWritten.push(displayRelative(project.root, job.outputPath));

@@ -5,6 +5,7 @@ import { chromium, type Browser, type BrowserContext } from "playwright";
 import sharp from "sharp";
 import type { TargetProfile } from "../targets";
 import { IN_PAGE_CHECKS_SOURCE, type InPageResult } from "./checks";
+import { FIT_SOURCE, type FitResult } from "./fit";
 
 export interface ExportOptions {
   /** Hex colour the PNG is flattened onto (alpha removed). */
@@ -19,6 +20,7 @@ export interface ExportResult {
   height: number;
   channels: number;
   checks: InPageResult;
+  fits: FitResult[];
   htmlPath: string;
 }
 
@@ -61,6 +63,7 @@ export class ExportRenderer {
       await page.evaluate(() =>
         Promise.all(Array.from(document.images).map((img) => img.decode().catch(() => undefined))),
       );
+      const fits = (await page.evaluate(FIT_SOURCE)) as FitResult[];
       const checks = (await page.evaluate(IN_PAGE_CHECKS_SOURCE)) as InPageResult;
       if (!checks.artworkFound) throw new Error("template did not render a [data-artwork] root");
       if (
@@ -87,6 +90,7 @@ export class ExportRenderer {
         height: meta.height ?? 0,
         channels: meta.channels ?? 0,
         checks,
+        fits,
         htmlPath,
       };
     } finally {

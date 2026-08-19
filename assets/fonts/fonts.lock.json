@@ -25,6 +25,25 @@
         }
       ],
       "license": "inter/LICENSE.txt"
+    },
+    {
+      "family": "Noto Sans Arabic",
+      "source": "google",
+      "files": [
+        {
+          "path": "noto-sans-arabic/noto-sans-arabic-400.ttf",
+          "weight": 400,
+          "style": "normal",
+          "sha256": "146b2193f4aee343a8da5e2295255b04db547d74339a12be51763b3a0081868d"
+        },
+        {
+          "path": "noto-sans-arabic/noto-sans-arabic-700.ttf",
+          "weight": 700,
+          "style": "normal",
+          "sha256": "195e8d8e1e723630e46c1d19fe7ec118a73e5825baa198737d6a96df8c4063b1"
+        }
+      ],
+      "license": "noto-sans-arabic/LICENSE.txt"
     }
   ]
 }

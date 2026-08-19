@@ -82,6 +82,34 @@ function safeLock(dir: string): FontsLock | undefined {
   }
 }
 
+/**
+ * The ordered font stack for rendering: brand family, configured fallbacks,
+ * then every bundled family not already listed. Missing configured families are
+ * returned in `missing` so validate can report them; the brand family itself
+ * missing is a hard error for the caller.
+ */
+export function resolveFontStack(project: Project): { stack: ResolvedFont[]; missing: string[] } {
+  const wanted = [project.config.brand.font.family, ...project.config.brand.font.fallbacks];
+  const stack: ResolvedFont[] = [];
+  const missing: string[] = [];
+  for (const family of wanted) {
+    const f = resolveFont(project, family);
+    if (f) stack.push(f);
+    else missing.push(family);
+  }
+  for (const b of safeLock(bundledFontsDir())?.fonts ?? []) {
+    if (!stack.some((s) => s.family.toLowerCase() === b.family.toLowerCase())) {
+      stack.push({ family: b.family, dir: bundledFontsDir(), files: b.files, source: "bundled" });
+    }
+  }
+  return { stack, missing };
+}
+
+/** CSS font-family value for a stack. */
+export function fontFamilyCss(stack: ResolvedFont[]): string {
+  return [...stack.map((f) => `"${f.family}"`), "system-ui", "sans-serif"].join(", ");
+}
+
 export function listFonts(project: Project): { app: FontsLock["fonts"]; bundled: FontsLock["fonts"] } {
   return { app: safeLock(appFontsDir(project))?.fonts ?? [], bundled: safeLock(bundledFontsDir())?.fonts ?? [] };
 }

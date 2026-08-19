@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { getTemplateModule } from "../../templates";
 import type { BrandTheme, TemplateRenderInput } from "../../templates/types";
 import type { Project } from "../config";
-import { fontFaceCss, resolveFont, type ResolvedFont } from "../fonts";
+import { fontFaceCss, fontFamilyCss, resolveFontStack, type ResolvedFont } from "../fonts";
 import type { RenderJob } from "../render-plan";
 import type { LocaleContent } from "../schema";
 
@@ -13,9 +13,11 @@ export interface ArtworkUrls {
   fontUrl: (absPath: string) => string;
 }
 
-export function brandThemeOf(project: Project): BrandTheme {
+export function brandThemeOf(project: Project, stack?: ResolvedFont[]): BrandTheme {
+  const resolved = stack ?? resolveFontStack(project).stack;
   return {
     fontFamily: project.config.brand.font.family,
+    fontStack: fontFamilyCss(resolved),
     primary: project.config.brand.primary,
     onPrimary: project.config.brand.onPrimary,
   };
@@ -28,6 +30,7 @@ export function templateInputFor(
   content: LocaleContent,
   sourceImageUrl: string,
   mode: "preview" | "export",
+  stack?: ResolvedFont[],
 ): TemplateRenderInput {
   const mod = getTemplateModule(job.screen.template);
   if (!mod) throw new Error(`Unknown template "${job.screen.template}"`);
@@ -38,7 +41,7 @@ export function templateInputFor(
     direction: content.direction ?? "ltr",
     fields: content.screens[job.screen.id] ?? {},
     sourceImageUrl,
-    brand: brandThemeOf(project),
+    brand: brandThemeOf(project, stack),
     overrides,
     mode,
   };
@@ -56,7 +59,8 @@ export function baseCss(): string {
 
 export interface RenderedArtwork {
   html: string;
-  font: ResolvedFont;
+  /** Brand font first, then fallbacks. */
+  fonts: ResolvedFont[];
 }
 
 /**
@@ -70,13 +74,13 @@ export function renderArtworkHtml(
   content: LocaleContent,
   urls: ArtworkUrls,
 ): RenderedArtwork {
-  const font = resolveFont(project, project.config.brand.font.family);
-  if (!font) {
+  const { stack } = resolveFontStack(project);
+  if (!stack.some((f) => f.family.toLowerCase() === project.config.brand.font.family.toLowerCase())) {
     throw new Error(
       `Font "${project.config.brand.font.family}" is not available locally. Run: store-shots fonts add "${project.config.brand.font.family}" --project ${project.root}`,
     );
   }
-  const input = templateInputFor(project, job, content, urls.sourceImage, "export");
+  const input = templateInputFor(project, job, content, urls.sourceImage, "export", stack);
   const mod = getTemplateModule(job.screen.template)!;
   const body = renderToStaticMarkup(mod.render(input));
   const html = [
@@ -85,11 +89,11 @@ export function renderArtworkHtml(
     "<head>",
     '<meta charset="utf-8">',
     `<title>${job.key}</title>`,
-    `<style>${baseCss()}\n${fontFaceCss(font, urls.fontUrl)}</style>`,
+    `<style>${baseCss()}\n${stack.map((f) => fontFaceCss(f, urls.fontUrl)).join("\n")}</style>`,
     "</head>",
     `<body style="width:${job.target.width}px;height:${job.target.height}px;overflow:hidden;">`,
     body,
     "</body></html>",
   ].join("\n");
-  return { html, font };
+  return { html, fonts: stack };
 }

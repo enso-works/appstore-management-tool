@@ -621,7 +621,7 @@ Recheck Apple and fastlane docs when bumping the device registry or the fastlane
 - [x] Approval of revision 2 (2026-08-19: defaults accepted; fonts from Google Fonts)
 - [x] Phase 1 — tool + template repos, skeleton, schemas, fixture, `init` on template (2026-08-19; also `init` on Braele so readiness could be verified against a real app)
 - [x] Phase 2 — hero-top + exact export (2026-08-19: Playwright + Sharp, `generate`/`clean`, `fonts add|list|check` from Google Fonts, Inter bundled; Braele en-US iPhone set generated from its existing captures)
-- [ ] Phase 3 — localization + overflow
+- [x] Phase 3 — localization + overflow (2026-08-19: in-page font fitting within template range, line-based overflow check, glyph coverage via opentype.js, font fallback stack, Noto Sans Arabic bundled)
 - [ ] Phase 4 — editor UI
 - [ ] Phase 5 — store management
 - [ ] Phase 6 — remaining templates + Braele pilot

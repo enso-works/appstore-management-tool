@@ -16,7 +16,10 @@ export interface TemplateDescriptor {
 }
 
 export interface BrandTheme {
+  /** Primary family name. */
   fontFamily: string;
+  /** Full CSS font-family stack (brand + fallbacks), used by the artwork root. */
+  fontStack: string;
   primary: string;
   onPrimary: string;
 }

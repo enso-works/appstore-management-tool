@@ -1,7 +1,7 @@
 /**
  * In-page checks (plan §13.2). Runs inside the artwork page (export worker or
- * preview iframe). Kept dependency-free and serialisable so Playwright can
- * `page.evaluate` it and the UI can run it directly.
+ * preview iframe) after the fitter. Plain JavaScript string for the same reason
+ * as fit.ts: it must survive being evaluated in the page untouched.
  */
 export interface OverflowFinding {
   id: string;
@@ -22,54 +22,47 @@ export interface InPageResult {
   textOverlapsDevice: string[];
 }
 
-/** Pixel tolerance for overflow: sub-pixel rounding must not count as overflow. */
+/** Pixel tolerance: sub-pixel rounding must not count as overflow. */
 export const OVERFLOW_TOLERANCE_PX = 1;
 
-export function runInPageChecks(tolerance: number = 1): InPageResult {
-  const doc = document;
-  const artwork = doc.querySelector("[data-artwork]") as HTMLElement | null;
-  const result: InPageResult = {
+export const IN_PAGE_CHECKS_SOURCE = `(function (tolerance) {
+  var doc = document;
+  var artwork = doc.querySelector("[data-artwork]");
+  var result = {
     artworkFound: !!artwork,
     artworkSize: artwork ? { width: artwork.offsetWidth, height: artwork.offsetHeight } : null,
     fontsStatus: doc.fonts ? doc.fonts.status : "unknown",
     fontsFailed: [],
     missingImages: [],
     overflow: [],
-    textOverlapsDevice: [],
+    textOverlapsDevice: []
   };
-  if (doc.fonts) {
-    doc.fonts.forEach((face) => {
-      if (face.status === "error") result.fontsFailed.push(`${face.family} ${face.weight} ${face.style}`);
+  if (doc.fonts && doc.fonts.forEach) {
+    doc.fonts.forEach(function (face) {
+      if (face.status === "error") result.fontsFailed.push(face.family + " " + face.weight + " " + face.style);
     });
   }
-  doc.querySelectorAll("img").forEach((img) => {
-    if (!img.complete || img.naturalWidth === 0) result.missingImages.push(img.getAttribute("src") ?? "(no src)");
-  });
-  const device = doc.querySelector("[data-device]") as HTMLElement | null;
-  const deviceTop = device ? device.getBoundingClientRect().top : Infinity;
-  doc.querySelectorAll("[data-check]").forEach((el) => {
-    const e = el as HTMLElement;
-    const id = e.getAttribute("data-check") ?? "?";
+  var imgs = doc.querySelectorAll("img");
+  for (var i = 0; i < imgs.length; i++) {
+    if (!imgs[i].complete || imgs[i].naturalWidth === 0) result.missingImages.push(imgs[i].getAttribute("src") || "(no src)");
+  }
+  var device = doc.querySelector("[data-device]");
+  var deviceTop = device ? device.getBoundingClientRect().top : Infinity;
+  var nodes = doc.querySelectorAll("[data-check]");
+  for (var n = 0; n < nodes.length; n++) {
+    var e = nodes[n];
+    var id = e.getAttribute("data-check") || "?";
     // Line-based vertical check: glyph ascenders/descenders legitimately poke a
     // few px past tight line boxes, so compare against the declared line budget
     // (maxLines x lineHeight) with half a line of slack; a real overflow adds a
     // whole extra line. Elements without the attributes fall back to a pixel check.
-    const lh = Number(e.getAttribute("data-line-height") || 0);
-    const maxLines = Number(e.getAttribute("data-max-lines") || 0);
-    const vLimit = lh && maxLines ? lh * maxLines + lh * 0.5 : e.clientHeight + tolerance;
+    var lh = Number(e.getAttribute("data-line-height") || 0);
+    var maxLines = Number(e.getAttribute("data-max-lines") || 0);
+    var vLimit = lh && maxLines ? lh * maxLines + lh * 0.5 : e.clientHeight + tolerance;
     if (e.scrollWidth > e.clientWidth + tolerance || e.scrollHeight > vLimit) {
-      result.overflow.push({
-        id,
-        scrollWidth: e.scrollWidth,
-        clientWidth: e.clientWidth,
-        scrollHeight: e.scrollHeight,
-        clientHeight: e.clientHeight,
-      });
+      result.overflow.push({ id: id, scrollWidth: e.scrollWidth, clientWidth: e.clientWidth, scrollHeight: e.scrollHeight, clientHeight: e.clientHeight });
     }
     if (e.getBoundingClientRect().bottom > deviceTop + tolerance) result.textOverlapsDevice.push(id);
-  });
+  }
   return result;
-}
-
-/** Source of the checker as a string for page.evaluate / preview iframes. */
-export const IN_PAGE_CHECKS_SOURCE = `(${runInPageChecks.toString()})(${OVERFLOW_TOLERANCE_PX})`;
+})(${OVERFLOW_TOLERANCE_PX})`;

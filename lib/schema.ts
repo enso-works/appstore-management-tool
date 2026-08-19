@@ -44,6 +44,8 @@ export const fontConfigSchema = z.strictObject({
   family: z.string().min(1).default("Inter"),
   source: z.enum(["google", "local"]).default("google"),
   weights: z.array(z.number().int().min(100).max(900)).min(1).default([400, 600, 700]),
+  /** Extra families tried after `family`, in order (must be local: `fonts add`). Bundled fallbacks are appended automatically. */
+  fallbacks: z.array(z.string().min(1)).default([]),
 });
 
 export const projectConfigSchema = z.strictObject({

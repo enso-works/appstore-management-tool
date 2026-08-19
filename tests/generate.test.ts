@@ -90,13 +90,26 @@ describe("generate on the fixture", () => {
     expect(s.filesWritten).toHaveLength(0);
   }, 60_000);
 
-  it("fails a job whose headline overflows and names the field to edit", async () => {
+  it("shrinks a long headline within the template range and reports it", async () => {
     editJson(path.join(fx.root, "store/content/en-US.json"), (c) => {
-      c.screens.home.headline = "An impossibly long headline that keeps going and going well past three lines of space";
+      c.screens.home.headline = "Plan absolutely everything you need in one calm, quiet place";
+    });
+    const s = await generateProject(load(), { renderer, filter: { locales: ["en-US"], screens: ["home"] } });
+    expect(s.failed).toBe(0);
+    expect(s.rendered).toBe(2);
+    const fitted = s.issues.find((i) => i.code === "render.fitted");
+    expect(fitted?.message).toMatch(/"headline" shrunk to \d+%/);
+  }, 60_000);
+
+  it("fails a job whose headline overflows even at the minimum size and names the field to edit", async () => {
+    editJson(path.join(fx.root, "store/content/en-US.json"), (c) => {
+      c.screens.home.headline =
+        "An impossibly long headline that keeps going and going and going well past three lines of space at any size we allow, and then some more words for good measure";
     });
     const s = await generateProject(load(), { renderer, filter: { locales: ["en-US"], screens: ["home"] } });
     expect(s.failed).toBe(2);
     const issue = s.issues.find((i) => i.code === "render.overflow")!;
+    expect(issue.message).toMatch(/even at the minimum allowed size/);
     expect(issue.hint).toMatch(/screens.home.headline for en-US/);
     expect(fs.existsSync(out("en-US/01_home_IPHONE_69.png"))).toBe(false);
   }, 60_000);
@@ -107,6 +120,29 @@ describe("generate on the fixture", () => {
     expect(s.aborted).toBe(true);
     expect(s.issues.some((i) => i.code === "font.missing")).toBe(true);
   }, 60_000);
+});
+
+describe("glyph coverage", () => {
+  it("fails validation for characters no local font covers and suggests a family", async () => {
+    const fx = tempFixture();
+    try {
+      editJson(
+        path.join(fx.root, "store/content/en-US.json"),
+        (c) => (c.screens.home.caption = "日本語のキャプション"),
+      );
+      const { validateProject } = await import("../lib/validate");
+      const r = validateProject(loadProject(path.join(fx.root, "store-shots.config.json")));
+      const issue = r.issues.errors.find((i) => i.code === "content.glyph-missing")!;
+      expect(issue).toBeDefined();
+      expect(issue.hint).toMatch(/Noto Sans/);
+      // Arabic is covered by the bundled Noto Sans Arabic, so ar-SA is clean.
+      expect(
+        r.issues.errors.filter((i) => i.code === "content.glyph-missing").every((i) => i.key?.startsWith("en-US")),
+      ).toBe(true);
+    } finally {
+      fx.cleanup();
+    }
+  });
 });
 
 describe("fonts", () => {
