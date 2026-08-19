@@ -286,10 +286,12 @@ function validateCounts(project: Project, plan: RenderJob[], issues: IssueList) 
   const { min, max } = project.config.validation.screensPerTarget;
   const counts = new Map<string, number>();
   for (const job of plan) {
+    if (job.target.id.startsWith("appreview-")) continue;
     const k = `${job.target.id}/${job.locale}`;
     counts.set(k, (counts.get(k) ?? 0) + job.slices);
   }
   for (const targetId of project.config.targets) {
+    if (targetId.startsWith("appreview-")) continue; // posters are not store screenshot sets
     for (const locale of project.config.locales) {
       const k = `${targetId}/${locale}`;
       const n = counts.get(k) ?? 0;

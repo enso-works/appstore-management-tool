@@ -67,6 +67,18 @@ export const targetProfiles = {
     height: 500,
     fileToken: "PLAY_FEATURE",
   },
+  // App Preview poster (first video frame) for the 6.9-inch class: 886x1920.
+  // Written under store/generated/posters/<locale>/ - never uploaded by deliver.
+  "appreview-6.9-886x1920": {
+    id: "appreview-6.9-886x1920",
+    platform: "ios",
+    family: "iphone",
+    displayClass: "6.9-inch app preview",
+    orientation: "portrait",
+    width: 886,
+    height: 1920,
+    fileToken: "APP_PREVIEW_69",
+  },
 } as const satisfies Record<string, TargetProfile>;
 
 export type TargetId = keyof typeof targetProfiles;
@@ -91,8 +103,12 @@ export const APPLE_SCREENSHOTS_PER_SET = { min: 1, max: 10 } as const;
 export function outputDirFor(
   target: TargetProfile,
   locale: string,
-  paths: { outputScreenshots: string; outputPlay: string },
+  paths: { outputScreenshots: string; outputPlay: string; generated?: string },
 ): string {
+  // Posters are working assets for App Preview videos, not deliver screenshots.
+  if (target.id.startsWith("appreview-")) {
+    return `${paths.generated ?? "store/generated"}/posters/${locale}`;
+  }
   if (target.platform === "android") {
     const kind =
       target.family === "tablet" ? "tenInchScreenshots" : target.family === "feature-graphic" ? "" : "phoneScreenshots";

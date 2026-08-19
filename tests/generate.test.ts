@@ -343,6 +343,32 @@ describe("Google Play target", () => {
   }, 60_000);
 });
 
+describe("app preview poster target", () => {
+  it("renders 886x1920 posters into store/generated/posters and keeps them out of readiness", async () => {
+    const fx = tempFixture();
+    try {
+      editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+        c.targets = ["iphone-6.9-1320x2868", "appreview-6.9-886x1920"];
+        c.sourceDevices = { "appreview-6.9-886x1920": "iphone" };
+        c.locales = ["en-US"];
+      });
+      const p = loadProject(path.join(fx.root, "store-shots.config.json"));
+      const s = await generateProject(p, { renderer });
+      expect(s.failed).toBe(0);
+      const poster = path.join(fx.root, "store/generated/posters/en-US/01_home_APP_PREVIEW_69.png");
+      expect(fs.existsSync(poster)).toBe(true);
+      expect(readPngInfo(poster)).toMatchObject({ width: 886, height: 1920, hasAlpha: false });
+      const { readinessReport } = await import("../lib/readiness");
+      const r = readinessReport(loadProject(path.join(fx.root, "store-shots.config.json")));
+      const shots = r.checks.find((c) => c.id === "screenshots")!;
+      expect(shots.details.join("\n")).not.toMatch(/appreview/);
+      expect(shots.status).toBe("pass");
+    } finally {
+      fx.cleanup();
+    }
+  }, 90_000);
+});
+
 describe("feature graphic target", () => {
   it("writes featureGraphic.png into the supply layout", async () => {
     const fx = tempFixture();

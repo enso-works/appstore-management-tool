@@ -43,8 +43,8 @@ export function initProject(opts: InitOptions): InitResult {
     bundleId,
     defaultLocale,
     locales,
-    // iOS targets by default; Google Play (play-phone-1080x1920) is opt-in per app.
-    targets: targetIds.filter((t) => getTarget(t)?.platform === "ios"),
+    // iOS store targets by default; Google Play and App Preview posters are opt-in per app.
+    targets: targetIds.filter((t) => getTarget(t)?.platform === "ios" && !t.startsWith("appreview-")),
     brand: { font: { family: "Inter", source: "google", weights: [400, 600, 700] } },
   };
 

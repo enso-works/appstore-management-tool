@@ -213,7 +213,10 @@ interface ScreenshotSet {
 
 function scanScreenshots(project: Project): ScreenshotSet[] {
   const sets: ScreenshotSet[] = [];
-  const targets = project.config.targets.map((id) => getTarget(id)!).filter(Boolean);
+  const targets = project.config.targets
+    .map((id) => getTarget(id)!)
+    .filter(Boolean)
+    .filter((t) => !t.id.startsWith("appreview-"));
   for (const locale of project.config.locales) {
     const set: ScreenshotSet = {
       locale,
