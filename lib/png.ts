@@ -66,3 +66,68 @@ export function isPngFile(file: string): boolean {
     return false;
   }
 }
+
+/**
+ * Decode the first `maxRows` rows of an 8-bit RGBA (color type 6) PNG
+ * synchronously. Returns row-major RGBA bytes, or undefined for any other
+ * layout (interlaced, palette, 16-bit) — callers treat that as "no data".
+ * Only used to inspect device-frame artwork; sharp handles real image work.
+ */
+export function decodeRgbaRows(file: string, maxRows: number): { width: number; rows: Buffer } | undefined {
+  const buf = fs.readFileSync(file);
+  if (!buf.subarray(0, 8).equals(SIGNATURE)) return undefined;
+  const width = buf.readUInt32BE(16);
+  const height = buf.readUInt32BE(20);
+  const bitDepth = buf.readUInt8(24);
+  const colorType = buf.readUInt8(25);
+  const interlace = buf.readUInt8(28);
+  if (bitDepth !== 8 || colorType !== 6 || interlace !== 0) return undefined;
+  const idat: Buffer[] = [];
+  let off = 8;
+  while (off + 8 <= buf.length) {
+    const len = buf.readUInt32BE(off);
+    const type = buf.toString("ascii", off + 4, off + 8);
+    if (type === "IDAT") idat.push(buf.subarray(off + 8, off + 8 + len));
+    if (type === "IEND") break;
+    off += 12 + len;
+  }
+  if (!idat.length) return undefined;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const zlib = require("node:zlib") as typeof import("node:zlib");
+  let raw: Buffer;
+  try {
+    raw = zlib.inflateSync(Buffer.concat(idat));
+  } catch {
+    return undefined;
+  }
+  const bpp = 4;
+  const stride = width * bpp;
+  const rows = Math.min(maxRows, height);
+  if (raw.length < rows * (stride + 1)) return undefined;
+  const out = Buffer.alloc(rows * stride);
+  const prior = Buffer.alloc(stride);
+  for (let y = 0; y < rows; y++) {
+    const filter = raw[y * (stride + 1)];
+    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
+    const cur = out.subarray(y * stride, (y + 1) * stride);
+    for (let x = 0; x < stride; x++) {
+      const a = x >= bpp ? cur[x - bpp] : 0;
+      const b = prior[x];
+      const c = x >= bpp ? prior[x - bpp] : 0;
+      let v = line[x];
+      if (filter === 1) v += a;
+      else if (filter === 2) v += b;
+      else if (filter === 3) v += (a + b) >> 1;
+      else if (filter === 4) {
+        const p = a + b - c;
+        const pa = Math.abs(p - a),
+          pb = Math.abs(p - b),
+          pc = Math.abs(p - c);
+        v += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      } else if (filter !== 0) return undefined;
+      cur[x] = v & 0xff;
+    }
+    cur.copy(prior);
+  }
+  return { width, rows: out };
+}

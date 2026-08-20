@@ -124,6 +124,7 @@ export function renderArtworkHtml(
       screenX: frame.screenX,
       screenY: frame.screenY,
       screenWidth: frame.screenWidth,
+      screenRadius: frame.screenRadius,
     };
   }
   const mod = getTemplateModule(job.screen.template)!;

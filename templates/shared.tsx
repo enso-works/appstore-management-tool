@@ -309,6 +309,7 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
             height: screenH,
             objectFit: "cover",
             objectPosition: "top center",
+            borderRadius: frame.screenRadius ? frame.screenRadius * s : undefined,
           }}
         />
         {/* eslint-disable-next-line @next/next/no-img-element */}

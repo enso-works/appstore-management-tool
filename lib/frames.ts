@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { fastlaneBinary } from "./fastlane";
 import { fileExists } from "./paths";
-import { readPngInfo } from "./png";
+import { decodeRgbaRows, readPngInfo } from "./png";
 
 /**
  * Official device frames via fastlane frameit (roadmap #9). The tool never
@@ -26,6 +26,8 @@ export interface DeviceFrame {
   screenX: number;
   screenY: number;
   screenWidth: number;
+  /** Corner radius of the screen cut-out in frame pixels (0 = square corners). */
+  screenRadius: number;
 }
 
 interface OffsetsJson {
@@ -61,6 +63,46 @@ function offsetsFor(fileName: string): { offset: string; width: number } | undef
   return best?.value;
 }
 
+const radiusCache = new Map<string, number>();
+
+/**
+ * Corner radius of the frame's screen cut-out, measured from the alpha
+ * channel: walk each row of the top-left corner arc inward to the cut-out
+ * edge, then fit a circle through the arc points. Rectangular screens
+ * (iPads, home-button iPhones) measure 0. Cached per file.
+ */
+function measureScreenRadius(file: string, screenX: number, screenY: number): number {
+  const hit = radiusCache.get(file);
+  if (hit !== undefined) return hit;
+  let radius = 0;
+  try {
+    const maxDy = 400;
+    const png = decodeRgbaRows(file, screenY + maxDy);
+    if (png) {
+      const alpha = (x: number, y: number) => png.rows[(y * png.width + x) * 4 + 3];
+      const fits: number[] = [];
+      for (let dy = 2; dy < maxDy; dy++) {
+        const y = screenY + dy;
+        if (y * png.width * 4 >= png.rows.length) break;
+        let x = Math.min(png.width - 1, screenX + maxDy);
+        while (x > 0 && alpha(x, y) < 16) x--;
+        const o = x + 1 - screenX;
+        if (o <= 1) break;
+        // circle through (o, dy): r = (o + dy) + sqrt(2 * o * dy)
+        fits.push(o + dy + Math.sqrt(2 * o * dy));
+      }
+      if (fits.length >= 3) {
+        fits.sort((a, b) => a - b);
+        radius = Math.round(fits[Math.floor(fits.length / 2)]);
+      }
+    }
+  } catch {
+    radius = 0;
+  }
+  radiusCache.set(file, radius);
+  return radius;
+}
+
 /** Resolve one frame by its full name (file name without .png), reading sizes from the PNG header. */
 export function getFrame(name: string): DeviceFrame | undefined {
   const file = path.join(framesDir(), `${name}.png`);
@@ -78,6 +120,7 @@ export function getFrame(name: string): DeviceFrame | undefined {
     screenX: Number(m[1]),
     screenY: Number(m[2]),
     screenWidth: off.width,
+    screenRadius: measureScreenRadius(file, Number(m[1]), Number(m[2])),
   };
 }
 

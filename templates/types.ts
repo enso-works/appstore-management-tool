@@ -57,6 +57,8 @@ export interface TemplateRenderInput<O = Record<string, unknown>> {
     screenX: number;
     screenY: number;
     screenWidth: number;
+    /** Screen cut-out corner radius in frame pixels; clips the capture so it stays inside rounded screens. */
+    screenRadius?: number;
   };
   /** Extra elements composited over the template (image URLs resolved, text pulled from the locale content). */
   layers?: ResolvedLayer[];
