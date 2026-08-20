@@ -141,12 +141,79 @@ const DRAG_SCRIPT = `<script>
     if (a.stack) return "text:" + (a.stack.getAttribute("data-text-stack") || "0");
     return "background";
   }
+  var handles = [];
+  function clearHandles() { handles.forEach(function (h) { h.remove(); }); handles = []; }
+  function makeHandle(x, y, size, round, cursor, label) {
+    var h = document.createElement("div");
+    h.style.cssText = "position:absolute;z-index:99;box-sizing:border-box;display:flex;align-items:center;justify-content:center;" +
+      "background:#2563eb;color:#fff;border:" + Math.max(2, Math.round(size * 0.08)) + "px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4);" +
+      "user-select:none;touch-action:none;font-family:system-ui,sans-serif;";
+    h.style.left = Math.round(x - size / 2) + "px";
+    h.style.top = Math.round(y - size / 2) + "px";
+    h.style.width = size + "px";
+    h.style.height = size + "px";
+    h.style.borderRadius = round ? "50%" : Math.round(size * 0.25) + "px";
+    h.style.cursor = cursor;
+    h.style.fontSize = Math.round(size * 0.6) + "px";
+    h.textContent = label;
+    document.body.appendChild(h);
+    handles.push(h);
+    return h;
+  }
+  function handleDrag(h, onMove, onEnd) {
+    h.addEventListener("pointerdown", function (e) {
+      e.stopPropagation();
+      e.preventDefault();
+      var move = function (ev) { onMove(ev); };
+      var up = function (ev) {
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+        onEnd(ev);
+      };
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+      onMove(e);
+    });
+  }
+  function updateHandles(hit) {
+    clearHandles();
+    if (hit !== "phone" || !device) return;
+    var r = device.getBoundingClientRect();
+    var size = Math.max(28, Math.round(r.width * 0.09));
+    var base = device.style.transform || "";
+    var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    // Rotate: circular handle on the right side, drag around the centre.
+    var rot = makeHandle(r.right + size * 1.1, cy, size, true, "grab", "\u21bb");
+    var a0 = null, deg = 0;
+    handleDrag(rot, function (ev) {
+      var a = Math.atan2(ev.clientY - cy, ev.clientX - cx);
+      if (a0 === null) a0 = a;
+      deg = ((a - a0) * 180) / Math.PI;
+      device.style.transform = base + " rotate(" + deg + "deg)";
+    }, function () {
+      if (Math.abs(deg) > 0.2) post({ type: "store-shots-drag-end", key: key, mode: "tilt", dTilt: deg });
+      a0 = null;
+    });
+    // Scale: square handle on the bottom-right corner, drag away from the centre.
+    var sc = makeHandle(r.right, r.bottom, size, false, "nwse-resize", "\u2922");
+    var d0 = null, factor = 1;
+    handleDrag(sc, function (ev) {
+      var d = Math.hypot(ev.clientX - cx, ev.clientY - cy);
+      if (d0 === null) d0 = d;
+      factor = Math.max(0.2, d / d0);
+      device.style.transform = base + " scale(" + factor + ")";
+    }, function () {
+      if (Math.abs(factor - 1) > 0.005) post({ type: "store-shots-drag-end", key: key, mode: "scale", dScale: factor });
+      d0 = null;
+    });
+  }
   function highlight(hit) {
     document.querySelectorAll("[data-device],[data-text-stack]").forEach(function (el) { el.style.outline = ""; el.style.outlineOffset = ""; });
     var el = null;
     if (hit === "phone") el = device;
     else if (hit && hit.indexOf("text:") === 0) el = document.querySelector('[data-text-stack="' + hit.slice(5) + '"]');
     if (el) { el.style.outline = Math.max(2, Math.round(window.innerWidth * 0.004)) + "px dashed rgba(37,99,235,0.9)"; el.style.outlineOffset = "6px"; }
+    updateHandles(hit);
   }
   window.addEventListener("message", function (e) {
     if (e.data && e.data.type === "store-shots-select") highlight(e.data.hit);

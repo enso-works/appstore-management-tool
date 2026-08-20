@@ -43,10 +43,12 @@ const MAX_ZOOM = 4;
 const ZOOM_STEPS = [0.05, 0.1, 0.15, 0.2, 0.25, 0.33, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 
 /**
- * Zoomable, pannable canvas (plan §17.2 "preview all screens"): trackpad pinch /
- * ctrl+wheel zoom around the cursor, plain wheel pans, drag pans, buttons and
- * keys (+ - 0 1) zoom. Iframes are pointer-events:none so dragging works over
- * them; they are rendered at the real target size and scaled with a transform.
+ * Zoomable, pannable canvas. All frame geometry is laid out in INTEGER screen
+ * pixels and each iframe carries its own `translate(int) scale()` transform, so
+ * every slice of a panorama rasterises at the same sub-pixel phase — a wide
+ * artwork stays seam-aligned across its slice frames at any zoom. (A single
+ * world-level scale transform snaps each iframe differently and shows hairline
+ * offsets / duplicated columns at the seams.)
  */
 export default function PreviewCanvas({
   target,
@@ -67,18 +69,19 @@ export default function PreviewCanvas({
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const [dragging, setDragging] = useState(false);
 
+  const W = target.width;
+  const H = target.height;
   const shown = mode === "single" ? items.filter((i) => i.id === selectedId) : items;
   // One visual frame per slice; a panorama item contributes `slices` frames showing the same artwork shifted.
   const frames = shown.flatMap((item) =>
     Array.from({ length: item.slices ?? 1 }, (_, slice) => ({ item, slice, key: `${item.id}#${slice}` })),
   );
-  const gap = Math.round(target.width * (storeLook ? 0.06 : 0.04));
-  const radius = storeLook ? Math.round(target.width * 0.045) : 0;
-  const pad = Math.round(target.width * 0.06);
+  const gap = Math.round(W * (storeLook ? 0.06 : 0.04));
+  const pad = Math.round(W * 0.06);
   const cols = Math.max(frames.length, belowRow ? belowRow.images.length : 0);
-  const rowGap = Math.round(target.width * 0.12);
-  const contentW = cols * target.width + Math.max(0, cols - 1) * gap + (storeLook ? 2 * pad : 0);
-  const contentH = target.height + (storeLook ? 2 * pad : 0) + (belowRow ? rowGap + target.height : 0);
+  const rowGap = Math.round(W * 0.12);
+  const contentW = cols * W + Math.max(0, cols - 1) * gap + (storeLook ? 2 * pad : 0);
+  const contentH = H + (storeLook ? 2 * pad : 0) + (belowRow ? rowGap + H : 0);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -99,6 +102,17 @@ export default function PreviewCanvas({
   }, [size, contentW, contentH]);
   const scale = zoom === "fit" ? fitScale : zoom;
 
+  // Integer screen-pixel geometry (see the component comment).
+  const sW = Math.max(1, Math.round(W * scale));
+  const effS = sW / W; // the scale actually applied, so one slice is exactly sW px
+  const sH = Math.max(1, Math.round(H * effS));
+  const sGap = Math.round(gap * effS);
+  const sPad = storeLook ? Math.round(pad * effS) : 0;
+  const sRowGap = Math.round(rowGap * effS);
+  const sRadius = storeLook ? Math.round(W * 0.045 * effS) : 0;
+  const worldW = cols * sW + Math.max(0, cols - 1) * sGap + 2 * sPad;
+  const worldH = sH + 2 * sPad + (belowRow ? sRowGap + sH : 0);
+
   // Reset to fit when the layout (mode/target/count) changes (derived-state reset during render).
   const layoutKey = `${mode}/${target.id}/${frames.length}/${storeLook}/${belowRow ? belowRow.images.length : 0}`;
   const [lastLayoutKey, setLastLayoutKey] = useState(layoutKey);
@@ -109,8 +123,8 @@ export default function PreviewCanvas({
   }
 
   // Centre the content when fitting; pan is relative to that centre.
-  const baseX = (size.w - contentW * scale) / 2;
-  const baseY = (size.h - contentH * scale) / 2;
+  const baseX = Math.round((size.w - contentW * scale) / 2 + pan.x);
+  const baseY = Math.round((size.h - contentH * scale) / 2 + pan.y);
 
   const zoomTo = useCallback(
     (next: number, anchor?: { x: number; y: number }) => {
@@ -187,24 +201,20 @@ export default function PreviewCanvas({
       if (ev.data?.type !== "store-shots-pan") return;
       if (ev.data.phase === "start") start = { x: pan.x, y: pan.y };
       else if (ev.data.phase === "move" && start)
-        setPan({ x: start.x + ev.data.dx * scale, y: start.y + ev.data.dy * scale });
+        setPan({ x: start.x + ev.data.dx * effS, y: start.y + ev.data.dy * effS });
       else if (ev.data.phase === "end") start = null;
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [pan, scale]);
+  }, [pan, effS]);
 
-  const singleIframeRef = useRef<HTMLIFrameElement | null>(null);
   useEffect(() => {
     if (mode !== "single") return;
-    const t = setTimeout(
-      () =>
-        singleIframeRef.current?.contentWindow?.postMessage(
-          { type: "store-shots-select", hit: highlightEl ?? null },
-          "*",
-        ),
-      150,
-    );
+    const t = setTimeout(() => {
+      containerRef.current
+        ?.querySelectorAll("iframe")
+        .forEach((f) => f.contentWindow?.postMessage({ type: "store-shots-select", hit: highlightEl ?? null }, "*"));
+    }, 150);
     return () => clearTimeout(t);
   }, [highlightEl, mode, items]);
 
@@ -230,6 +240,8 @@ export default function PreviewCanvas({
     }
   };
 
+  const labelFont = Math.max(9, Math.round(W * 0.045 * effS));
+
   return (
     <div
       ref={containerRef}
@@ -243,57 +255,52 @@ export default function PreviewCanvas({
       <div
         className={styles.world}
         style={{
-          width: contentW,
-          height: contentH,
-          transform: `translate(${baseX + pan.x}px, ${baseY + pan.y}px) scale(${scale})`,
-          transformOrigin: "0 0",
-          padding: storeLook ? pad : 0,
-          gap: rowGap,
+          left: baseX,
+          top: baseY,
+          width: worldW,
+          height: worldH,
+          padding: sPad,
+          gap: sRowGap,
           flexDirection: "column",
           background: storeLook ? "#1c1c1e" : "transparent",
-          borderRadius: storeLook ? Math.round(target.width * 0.02) : 0,
+          borderRadius: storeLook ? Math.round(W * 0.02 * effS) : 0,
         }}
       >
-        <div className={styles.worldRow} style={{ gap }}>
+        <div className={styles.worldRow} style={{ gap: sGap }}>
           {frames.map(({ item, slice, key }) => {
             const slices = item.slices ?? 1;
-            const artW = target.width * slices;
             return (
               <div
                 key={key}
                 data-frame-id={item.id}
                 className={`${styles.frameWrap} ${item.id === selectedId && mode !== "single" ? styles.frameSelected : ""}`}
-                style={{ width: target.width, height: target.height, borderRadius: radius }}
+                style={{ width: sW, height: sH, borderRadius: sRadius }}
               >
                 {item.html ? (
                   <iframe
-                    ref={mode === "single" ? singleIframeRef : undefined}
                     title={`${item.id} ${slice + 1}/${slices}`}
                     srcDoc={item.html}
                     sandbox="allow-scripts allow-same-origin"
                     style={{
-                      width: artW,
-                      height: target.height,
-                      marginLeft: -slice * target.width,
+                      width: W * slices,
+                      height: H,
                       border: 0,
                       background: "#000",
                       pointerEvents: interactive && mode === "single" ? "auto" : "none",
                       display: "block",
+                      transform: `translateX(${-slice * sW}px) scale(${effS})`,
+                      transformOrigin: "0 0",
                     }}
                   />
                 ) : (
-                  <div className={styles.framePlaceholder} style={{ fontSize: Math.round(target.width * 0.05) }}>
+                  <div className={styles.framePlaceholder} style={{ fontSize: Math.max(10, Math.round(sW * 0.06)) }}>
                     rendering…
                   </div>
                 )}
                 {mode !== "single" && (
                   <div
                     className={styles.frameLabel}
-                    style={{
-                      fontSize: Math.round(target.width * 0.045),
-                      bottom: Math.round(target.width * 0.02),
-                      left: Math.round(target.width * 0.02),
-                    }}
+                    style={{ fontSize: labelFont, bottom: Math.round(sW * 0.03), left: Math.round(sW * 0.03) }}
                   >
                     <span className={`${styles.dot} ${styles[item.status ?? "ok"]}`} />{" "}
                     {item.label ?? `${String(item.order + slice).padStart(2, "0")} ${item.id}`}
@@ -306,26 +313,14 @@ export default function PreviewCanvas({
           })}
         </div>
         {belowRow && (
-          <div className={styles.worldRow} style={{ gap }}>
+          <div className={styles.worldRow} style={{ gap: sGap }}>
             {belowRow.images.map((src, i) => (
-              <div
-                key={src}
-                className={styles.frameWrap}
-                style={{ width: target.width, height: target.height, borderRadius: radius }}
-              >
+              <div key={src} className={styles.frameWrap} style={{ width: sW, height: sH, borderRadius: sRadius }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={src}
-                  alt=""
-                  style={{ width: target.width, height: target.height, objectFit: "cover", display: "block" }}
-                />
+                <img src={src} alt="" style={{ width: sW, height: sH, objectFit: "cover", display: "block" }} />
                 <div
                   className={styles.frameLabel}
-                  style={{
-                    fontSize: Math.round(target.width * 0.045),
-                    bottom: Math.round(target.width * 0.02),
-                    left: Math.round(target.width * 0.02),
-                  }}
+                  style={{ fontSize: labelFont, bottom: Math.round(sW * 0.03), left: Math.round(sW * 0.03) }}
                 >
                   {belowRow.label} {String(i + 1).padStart(2, "0")}
                 </div>
