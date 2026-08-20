@@ -99,14 +99,29 @@ export function renderTextAndDevice(
 
   // Panoramas get one text stack per slice (fields headline2, caption2, ...):
   // each slide reads as its own screenshot while the artwork stays continuous.
-  const sliceLayout = slices > 1 ? stackLayout({ ...input, canvasWidth: W }, textHeight, defaults) : layout;
-  const stacks = Array.from({ length: slices }, (_, i) => ({
-    slice: i,
-    left: sliceLayout.text.left + i * W,
-    eyebrow: fields[sliceField("eyebrow", i)],
-    headline: fields[sliceField("headline", i)],
-    caption: fields[sliceField("caption", i)],
-  })).filter((st) => st.headline || st.eyebrow || st.caption);
+  // Slide 1 uses textOffsetX/Y; later slides have independent textOffsetX2/Y2 keys.
+  const ov = input.overrides as Record<string, unknown>;
+  const stacks = Array.from({ length: slices }, (_, i) => {
+    const sliceOverrides =
+      i === 0
+        ? input.overrides
+        : {
+            ...input.overrides,
+            textOffsetX: (ov[`textOffsetX${i + 1}`] as number | undefined) ?? 0,
+            textOffsetY: (ov[`textOffsetY${i + 1}`] as number | undefined) ?? 0,
+          };
+    const sl =
+      slices > 1 ? stackLayout({ ...input, canvasWidth: W, overrides: sliceOverrides }, textHeight, defaults) : layout;
+    return {
+      slice: i,
+      left: sl.text.left + i * W,
+      top: sl.text.top,
+      width: sl.text.width,
+      eyebrow: fields[sliceField("eyebrow", i)],
+      headline: fields[sliceField("headline", i)],
+      caption: fields[sliceField("caption", i)],
+    };
+  }).filter((st) => st.headline || st.eyebrow || st.caption);
 
   return (
     <Artwork input={input}>
@@ -117,8 +132,8 @@ export function renderTextAndDevice(
           style={{
             position: "absolute",
             left: st.left,
-            top: layout.text.top,
-            width: sliceLayout.text.width,
+            top: st.top,
+            width: st.width,
             height: layout.text.height,
             display: "flex",
             flexDirection: "column",

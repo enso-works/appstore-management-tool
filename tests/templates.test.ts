@@ -262,6 +262,29 @@ describe("background patterns", () => {
   });
 });
 
+describe("per-slice text offsets", () => {
+  it("slide 2's stack moves with textOffsetY2 while slide 1 stays", async () => {
+    const { renderStatic } = await import("../lib/render/ssr");
+    const mod = templateModules["hero-top"];
+    const base = input("iphone-6.9-1320x2868", {
+      canvasWidth: 2640,
+      fields: { headline: "One", headline2: "Two" },
+    });
+    const html0 = renderStatic(mod.render(base));
+    const html2 = renderStatic(mod.render({ ...base, overrides: { textOffsetY2: 0.1 } }));
+    const topOf = (html: string, slice: string) =>
+      Number(
+        /data-text-stack="SLICE" style="position:absolute;left:\d+px;top:(\d+)px/.source &&
+          new RegExp(`data-text-stack="${slice}" style="position:absolute;left:\\d+px;top:(\\d+)px`).exec(html)?.[1],
+      );
+    expect(topOf(html2, "0")).toBe(topOf(html0, "0"));
+    expect(topOf(html2, "1")).toBe(topOf(html0, "1") + 132);
+    const html1 = renderStatic(mod.render({ ...base, overrides: { textOffsetY: 0.1 } }));
+    expect(topOf(html1, "0")).toBe(topOf(html0, "0") + 132);
+    expect(topOf(html1, "1")).toBe(topOf(html0, "1"));
+  });
+});
+
 describe("project default background", () => {
   const brandWith = {
     fontFamily: "Inter",
