@@ -90,6 +90,7 @@ describe("editor server helpers", () => {
         locale: "en-US",
         screen: { id: "home", order: 1, template: "hero-top", overrides: { deviceTilt: 3 } },
         fields: { headline: "Draft headline", eyebrow: "Draft" },
+        interactive: true,
       },
       {
         sourceImage: (abs) => `/api/file?raw=${path.basename(abs)}`,
