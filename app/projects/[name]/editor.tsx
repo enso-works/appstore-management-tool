@@ -141,6 +141,7 @@ export default function Editor({ name }: { name: string }) {
   const [canvasMode, setCanvasMode] = useState<"single" | "strip" | "locales">("single");
   const [storeLook, setStoreLook] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
+  const [frames, setFrames] = useState<{ name: string; width: number; height: number }[] | null>(null);
   const [selectedEl, setSelectedEl] = useState<string>("phone");
   const [showLive, setShowLive] = useState(false);
   const [liveCountry, setLiveCountry] = useState("us");
@@ -185,6 +186,18 @@ export default function Editor({ name }: { name: string }) {
     const t = setTimeout(() => void load(), 0);
     return () => clearTimeout(t);
   }, [load]);
+
+  useEffect(() => {
+    let alive = true;
+    void fetch(`/api/projects/${encodeURIComponent(name)}/frames`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { frames: [] }))
+      .then((d) => {
+        if (alive) setFrames(d.frames ?? []);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [name]);
 
   // ---- derived -----------------------------------------------------------
   const screens = useMemo(
@@ -1414,6 +1427,52 @@ export default function Editor({ name }: { name: string }) {
                   .map((key) => {
                     const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
                     const v = screen.overrides[key];
+                    if (key === "shell") {
+                      const current = typeof v === "string" ? v : "";
+                      const family = target?.family === "ipad" ? "iPad" : "iPhone";
+                      return (
+                        <label key={key} className={styles.row}>
+                          <span title="neutral CSS shell or an official device frame (store-shots frames setup)">
+                            Device shell
+                          </span>
+                          <select
+                            className={styles.select}
+                            value={current}
+                            onChange={(e) => setOverride("shell", e.target.value)}
+                          >
+                            <option value="">default (dark shell)</option>
+                            <optgroup label="Neutral">
+                              <option value="light">light shell</option>
+                              <option value="none">no shell</option>
+                            </optgroup>
+                            <optgroup
+                              label={
+                                frames === null
+                                  ? "Device frames (loading…)"
+                                  : frames.length
+                                    ? `Device frames (${family} first)`
+                                    : "Device frames — run: store-shots frames setup"
+                              }
+                            >
+                              {current.startsWith("frame:") && !frames?.some((f) => `frame:${f.name}` === current) && (
+                                <option value={current}>{current.slice(6)}</option>
+                              )}
+                              {[...(frames ?? [])]
+                                .sort(
+                                  (a, b) =>
+                                    Number(b.name.includes(family)) - Number(a.name.includes(family)) ||
+                                    a.name.localeCompare(b.name),
+                                )
+                                .map((f) => (
+                                  <option key={f.name} value={`frame:${f.name}`}>
+                                    {f.name.replace(/^Apple /, "")}
+                                  </option>
+                                ))}
+                            </optgroup>
+                          </select>
+                        </label>
+                      );
+                    }
                     return (
                       <label key={key} className={styles.row}>
                         <span title={c.hint}>{c.label}</span>
