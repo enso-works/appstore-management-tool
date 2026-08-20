@@ -8,7 +8,9 @@ import {
   duplicateScreen,
   etagOf,
   HttpError,
+  listBackgroundAssets,
   projectSnapshot,
+  saveBackgroundAsset,
   saveContent,
   saveManifest,
   savePresets,
@@ -149,5 +151,30 @@ describe("duplicate and presets", () => {
     const cfg = loadProject(p.configPath).config;
     expect(cfg.presets.cream).toEqual({ background: "#F4F0E7", deviceTilt: -10 });
     expect(() => savePresets(p, {}, "stale")).toThrow(HttpError);
+  });
+});
+
+describe("background assets", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+  const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+
+  it("saves with a sanitised unique name and lists it", () => {
+    const p = load();
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const a = saveBackgroundAsset(p, "My Wavy BG (final)!.PNG", png);
+    expect(a.rel).toBe("backgrounds/my-wavy-bg-final.png");
+    const b = saveBackgroundAsset(p, "My Wavy BG (final)!.PNG", png);
+    expect(b.rel).toBe("backgrounds/my-wavy-bg-final-2.png");
+    expect(listBackgroundAssets(p).map((x) => x.name)).toEqual(["my-wavy-bg-final-2.png", "my-wavy-bg-final.png"]);
+  });
+
+  it("rejects bad extensions, empty and oversized files", () => {
+    const p = load();
+    expect(() => saveBackgroundAsset(p, "x.exe", Buffer.from([1]))).toThrow(/Unsupported/);
+    expect(() => saveBackgroundAsset(p, "x.png", Buffer.alloc(0))).toThrow(/Empty/);
+    expect(() => saveBackgroundAsset(p, "x.png", Buffer.alloc(9 * 1024 * 1024))).toThrow(/too large/);
+    expect(() => saveBackgroundAsset(p, "....png", Buffer.from([1]))).toThrow(/no usable characters/);
   });
 });

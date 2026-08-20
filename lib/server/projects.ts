@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { type Project } from "../config";
 import { contentFileFor, loadContent, loadManifest } from "../content";
-import { fileExists } from "../paths";
+import { fileExists, resolveWithin } from "../paths";
 import { discoverProjects } from "../registry";
 import {
   formatZodError,
@@ -195,4 +195,55 @@ export function duplicateScreen(
     }
   }
   return { manifestEtag, contentEtags };
+}
+
+const ASSET_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg"]);
+const ASSET_MAX_BYTES = 8 * 1024 * 1024;
+
+export interface BackgroundAsset {
+  /** Path relative to store/assets, e.g. "backgrounds/waves.png" (what backgroundImage "asset:" expects). */
+  rel: string;
+  name: string;
+  bytes: number;
+}
+
+/** Images under store/assets/backgrounds/. */
+export function listBackgroundAssets(project: Project): BackgroundAsset[] {
+  const dir = path.join(project.paths.assets, "backgrounds");
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => ASSET_EXTENSIONS.has(path.extname(f).toLowerCase()))
+    .sort()
+    .map((f) => ({ rel: `backgrounds/${f}`, name: f, bytes: fs.statSync(path.join(dir, f)).size }));
+}
+
+/**
+ * Save an uploaded background image into store/assets/backgrounds/. The name is
+ * sanitised, the extension whitelisted, size capped; existing files are never
+ * overwritten (a numeric suffix is added instead).
+ */
+export function saveBackgroundAsset(project: Project, fileName: string, data: Buffer): BackgroundAsset {
+  const rawExt = path.extname(fileName);
+  const ext = rawExt.toLowerCase();
+  if (!ASSET_EXTENSIONS.has(ext)) throw new HttpError(422, `Unsupported image type "${ext}" (png, jpg, webp, svg)`);
+  if (data.length === 0) throw new HttpError(422, "Empty file");
+  if (data.length > ASSET_MAX_BYTES)
+    throw new HttpError(422, `File too large (${Math.round(data.length / 1e6)} MB, max 8 MB)`);
+  const base = path
+    .basename(fileName, rawExt)
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  if (!base) throw new HttpError(422, "File name has no usable characters");
+  const dir = resolveWithin(project.paths.assets, "backgrounds");
+  fs.mkdirSync(dir, { recursive: true });
+  let name = `${base}${ext}`;
+  for (let i = 2; fs.existsSync(path.join(dir, name)); i++) name = `${base}-${i}${ext}`;
+  const abs = path.join(dir, name);
+  const tmp = path.join(dir, `.${name}.tmp`);
+  fs.writeFileSync(tmp, data);
+  fs.renameSync(tmp, abs);
+  return { rel: `backgrounds/${name}`, name, bytes: data.length };
 }
