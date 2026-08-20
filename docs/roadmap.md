@@ -32,3 +32,9 @@ Out of scope for this pass: video rendering, hosted/cloud anything, credentials 
   (or the Background / Phone / Text chips) and the Style panel shows only that element's
   controls, with the rest behind "All overrides". The selected element gets a dashed outline.
 - Selects keep unknown values (e.g. shell "frame:...") visible instead of silently resetting.
+- Top bar UX: grouped clusters with separators, no wrapping; compact readiness pill; transient
+  status moved to a dismissible toast (with a Reload action on conflicts).
+- The "live" comparison toggle is always visible and works in Single mode too (live row under
+  the current screen).
+- Save conflicts (409, file changed on disk) auto-reload etags and retry once — the editor's
+  version wins; no more dead-end "reload before saving" error.

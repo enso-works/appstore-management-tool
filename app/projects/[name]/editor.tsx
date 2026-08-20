@@ -507,28 +507,54 @@ export default function Editor({ name }: { name: string }) {
     if (!snap) return;
     setStatus("Saving…");
     try {
-      let latestIssues = issues;
-      if (dirty.manifest) {
-        const res = await fetch(`/api/projects/${encodeURIComponent(name)}/manifest`, {
+      let em = etags;
+      // 409 = the file changed on disk (CLI, another window). Reload the etags
+      // and retry once: this is a local single-user tool, the editor's version wins.
+      const refreshEtags = async () => {
+        const res = await fetch(`/api/projects/${encodeURIComponent(name)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("could not reload after a conflict");
+        const data = (await res.json()) as Snapshot;
+        em = { manifest: data.manifestEtag, content: data.contentEtags };
+        setEtags(em);
+      };
+      const put = async (url: string, body: () => object) => {
+        let res = await fetch(url, {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ manifest, ifMatch: etags.manifest }),
+          body: JSON.stringify(body()),
         });
+        if (res.status === 409) {
+          await refreshEtags();
+          res = await fetch(url, {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body()),
+          });
+        }
+        return res;
+      };
+      let latestIssues = issues;
+      if (dirty.manifest) {
+        const res = await put(`/api/projects/${encodeURIComponent(name)}/manifest`, () => ({
+          manifest,
+          ifMatch: em.manifest,
+        }));
         const body = await res.json();
         if (!res.ok) throw new Error(body.error + (body.details ? `: ${(body.details as string[]).join("; ")}` : ""));
-        setEtags((e) => ({ ...e, manifest: body.etag }));
+        em = { ...em, manifest: body.etag };
+        setEtags(em);
         latestIssues = body.issues;
       }
       for (const l of dirty.content) {
-        const res = await fetch(`/api/projects/${encodeURIComponent(name)}/content/${encodeURIComponent(l)}`, {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ content: content[l], ifMatch: etags.content[l] }),
-        });
+        const res = await put(`/api/projects/${encodeURIComponent(name)}/content/${encodeURIComponent(l)}`, () => ({
+          content: content[l],
+          ifMatch: em.content[l],
+        }));
         const body = await res.json();
         if (!res.ok)
           throw new Error(`${l}: ${body.error}${body.details ? `: ${(body.details as string[]).join("; ")}` : ""}`);
-        setEtags((e) => ({ ...e, content: { ...e.content, [l]: body.etag } }));
+        em = { ...em, content: { ...em.content, [l]: body.etag } };
+        setEtags(em);
         latestIssues = body.issues;
       }
       setIssues(latestIssues);
@@ -683,7 +709,7 @@ export default function Editor({ name }: { name: string }) {
       ? (target.family === "ipad" ? live.ipad : live.iphone).map((u) => liveImageUrl(u, target.width, target.height))
       : [];
   const belowRow =
-    showLive && target && canvasMode === "strip"
+    showLive && target && canvasMode !== "locales"
       ? { label: live?.error ? `live: ${live.error}` : `live v${live?.version ?? "?"}`, images: liveImages }
       : undefined;
   const canvasSelectedId = canvasMode === "locales" ? locale : screenId;
@@ -706,11 +732,10 @@ export default function Editor({ name }: { name: string }) {
   return (
     <div className={styles.app}>
       <header className={styles.topbar}>
-        <Link href="/" className={styles.back}>
+        <Link href="/" className={styles.back} title="all projects">
           ←
         </Link>
-        <strong>{snap.config.projectName}</strong>
-        <span className={styles.muted}>{snap.name}</span>
+        <strong className={styles.projName}>{snap.config.projectName}</strong>
         <span className={styles.tabs}>
           <button
             className={`${styles.tab} ${view === "screens" ? styles.tabActive : ""}`}
@@ -727,6 +752,7 @@ export default function Editor({ name }: { name: string }) {
         </span>
         {view === "screens" && (
           <>
+            <span className={styles.sep} />
             <span className={styles.tabs}>
               <button
                 className={`${styles.tab} ${canvasMode === "single" ? styles.tabActive : ""}`}
@@ -751,52 +777,65 @@ export default function Editor({ name }: { name: string }) {
               </button>
             </span>
             <label className={styles.check} title="App Store look: dark page, rounded corners, store spacing">
-              <input type="checkbox" checked={storeLook} onChange={(e) => setStoreLook(e.target.checked)} /> store look
+              <input type="checkbox" checked={storeLook} onChange={(e) => setStoreLook(e.target.checked)} />
+              store
             </label>
-            {canvasMode === "strip" && (
-              <label
-                className={styles.check}
-                title="Show what is live on the App Store under the strip (public lookup by bundle id)"
-              >
-                <input type="checkbox" checked={showLive} onChange={(e) => setShowLive(e.target.checked)} /> live
-                {showLive && (
-                  <input
-                    className={`${styles.input} ${styles.country}`}
-                    value={liveCountry}
-                    maxLength={2}
-                    onChange={(e) => setLiveCountry(e.target.value.toLowerCase())}
-                    title="storefront country code"
-                  />
-                )}
-              </label>
-            )}
+            <label
+              className={styles.check}
+              title="Show the live App Store listing below your screens (public lookup by bundle id)"
+            >
+              <input
+                type="checkbox"
+                checked={showLive}
+                onChange={(e) => {
+                  setShowLive(e.target.checked);
+                  if (e.target.checked && canvasMode === "locales") setCanvasMode("strip");
+                }}
+              />
+              live
+              {showLive && (
+                <input
+                  className={`${styles.input} ${styles.country}`}
+                  value={liveCountry}
+                  maxLength={2}
+                  onChange={(e) => setLiveCountry(e.target.value.toLowerCase())}
+                  title="storefront country code"
+                />
+              )}
+            </label>
+            <span className={styles.sep} />
+            <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className={styles.select}>
+              {snap.targets.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.family} {t.displayClass} · {t.width}×{t.height}
+                </option>
+              ))}
+            </select>
+            <select value={locale} onChange={(e) => setLocale(e.target.value)} className={styles.select}>
+              {snap.config.locales.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                  {l === refLocale ? " (default)" : ""}
+                  {dirty.content.has(l) ? " *" : ""}
+                </option>
+              ))}
+            </select>
           </>
         )}
-        <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className={styles.select}>
-          {snap.targets.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.family} {t.displayClass} · {t.width}×{t.height}
-            </option>
-          ))}
-        </select>
-        <select value={locale} onChange={(e) => setLocale(e.target.value)} className={styles.select}>
-          {snap.config.locales.map((l) => (
-            <option key={l} value={l}>
-              {l}
-              {l === refLocale ? " (default)" : ""}
-              {dirty.content.has(l) ? " *" : ""}
-            </option>
-          ))}
-        </select>
         <span className={styles.spacer} />
         <button
           onClick={() => setView("store")}
           className={`${styles.badge} ${styles[snap.readiness.status]} ${styles.badgeBtn}`}
+          title="open the Store tab for details"
         >
-          readiness: {snap.readiness.status}
+          {snap.readiness.status === "pass" ? "ready" : snap.readiness.status}
         </button>
-        <span className={styles.status}>{status}</span>
-        <button className={styles.btn} onClick={save} disabled={!isDirty} title="autosaves ~1s after you stop editing">
+        <button
+          className={`${styles.btn} ${styles.saveBtn}`}
+          onClick={save}
+          disabled={!isDirty}
+          title="autosaves ~1s after you stop editing"
+        >
           {isDirty ? "Saving…" : "Saved"}
         </button>
         <button className={styles.btnPrimary} onClick={() => generate("screen")} disabled={gen.running || !screen}>
@@ -1393,6 +1432,27 @@ export default function Editor({ name }: { name: string }) {
           </pre>
         )}
       </footer>
+      {status && status !== "Saving…" && (
+        <div
+          className={`${styles.toast} ${status.startsWith("Save failed") || status.includes("failed") ? styles.toastError : ""}`}
+        >
+          <span>{status}</span>
+          {status.includes("reload") && (
+            <button
+              className={styles.btnSmall}
+              onClick={() => {
+                void load();
+                setStatus("");
+              }}
+            >
+              Reload
+            </button>
+          )}
+          <button className={styles.toastClose} onClick={() => setStatus("")} title="dismiss">
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }

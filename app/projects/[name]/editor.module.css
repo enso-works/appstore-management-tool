@@ -23,6 +23,26 @@
   border-bottom: 1px solid var(--line);
   background: var(--card);
   font-size: 14px;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.projName {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sep {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+}
+
+.saveBtn {
+  min-width: 72px;
 }
 
 .back {
@@ -38,6 +58,36 @@
 .status {
   font-size: 13px;
   color: var(--muted);
+}
+
+.toast {
+  position: fixed;
+  right: 16px;
+  bottom: 56px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 480px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.toastError {
+  border-color: var(--fail);
+}
+
+.toastClose {
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0 2px;
 }
 
 .left,
