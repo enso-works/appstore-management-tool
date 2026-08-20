@@ -142,6 +142,7 @@ export default function Editor({ name }: { name: string }) {
   const [storeLook, setStoreLook] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [frames, setFrames] = useState<{ name: string; width: number; height: number }[] | null>(null);
+  const [guides, setGuides] = useState(false);
   const [selectedEl, setSelectedEl] = useState<string>("phone");
   const [showLive, setShowLive] = useState(false);
   const [liveCountry, setLiveCountry] = useState("us");
@@ -476,6 +477,11 @@ export default function Editor({ name }: { name: string }) {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable))
         return;
+      if (e.key === "g" && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setGuides((v) => !v);
+        return;
+      }
       const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
       if (!dir) return;
       e.preventDefault();
@@ -1146,6 +1152,8 @@ export default function Editor({ name }: { name: string }) {
                   onCanvasSelect(id);
                   setCanvasMode("single");
                 }}
+                guides={guides}
+                onToggleGuides={() => setGuides((v) => !v)}
                 mode={canvasMode}
                 storeLook={storeLook}
                 interactive

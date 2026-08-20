@@ -70,7 +70,9 @@ export function previewHtml(
   } else { report(); }
 })();
 </script>`;
-  const dragScript = req.interactive ? DRAG_SCRIPT.replace("__KEY__", JSON.stringify(job.key)) : "";
+  const dragScript = req.interactive
+    ? DRAG_SCRIPT.replace("__KEY__", JSON.stringify(job.key)).replace("__SLICE_W__", String(job.target.width))
+    : "";
   const mod = getTemplateModule(screen.template);
   const budgets: Record<string, number> = {};
   if (mod?.descriptor.fieldBudget) {
@@ -241,8 +243,44 @@ const DRAG_SCRIPT = `<script>
     if (el) { el.style.outline = Math.max(2, Math.round(window.innerWidth * 0.004)) + "px dashed rgba(37,99,235,0.9)"; el.style.outlineOffset = "6px"; }
     updateHandles(hit);
   }
+  var guidesEl = null;
+  function setGuides(on) {
+    if (guidesEl) { guidesEl.remove(); guidesEl = null; }
+    if (!on) return;
+    var art = document.querySelector("[data-artwork]");
+    if (!art) return;
+    var W = art.offsetWidth, H = art.offsetHeight;
+    var slice = __SLICE_W__;
+    var slices = Math.max(1, Math.round(W / slice));
+    var pad = Math.round(slice * 0.07);
+    var g = document.createElement("div");
+    g.style.cssText = "position:absolute;inset:0;pointer-events:none;z-index:98;";
+    var line = function (x, y, w, h, color) {
+      var d = document.createElement("div");
+      d.style.cssText = "position:absolute;left:" + x + "px;top:" + y + "px;width:" + w + "px;height:" + h + "px;background:" + color + ";";
+      g.appendChild(d);
+    };
+    var lw = Math.max(1, Math.round(W / 900));
+    for (var i = 0; i < slices; i++) {
+      var x0 = i * slice;
+      // safe padding bounds
+      line(x0 + pad, 0, lw, H, "rgba(59,110,246,0.45)");
+      line(x0 + slice - pad, 0, lw, H, "rgba(59,110,246,0.45)");
+      // slice centre
+      line(x0 + slice / 2, 0, lw, H, "rgba(255,80,120,0.5)");
+    }
+    line(0, pad, W, lw, "rgba(59,110,246,0.45)");
+    line(0, H - pad, W, lw, "rgba(59,110,246,0.45)");
+    line(0, H / 2, W, lw, "rgba(255,80,120,0.5)");
+    // thirds
+    line(0, H / 3, W, lw, "rgba(59,110,246,0.22)");
+    line(0, (2 * H) / 3, W, lw, "rgba(59,110,246,0.22)");
+    art.appendChild(g);
+    guidesEl = g;
+  }
   window.addEventListener("message", function (e) {
     if (e.data && e.data.type === "store-shots-select") highlight(e.data.hit);
+    if (e.data && e.data.type === "store-shots-guides") setGuides(!!e.data.on);
   });
   function end(e) {
     if (!active) return;

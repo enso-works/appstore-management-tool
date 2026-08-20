@@ -36,6 +36,9 @@ export interface PreviewCanvasProps {
   highlightEl?: string | null;
   /** Double-click on a frame (strip/locales): open it in Single mode. */
   onOpen?: (id: string) => void;
+  /** Draw layout guides (safe padding, centres, thirds) inside the single-mode preview. */
+  guides?: boolean;
+  onToggleGuides?: () => void;
 }
 
 type Zoom = "fit" | number;
@@ -64,6 +67,8 @@ export default function PreviewCanvas({
   belowRow,
   highlightEl,
   onOpen,
+  guides = false,
+  onToggleGuides,
 }: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -214,12 +219,13 @@ export default function PreviewCanvas({
   useEffect(() => {
     if (mode !== "single") return;
     const t = setTimeout(() => {
-      containerRef.current
-        ?.querySelectorAll("iframe")
-        .forEach((f) => f.contentWindow?.postMessage({ type: "store-shots-select", hit: highlightEl ?? null }, "*"));
+      containerRef.current?.querySelectorAll("iframe").forEach((f) => {
+        f.contentWindow?.postMessage({ type: "store-shots-select", hit: highlightEl ?? null }, "*");
+        f.contentWindow?.postMessage({ type: "store-shots-guides", on: guides }, "*");
+      });
     }, 150);
     return () => clearTimeout(t);
-  }, [highlightEl, mode, items]);
+  }, [highlightEl, mode, items, guides]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -365,6 +371,15 @@ export default function PreviewCanvas({
         <button className={styles.btnSmall} onClick={() => zoomTo(1)} title="actual pixels (1)">
           100%
         </button>
+        {mode === "single" && onToggleGuides && (
+          <button
+            className={`${styles.btnSmall} ${guides ? styles.chipActive : ""}`}
+            onClick={onToggleGuides}
+            title="layout guides: safe padding, slide centres, thirds (g)"
+          >
+            Guides
+          </button>
+        )}
         <span className={styles.muted}> drag to pan · ⌘/ctrl+wheel or pinch to zoom</span>
       </div>
       {footer && (
