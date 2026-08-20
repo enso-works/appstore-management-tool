@@ -18,6 +18,14 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
     values: { background: "#F4F0E7", backgroundImage: "pattern:waves", patternColor: "rgba(0,0,0,0.06)" },
   },
   {
+    id: "sea-mist",
+    name: "Sea mist",
+    values: {
+      background:
+        "radial-gradient(140% 100% at 100% 0%, rgba(62,182,168,0.75) 0%, rgba(62,182,168,0) 58%), radial-gradient(95% 95% at 0% 0%, rgba(216,226,222,0.95) 0%, rgba(216,226,222,0) 55%), linear-gradient(100deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 50%), linear-gradient(175deg, #a8b7b3 0%, #7d938e 40%, #54706b 72%, #3f5e5a 100%)",
+    },
+  },
+  {
     id: "paper-grain",
     name: "Paper grain",
     values: { background: "#F7F5F0", backgroundImage: "pattern:noise" },
