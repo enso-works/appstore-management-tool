@@ -1102,91 +1102,7 @@ export default function Editor({ name }: { name: string }) {
                 </p>
 
                 <div className={styles.sectionTitle}>
-                  Copy <span className={styles.muted}>{locale}</span>
-                </div>
-                {Array.from({ length: screen.panorama?.slices ?? 1 }, (_, slice) => slice).flatMap((slice) => {
-                  const items =
-                    template?.requiredFields.concat(template.optionalFields).map((base) => {
-                      const f = slice === 0 ? base : `${base}${slice + 1}`;
-                      return { f, base, slice };
-                    }) ?? [];
-                  return [
-                    ...(screen.panorama
-                      ? [
-                          <div key={`slide-${slice}`} className={styles.sliceHead}>
-                            Slide {slice + 1}
-                          </div>,
-                        ]
-                      : []),
-                    ...items.map(({ f, base }) => {
-                      const required = slice === 0 && template!.requiredFields.includes(base);
-                      const value = fields[f];
-                      const ref = refFields[f];
-                      return (
-                        <div key={f} className={styles.field}>
-                          <div className={styles.fieldHead}>
-                            <span>
-                              {f}
-                              {required && <span className={styles.req}> *</span>}
-                            </span>
-                            {locale !== refLocale && typeof ref === "string" && !value && (
-                              <button
-                                className={styles.link}
-                                onClick={() => setField(f, ref)}
-                                title={`copy the ${refLocale} text as a starting point`}
-                              >
-                                prefill {refLocale}
-                              </button>
-                            )}
-                            <span
-                              className={
-                                previewInfo.budgets?.[f] &&
-                                typeof value === "string" &&
-                                value.length > previewInfo.budgets[f]
-                                  ? styles.warn
-                                  : styles.muted
-                              }
-                              title={
-                                previewInfo.budgets?.[f]
-                                  ? `~${previewInfo.budgets[f]} characters fit before the text shrinks`
-                                  : undefined
-                              }
-                            >
-                              {typeof value === "string" ? value.length : 0}
-                              {previewInfo.budgets?.[f] ? `/~${previewInfo.budgets[f]}` : ""}
-                            </span>
-                            {!required && (
-                              <button
-                                className={styles.link}
-                                onClick={() => setField(f, value === null ? "" : null)}
-                                title="null = intentionally empty"
-                              >
-                                {value === null ? "empty (null)" : "set empty"}
-                              </button>
-                            )}
-                          </div>
-                          <textarea
-                            className={styles.textarea}
-                            rows={f === "headline" ? 2 : 2}
-                            value={value ?? ""}
-                            disabled={value === null}
-                            dir={content[locale]?.direction ?? "auto"}
-                            onChange={(e) => setField(f, e.target.value)}
-                            placeholder={required ? "required" : "optional"}
-                          />
-                          {locale !== refLocale && ref && (
-                            <div className={styles.ref}>
-                              {refLocale}: {ref}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }),
-                  ];
-                })}
-
-                <div className={styles.sectionTitle}>
-                  Style overrides
+                  Element
                   <span className={styles.spacer} />
                   <select
                     className={styles.select}
@@ -1381,6 +1297,90 @@ export default function Editor({ name }: { name: string }) {
                       );
                     })}
                 </details>
+                <div className={styles.sectionTitle}>
+                  Copy <span className={styles.muted}>{locale}</span>
+                </div>
+                {Array.from({ length: screen.panorama?.slices ?? 1 }, (_, slice) => slice).flatMap((slice) => {
+                  const items =
+                    template?.requiredFields.concat(template.optionalFields).map((base) => {
+                      const f = slice === 0 ? base : `${base}${slice + 1}`;
+                      return { f, base, slice };
+                    }) ?? [];
+                  return [
+                    ...(screen.panorama
+                      ? [
+                          <div key={`slide-${slice}`} className={styles.sliceHead}>
+                            Slide {slice + 1}
+                          </div>,
+                        ]
+                      : []),
+                    ...items.map(({ f, base }) => {
+                      const required = slice === 0 && template!.requiredFields.includes(base);
+                      const value = fields[f];
+                      const ref = refFields[f];
+                      return (
+                        <div key={f} className={styles.field}>
+                          <div className={styles.fieldHead}>
+                            <span>
+                              {f}
+                              {required && <span className={styles.req}> *</span>}
+                            </span>
+                            {locale !== refLocale && typeof ref === "string" && !value && (
+                              <button
+                                className={styles.link}
+                                onClick={() => setField(f, ref)}
+                                title={`copy the ${refLocale} text as a starting point`}
+                              >
+                                prefill {refLocale}
+                              </button>
+                            )}
+                            <span
+                              className={
+                                previewInfo.budgets?.[f] &&
+                                typeof value === "string" &&
+                                value.length > previewInfo.budgets[f]
+                                  ? styles.warn
+                                  : styles.muted
+                              }
+                              title={
+                                previewInfo.budgets?.[f]
+                                  ? `~${previewInfo.budgets[f]} characters fit before the text shrinks`
+                                  : undefined
+                              }
+                            >
+                              {typeof value === "string" ? value.length : 0}
+                              {previewInfo.budgets?.[f] ? `/~${previewInfo.budgets[f]}` : ""}
+                            </span>
+                            {!required && (
+                              <button
+                                className={styles.link}
+                                onClick={() => setField(f, value === null ? "" : null)}
+                                title="null = intentionally empty"
+                              >
+                                {value === null ? "empty (null)" : "set empty"}
+                              </button>
+                            )}
+                          </div>
+                          <textarea
+                            className={styles.textarea}
+                            rows={f === "headline" ? 2 : 2}
+                            value={value ?? ""}
+                            disabled={value === null}
+                            dir={content[locale]?.direction ?? "auto"}
+                            onChange={(e) => setField(f, e.target.value)}
+                            placeholder={required ? "required" : "optional"}
+                          />
+                          {locale !== refLocale && ref && (
+                            <div className={styles.ref}>
+                              {refLocale}: {ref}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }),
+                  ];
+                })}
+
                 <div className={styles.dangerRow}>
                   <button
                     className={styles.btn}
