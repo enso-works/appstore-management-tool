@@ -433,6 +433,46 @@ export default function Editor({ name }: { name: string }) {
     };
   }, [showLive, liveCountry, name, snap]);
 
+  // Arrow keys nudge the selected element (shift = coarse). Fractions of the
+  // target width, matching the drag units.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!screen || view !== "screens") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable))
+        return;
+      const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+      if (!dir) return;
+      e.preventDefault();
+      const step = e.shiftKey ? 0.05 : 0.005;
+      const dx = dir[0] * step;
+      const dy = dir[1] * step;
+      const round3 = (v: number) => Math.round(v * 1000) / 1000;
+      const num = (v: unknown, d: number) => (typeof v === "number" ? v : d);
+      if (selectedEl === "phone") {
+        setOverrides({
+          screenshotOffsetX: round3(num(screen.overrides.screenshotOffsetX, 0) + dx),
+          screenshotOffsetY: round3(num(screen.overrides.screenshotOffsetY, 0) + dy),
+        });
+      } else if (selectedEl.startsWith("text")) {
+        setOverrides({
+          textOffsetX: round3(num(screen.overrides.textOffsetX, 0) + dx),
+          textOffsetY: round3(Math.max(-0.3, Math.min(1, num(screen.overrides.textOffsetY, 0) + dy))),
+        });
+      } else if (selectedEl.startsWith("layer:")) {
+        const id = selectedEl.slice(6);
+        updateScreen({
+          layers: (screen.layers ?? []).map((l) =>
+            l.id === id ? { ...l, x: round3(l.x + dx), y: round3(l.y + dy) } : l,
+          ),
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEl, screenKey, view]);
+
   // ---- editing -----------------------------------------------------------
   // ---- undo/redo ---------------------------------------------------------
   // Session-level snapshots of the two editable documents. Autosave persists
