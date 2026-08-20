@@ -11,6 +11,7 @@ import type { FitResult } from "@/lib/render/fit";
 import type { ReadinessReport } from "@/lib/readiness";
 import type { GenerationSummary } from "@/lib/generate";
 import StorePanel from "./store-panel";
+import BackgroundEditor from "./background-editor";
 import PreviewCanvas, { type CanvasItem } from "./preview-canvas";
 import { liveImageUrl } from "@/lib/live";
 import styles from "./editor.module.css";
@@ -1229,8 +1230,18 @@ export default function Editor({ name }: { name: string }) {
                     </button>
                   ))}
                 </div>
+                {groupOf(selectedEl) === "background" && (
+                  <BackgroundEditor
+                    projectName={name}
+                    overrides={screen.overrides}
+                    setOverride={setOverride}
+                    defaultBackground={`linear-gradient(165deg, ${snap.config.brand.primary} 0%, #00000088 100%)`}
+                  />
+                )}
                 {(template?.overrideKeys ?? [])
-                  .filter((k) => (EL_GROUPS[groupOf(selectedEl)] ?? []).includes(k))
+                  .filter(
+                    (k) => groupOf(selectedEl) !== "background" && (EL_GROUPS[groupOf(selectedEl)] ?? []).includes(k),
+                  )
                   .map((key) => {
                     const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
                     const v = screen.overrides[key];

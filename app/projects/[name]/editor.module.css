@@ -721,3 +721,62 @@
   color: var(--muted);
   margin-bottom: 4px;
 }
+
+.bgEditor {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.bgModes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bgSwatch {
+  margin-left: auto;
+  width: 28px;
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+}
+
+.sectionSub {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-top: 6px;
+}
+
+.patternGrid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.patternCell {
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background-color: var(--bg);
+  background-repeat: repeat;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.patternActive {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px #2563eb inset;
+}
+
+.patternNone {
+  font-size: 11px;
+}
+
+.hex {
+  width: 130px;
+}
