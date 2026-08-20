@@ -445,6 +445,18 @@ export default function Editor({ name }: { name: string }) {
     updateScreen({ overrides });
   }
 
+  /** Apply several override keys atomically ("" removes a key) — sequential setOverride calls would clobber each other. */
+  function setOverrides(patch: Record<string, unknown>) {
+    if (!screen) return;
+    const overrides = { ...screen.overrides };
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === "" || value === undefined || value === null || (typeof value === "number" && Number.isNaN(value)))
+        delete overrides[key];
+      else overrides[key] = value;
+    }
+    updateScreen({ overrides });
+  }
+
   function addScreen() {
     const id = newScreenId
       .trim()
@@ -1235,7 +1247,34 @@ export default function Editor({ name }: { name: string }) {
                     projectName={name}
                     overrides={screen.overrides}
                     setOverride={setOverride}
+                    setOverrides={setOverrides}
                     defaultBackground={`linear-gradient(165deg, ${snap.config.brand.primary} 0%, #00000088 100%)`}
+                    brandBackground={snap.config.brand.background}
+                    configEtag={snap.configEtag}
+                    onSaveBrandBackground={async (values, etag) => {
+                      const res = await fetch(`/api/projects/${encodeURIComponent(name)}/brand-background`, {
+                        method: "PUT",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({ values, ifMatch: etag }),
+                      });
+                      const body = await res.json();
+                      if (!res.ok) {
+                        setStatus(`Default background failed: ${body.error}`);
+                        return null;
+                      }
+                      setSnap((sn) =>
+                        sn
+                          ? {
+                              ...sn,
+                              config: { ...sn.config, brand: { ...sn.config.brand, background: values ?? undefined } },
+                              configEtag: body.etag,
+                            }
+                          : sn,
+                      );
+                      setStatus("Default background saved for all screens");
+                      setTimeout(() => setStatus((v) => (v.startsWith("Default background") ? "" : v)), 2500);
+                      return body.etag as string;
+                    }}
                   />
                 )}
                 {(template?.overrideKeys ?? [])

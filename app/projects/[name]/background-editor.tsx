@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { BACKGROUND_PRESETS } from "@/lib/background-presets";
+import type { BackgroundValues } from "@/lib/schema";
 import { PATTERN_KINDS, patternDataUri, type PatternKind } from "@/templates/shared";
 import styles from "./editor.module.css";
 
@@ -8,8 +10,32 @@ interface Props {
   projectName: string;
   overrides: Record<string, unknown>;
   setOverride: (key: string, value: unknown) => void;
+  /** Atomic multi-key update ("" removes a key). */
+  setOverrides: (patch: Record<string, unknown>) => void;
   /** The brand gradient used when background is unset (for the "default" swatch). */
   defaultBackground: string;
+  /** Project-wide default background from config (brand.background). */
+  brandBackground?: BackgroundValues;
+  configEtag: string;
+  /** Persist a new project default; resolves to the fresh config etag. */
+  onSaveBrandBackground: (values: BackgroundValues | null, etag: string) => Promise<string | null>;
+}
+
+const BG_KEYS = ["background", "backgroundImage", "patternColor", "patternScale"] as const;
+
+/** Preview CSS for a preset card (small tile). */
+function presetCss(v: BackgroundValues): { background: string; backgroundImage?: string; backgroundSize?: string } {
+  const base = v.background ?? "#888";
+  if (v.backgroundImage?.startsWith("pattern:")) {
+    const kind = v.backgroundImage.slice("pattern:".length) as PatternKind;
+    const tile = kind === "waves" || kind === "zigzag" ? 22 : 12;
+    return {
+      background: base,
+      backgroundImage: patternDataUri(kind, v.patternColor ?? "rgba(0,0,0,0.1)", tile),
+      backgroundSize: `${tile}px auto`,
+    };
+  }
+  return { background: base };
 }
 
 interface Asset {
@@ -56,7 +82,16 @@ function toHex6(c: string): string {
  * a pattern gallery with live previews, pattern colour + scale, and project
  * background images (upload into store/assets/backgrounds/).
  */
-export default function BackgroundEditor({ projectName, overrides, setOverride, defaultBackground }: Props) {
+export default function BackgroundEditor({
+  projectName,
+  overrides,
+  setOverride,
+  setOverrides,
+  defaultBackground,
+  brandBackground,
+  configEtag,
+  onSaveBrandBackground,
+}: Props) {
   const parsed = parseBackground(overrides.background);
   const [mode, setMode] = useState<Mode>(parsed.mode);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -117,8 +152,61 @@ export default function BackgroundEditor({ projectName, overrides, setOverride, 
     }
   }
 
+  const screenHasOwn = BG_KEYS.some((k) => overrides[k] !== undefined && overrides[k] !== "");
+  const applyValues = (v: BackgroundValues) =>
+    setOverrides({
+      background: v.background ?? "",
+      backgroundImage: v.backgroundImage ?? "",
+      patternColor: v.patternColor ?? "",
+      patternScale: v.patternScale ?? "",
+    });
+  const clearOwn = () => setOverrides(Object.fromEntries(BG_KEYS.map((k) => [k, ""])));
+  const effective: BackgroundValues = {
+    background: (overrides.background as string) || brandBackground?.background,
+    backgroundImage: (overrides.backgroundImage as string) || brandBackground?.backgroundImage,
+    patternColor: (overrides.patternColor as string) || brandBackground?.patternColor,
+    patternScale: (overrides.patternScale as number) ?? brandBackground?.patternScale,
+  };
+
   return (
     <div className={styles.bgEditor}>
+      <div className={styles.sectionSub}>Styles</div>
+      <div className={styles.presetGrid}>
+        {BACKGROUND_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            className={styles.presetCard}
+            title={`apply "${preset.name}" to this screen`}
+            onClick={() => applyValues(preset.values)}
+          >
+            <span className={styles.presetSwatch} style={presetCss(preset.values)} />
+            <span className={styles.presetName}>{preset.name}</span>
+          </button>
+        ))}
+      </div>
+      <div className={styles.inline}>
+        <button
+          className={styles.btnSmall}
+          title="make this screen's background the project default (all screens without their own background inherit it)"
+          onClick={async () => {
+            const etag = await onSaveBrandBackground(effective, configEtag);
+            if (etag) clearOwn();
+          }}
+        >
+          Set for all screens
+        </button>
+        {screenHasOwn && (
+          <button
+            className={styles.btnSmall}
+            title="drop this screen's own background and inherit the project default"
+            onClick={clearOwn}
+          >
+            Use project default
+          </button>
+        )}
+        {!screenHasOwn && brandBackground && <span className={styles.small}>inheriting the project default</span>}
+      </div>
+
       <div className={styles.bgModes}>
         {(
           [

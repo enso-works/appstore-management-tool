@@ -780,3 +780,39 @@
 .hex {
   width: 130px;
 }
+
+.presetGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.presetCard {
+  display: grid;
+  gap: 3px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10px;
+  text-align: center;
+}
+
+.presetSwatch {
+  height: 34px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background-repeat: repeat;
+}
+
+.presetCard:hover .presetSwatch {
+  border-color: #2563eb;
+}
+
+.presetName {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
