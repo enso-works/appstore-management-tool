@@ -504,6 +504,11 @@ export default function Editor({ name }: { name: string }) {
         setGuides((v) => !v);
         return;
       }
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedEl.startsWith("layer:")) {
+        e.preventDefault();
+        deleteLayer(selectedEl.slice(6));
+        return;
+      }
       const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
       if (!dir) return;
       e.preventDefault();
@@ -644,6 +649,41 @@ export default function Editor({ name }: { name: string }) {
       acc += W * (s.panorama?.slices ?? 1);
     }
     return { offsetX, width: acc };
+  }
+
+  /** Drop a text layer's content field from every locale (layer text lives in content files). */
+  function removeLayerContentField(id: string) {
+    setContent((c) => {
+      const next = { ...c };
+      for (const l of Object.keys(next)) {
+        const lc = next[l];
+        if (lc?.screens[screenId] && id in lc.screens[screenId]) {
+          const fields2 = { ...lc.screens[screenId] };
+          delete fields2[id];
+          next[l] = { ...lc, screens: { ...lc.screens, [screenId]: fields2 } };
+        }
+      }
+      return next;
+    });
+    setDirty((d) => ({
+      ...d,
+      content: new Set([
+        ...d.content,
+        ...(snap?.config.locales ?? []).filter(
+          (l) => content[l]?.screens[screenId] && id in content[l].screens[screenId],
+        ),
+      ]),
+    }));
+  }
+
+  /** Delete an element (layer) from the current screen, pruning localized text and selection. */
+  function deleteLayer(id: string) {
+    if (!screen) return;
+    const layer = (screen.layers ?? []).find((l) => l.id === id);
+    if (!layer) return;
+    updateScreen({ layers: (screen.layers ?? []).filter((l) => l.id !== id) });
+    if (layer.type === "text") removeLayerContentField(id);
+    setSelectedEl((sel) => (sel === `layer:${id}` ? "phone" : sel));
   }
 
   /** Remove background overrides from every screen so all inherit the project default. */
@@ -1423,29 +1463,7 @@ export default function Editor({ name }: { name: string }) {
                     onTextChange={(id, text) => setField(id, text)}
                     aspect={target ? target.height / target.width : 2}
                     slices={screen.panorama?.slices ?? 1}
-                    onRemoveTextField={(id) => {
-                      setContent((c) => {
-                        const next = { ...c };
-                        for (const l of Object.keys(next)) {
-                          const lc = next[l];
-                          if (lc?.screens[screenId] && id in lc.screens[screenId]) {
-                            const fields2 = { ...lc.screens[screenId] };
-                            delete fields2[id];
-                            next[l] = { ...lc, screens: { ...lc.screens, [screenId]: fields2 } };
-                          }
-                        }
-                        return next;
-                      });
-                      setDirty((d) => ({
-                        ...d,
-                        content: new Set([
-                          ...d.content,
-                          ...snap!.config.locales.filter(
-                            (l) => content[l]?.screens[screenId] && id in content[l].screens[screenId],
-                          ),
-                        ]),
-                      }));
-                    }}
+                    onDelete={deleteLayer}
                     locale={locale}
                   />
                 )}
@@ -1902,6 +1920,7 @@ export default function Editor({ name }: { name: string }) {
                   ["⇧ drag phone", "scale"],
                   ["side / corner handles", "rotate / resize selection"],
                   ["arrows (+⇧)", "nudge selected element"],
+                  ["⌫ / Del", "delete selected element"],
                   ["⌘Z / ⇧⌘Z", "undo / redo"],
                   ["⌘/ctrl + wheel or pinch", "zoom at cursor"],
                   ["drag canvas / wheel", "pan"],

@@ -780,6 +780,91 @@
   background: var(--accent-soft);
 }
 
+.layerList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0 10px;
+}
+
+.layerRow {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 0.12s;
+}
+
+.layerRow:hover {
+  border-color: var(--line-strong);
+}
+
+.layerRowActive {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.layerRowMain {
+  font: inherit;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 4px 6px 8px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.layerKind {
+  flex: none;
+  width: 26px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 2px 0;
+}
+
+.layerName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.layerDelete {
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  flex: none;
+  width: 28px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color 0.12s,
+    background 0.12s;
+}
+
+.layerDelete:hover {
+  color: #e5484d;
+  background: rgba(229, 72, 77, 0.08);
+}
+
 .allOverrides {
   margin-top: 10px;
   font-size: 13px;

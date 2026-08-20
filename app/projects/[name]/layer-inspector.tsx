@@ -19,8 +19,8 @@ interface Props {
   /** Current locale's text for a text layer (content field <layer id>). */
   textOf: (id: string) => string;
   onTextChange: (id: string, text: string) => void;
-  /** Remove a text layer's content field from every locale (called on element removal). */
-  onRemoveTextField: (id: string) => void;
+  /** Delete an element entirely (layers + localized text + selection). */
+  onDelete: (id: string) => void;
   locale: string;
   /** target.height / target.width, for vertical centring. */
   aspect: number;
@@ -51,7 +51,7 @@ export default function LayerInspector({
   onChange,
   textOf,
   onTextChange,
-  onRemoveTextField,
+  onDelete,
   locale,
   aspect,
   slices,
@@ -152,16 +152,23 @@ export default function LayerInspector({
       </div>
 
       {layers.length > 0 && (
-        <div className={styles.chips}>
+        <div className={styles.layerList}>
           {layers.map((l) => (
-            <button
-              key={l.id}
-              className={`${styles.chip} ${l.id === selectedLayerId ? styles.chipActive : ""}`}
-              onClick={() => onSelect(l.id)}
-              title={l.type === "image" ? l.asset : "text element"}
-            >
-              {l.type === "image" ? "🖼" : "T"} {l.id}
-            </button>
+            <div key={l.id} className={`${styles.layerRow} ${l.id === selectedLayerId ? styles.layerRowActive : ""}`}>
+              <button
+                className={styles.layerRowMain}
+                onClick={() => onSelect(l.id)}
+                title={l.type === "image" ? l.asset : "text element - click to edit"}
+              >
+                <span className={styles.layerKind}>{l.type === "image" ? "img" : "T"}</span>
+                <span className={styles.layerName}>
+                  {l.type === "image" ? (l.asset.split("/").pop() ?? l.asset) : textOf(l.id) || "(empty text)"}
+                </span>
+              </button>
+              <button className={styles.layerDelete} title="delete this element (Del)" onClick={() => onDelete(l.id)}>
+                {"\u00d7"}
+              </button>
+            </div>
           ))}
         </div>
       )}
@@ -387,15 +394,9 @@ export default function LayerInspector({
             </span>
           </label>
           <div className={styles.inline}>
-            <span className={styles.small}>drag it in the preview to position</span>
+            <span className={styles.small}>drag it in the preview to position - Del key removes it</span>
             <span className={styles.spacer} />
-            <button
-              className={styles.btnDanger}
-              onClick={() => {
-                onChange(layers.filter((l) => l.id !== layer.id));
-                if (layer.type === "text") onRemoveTextField(layer.id);
-              }}
-            >
+            <button className={styles.btnDanger} onClick={() => onDelete(layer.id)}>
               Remove element
             </button>
           </div>
