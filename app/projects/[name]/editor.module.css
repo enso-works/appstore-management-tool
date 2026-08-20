@@ -816,3 +816,15 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.screenSettings {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.screenSettings summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 2px 0 6px;
+}

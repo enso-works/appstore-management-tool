@@ -149,6 +149,9 @@ const DRAG_SCRIPT = `<script>
     if (a.stack) return "text:" + (a.stack.getAttribute("data-text-stack") || "0");
     return "background";
   }
+  var hoverStyle = document.createElement("style");
+  hoverStyle.textContent = "[data-device]:hover,[data-text-stack]:hover,[data-layer]:hover{outline:" + Math.max(2, Math.round(window.innerWidth * 0.003)) + "px dashed rgba(37,99,235,0.35);outline-offset:4px;}";
+  document.head.appendChild(hoverStyle);
   var handles = [];
   function clearHandles() { handles.forEach(function (h) { h.remove(); }); handles = []; }
   function makeHandle(x, y, size, round, cursor, label) {

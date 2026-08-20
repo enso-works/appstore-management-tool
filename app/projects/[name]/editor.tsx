@@ -1136,83 +1136,92 @@ export default function Editor({ name }: { name: string }) {
                 <div className={styles.sectionTitle}>
                   Screen <code>{screen.id}</code>
                 </div>
-                <label className={styles.row}>
-                  <span>Template</span>
-                  <select
-                    value={screen.template}
-                    onChange={(e) => updateScreen({ template: e.target.value })}
-                    className={styles.select}
-                  >
-                    {snap.templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={styles.row}>
-                  <span>Enabled</span>
-                  <input
-                    type="checkbox"
-                    checked={screen.enabled}
-                    onChange={(e) => updateScreen({ enabled: e.target.checked })}
-                  />
-                </label>
-                <label className={styles.row}>
-                  <span>Order</span>
-                  <span className={styles.inline}>
-                    <button className={styles.btnSmall} onClick={() => moveScreen(-1)}>
-                      ↑
-                    </button>
-                    <button className={styles.btnSmall} onClick={() => moveScreen(1)}>
-                      ↓
-                    </button>
-                    <span className={styles.muted}>{screen.order}</span>
-                  </span>
-                </label>
-                <label className={styles.row}>
-                  <span>Raw capture</span>
-                  <input
-                    className={styles.input}
-                    value={screen.source.filePattern}
-                    onChange={(e) => updateScreen({ source: { ...screen.source, filePattern: e.target.value } })}
-                  />
-                </label>
-                <label className={styles.row}>
-                  <span>Localized captures</span>
-                  <input
-                    type="checkbox"
-                    checked={screen.source.localized}
-                    onChange={(e) => updateScreen({ source: { ...screen.source, localized: e.target.checked } })}
-                  />
-                </label>
-                <label className={styles.row}>
-                  <span title="one artwork spanning consecutive screenshots; the following order numbers are reserved">
-                    Panorama
-                  </span>
-                  <select
-                    className={styles.select}
-                    value={screen.panorama?.slices ?? 1}
-                    onChange={(e) => {
-                      const n = Number(e.target.value);
-                      updateScreen({ panorama: n > 1 ? { slices: n } : undefined });
-                    }}
-                  >
-                    <option value={1}>single screenshot</option>
-                    <option value={2}>2 slices (double wide)</option>
-                    <option value={3}>3 slices (triple wide)</option>
-                  </select>
-                </label>
-                <p className={styles.small}>
-                  store/raw/{target?.family}/{screen.source.localized ? locale : refLocale}/
-                  {screen.source.filePattern
-                    .replaceAll("{order}", String(screen.order).padStart(2, "0"))
-                    .replaceAll("{id}", screen.id)}
-                  {(previewInfo.sourceExists === false ||
-                    (previewInfo.checks && previewInfo.checks.missingImages.length > 0)) && (
-                    <span className={styles.error}> (missing)</span>
-                  )}
-                </p>
+                <details className={styles.screenSettings}>
+                  <summary>
+                    Screen settings{" "}
+                    <span className={styles.muted}>
+                      · {template?.name ?? screen.template}
+                      {screen.panorama ? ` · ${screen.panorama.slices}-slice panorama` : ""}
+                    </span>
+                  </summary>
+                  <label className={styles.row}>
+                    <span>Template</span>
+                    <select
+                      value={screen.template}
+                      onChange={(e) => updateScreen({ template: e.target.value })}
+                      className={styles.select}
+                    >
+                      {snap.templates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className={styles.row}>
+                    <span>Enabled</span>
+                    <input
+                      type="checkbox"
+                      checked={screen.enabled}
+                      onChange={(e) => updateScreen({ enabled: e.target.checked })}
+                    />
+                  </label>
+                  <label className={styles.row}>
+                    <span>Order</span>
+                    <span className={styles.inline}>
+                      <button className={styles.btnSmall} onClick={() => moveScreen(-1)}>
+                        ↑
+                      </button>
+                      <button className={styles.btnSmall} onClick={() => moveScreen(1)}>
+                        ↓
+                      </button>
+                      <span className={styles.muted}>{screen.order}</span>
+                    </span>
+                  </label>
+                  <label className={styles.row}>
+                    <span>Raw capture</span>
+                    <input
+                      className={styles.input}
+                      value={screen.source.filePattern}
+                      onChange={(e) => updateScreen({ source: { ...screen.source, filePattern: e.target.value } })}
+                    />
+                  </label>
+                  <label className={styles.row}>
+                    <span>Localized captures</span>
+                    <input
+                      type="checkbox"
+                      checked={screen.source.localized}
+                      onChange={(e) => updateScreen({ source: { ...screen.source, localized: e.target.checked } })}
+                    />
+                  </label>
+                  <label className={styles.row}>
+                    <span title="one artwork spanning consecutive screenshots; the following order numbers are reserved">
+                      Panorama
+                    </span>
+                    <select
+                      className={styles.select}
+                      value={screen.panorama?.slices ?? 1}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        updateScreen({ panorama: n > 1 ? { slices: n } : undefined });
+                      }}
+                    >
+                      <option value={1}>single screenshot</option>
+                      <option value={2}>2 slices (double wide)</option>
+                      <option value={3}>3 slices (triple wide)</option>
+                    </select>
+                  </label>
+                  <p className={styles.small}>
+                    store/raw/{target?.family}/{screen.source.localized ? locale : refLocale}/
+                    {screen.source.filePattern
+                      .replaceAll("{order}", String(screen.order).padStart(2, "0"))
+                      .replaceAll("{id}", screen.id)}
+                    {(previewInfo.sourceExists === false ||
+                      (previewInfo.checks && previewInfo.checks.missingImages.length > 0)) && (
+                      <span className={styles.error}> (missing)</span>
+                    )}
+                  </p>
+                </details>
 
                 <div className={styles.sectionTitle}>
                   Element
