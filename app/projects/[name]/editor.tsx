@@ -309,8 +309,11 @@ export default function Editor({ name }: { name: string }) {
         return;
       } else if (ev.data.mode === "text") {
         const rtl = (content[locale]?.direction ?? "ltr") === "rtl";
-        o.textOffsetX = Math.round((num(o.textOffsetX, 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
-        o.textOffsetY = Math.max(-0.3, Math.min(1, Math.round((num(o.textOffsetY, 0) + ev.data.dy / W) * 100) / 100));
+        const slice = typeof ev.data.slice === "number" ? ev.data.slice : 0;
+        const kx = slice === 0 ? "textOffsetX" : `textOffsetX${slice + 1}`;
+        const ky = slice === 0 ? "textOffsetY" : `textOffsetY${slice + 1}`;
+        o[kx] = Math.round((num(o[kx], 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
+        o[ky] = Math.max(-0.3, Math.min(1, Math.round((num(o[ky], 0) + ev.data.dy / W) * 100) / 100));
       } else if (ev.data.mode === "tilt") {
         o.deviceTilt = Math.max(-30, Math.min(30, Math.round((num(o.deviceTilt, 0) + ev.data.dTilt) * 2) / 2));
       } else if (ev.data.mode === "scale") {
@@ -506,9 +509,12 @@ export default function Editor({ name }: { name: string }) {
           screenshotOffsetY: round3(num(screen.overrides.screenshotOffsetY, 0) + dy),
         });
       } else if (selectedEl.startsWith("text")) {
+        const slice = Number(selectedEl.split(":")[1] ?? 0);
+        const kx = slice === 0 ? "textOffsetX" : `textOffsetX${slice + 1}`;
+        const ky = slice === 0 ? "textOffsetY" : `textOffsetY${slice + 1}`;
         setOverrides({
-          textOffsetX: round3(num(screen.overrides.textOffsetX, 0) + dx),
-          textOffsetY: round3(Math.max(-0.3, Math.min(1, num(screen.overrides.textOffsetY, 0) + dy))),
+          [kx]: round3(num(screen.overrides[kx], 0) + dx),
+          [ky]: round3(Math.max(-0.3, Math.min(1, num(screen.overrides[ky], 0) + dy))),
         });
       } else if (selectedEl.startsWith("layer:")) {
         const id = selectedEl.slice(6);

@@ -104,6 +104,9 @@ describe("editor server helpers", () => {
     expect(r.html).toContain("store-shots-preview");
     expect(r.html).toContain("rotate(3deg)");
     expect(r.job.sourceExists).toBe(true);
+    // Panorama text drags must report which slide's stack moved so the editor
+    // writes textOffsetX2/Y2 instead of the base keys (right slide moved left bug).
+    expect(r.html).toContain('slice: Number(a.stack.getAttribute("data-text-stack") || 0)');
   });
 
   it("preview falls back to a placeholder when the raw capture is missing", () => {

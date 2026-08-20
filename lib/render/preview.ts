@@ -292,7 +292,7 @@ const DRAG_SCRIPT = `<script>
     } else if (a.onDevice && a.moved) {
       post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: a.alt ? "tilt" : a.shift ? "scale" : "move", dTilt: dx / 8, dScale: Math.max(0.2, 1 + dx / 600) });
     } else if (a.stack && a.moved) {
-      post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: "text" });
+      post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: "text", slice: Number(a.stack.getAttribute("data-text-stack") || 0) });
     } else {
       if (!a.moved) { var h = hitOf(a); highlight(h); post({ type: "store-shots-click", key: key, hit: h }); }
       post({ type: "store-shots-pan", key: key, phase: "end", dx: dx, dy: dy, click: !a.moved });
