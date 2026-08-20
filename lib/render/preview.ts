@@ -105,12 +105,17 @@ const DRAG_SCRIPT = `<script>
   var active = null;
   function post(msg) { parent.postMessage(msg, "*"); }
   function stackOf(el) { return el && el.closest ? el.closest("[data-text-stack]") : null; }
+  function layerOf(el) { return el && el.closest ? el.closest("[data-layer]") : null; }
   document.addEventListener("pointerdown", function (e) {
     if (e.button !== 0) return;
-    var onDevice = device && device.contains(e.target);
-    var stack = onDevice ? null : stackOf(e.target);
-    active = { x: e.clientX, y: e.clientY, onDevice: onDevice, stack: stack, alt: e.altKey, shift: e.shiftKey, moved: false };
-    if (onDevice) {
+    var layerEl = layerOf(e.target);
+    var onDevice = !layerEl && device && device.contains(e.target);
+    var stack = onDevice || layerEl ? null : stackOf(e.target);
+    active = { x: e.clientX, y: e.clientY, onDevice: onDevice, stack: stack, layer: layerEl, alt: e.altKey, shift: e.shiftKey, moved: false };
+    if (layerEl) {
+      active.base = layerEl.style.transform || "";
+      document.body.style.cursor = "move";
+    } else if (onDevice) {
       active.base = device.style.transform || "";
       document.body.style.cursor = e.altKey ? "grab" : e.shiftKey ? "nwse-resize" : "move";
     } else if (stack) {
@@ -124,7 +129,9 @@ const DRAG_SCRIPT = `<script>
     if (!active) return;
     var dx = e.clientX - active.x, dy = e.clientY - active.y;
     if (Math.abs(dx) + Math.abs(dy) > 2) active.moved = true;
-    if (active.onDevice) {
+    if (active.layer) {
+      active.layer.style.transform = "translate(" + dx + "px," + dy + "px) " + active.base;
+    } else if (active.onDevice) {
       var t = active.base;
       if (active.alt) t = t + " rotate(" + (dx / 8) + "deg)";
       else if (active.shift) t = t + " scale(" + Math.max(0.2, 1 + dx / 600) + ")";
@@ -137,6 +144,7 @@ const DRAG_SCRIPT = `<script>
     }
   });
   function hitOf(a) {
+    if (a.layer) return "layer:" + a.layer.getAttribute("data-layer");
     if (a.onDevice) return "phone";
     if (a.stack) return "text:" + (a.stack.getAttribute("data-text-stack") || "0");
     return "background";
@@ -208,10 +216,11 @@ const DRAG_SCRIPT = `<script>
     });
   }
   function highlight(hit) {
-    document.querySelectorAll("[data-device],[data-text-stack]").forEach(function (el) { el.style.outline = ""; el.style.outlineOffset = ""; });
+    document.querySelectorAll("[data-device],[data-text-stack],[data-layer]").forEach(function (el) { el.style.outline = ""; el.style.outlineOffset = ""; });
     var el = null;
     if (hit === "phone") el = device;
     else if (hit && hit.indexOf("text:") === 0) el = document.querySelector('[data-text-stack="' + hit.slice(5) + '"]');
+    else if (hit && hit.indexOf("layer:") === 0) el = document.querySelector('[data-layer="' + hit.slice(6) + '"]');
     if (el) { el.style.outline = Math.max(2, Math.round(window.innerWidth * 0.004)) + "px dashed rgba(37,99,235,0.9)"; el.style.outlineOffset = "6px"; }
     updateHandles(hit);
   }
@@ -223,7 +232,9 @@ const DRAG_SCRIPT = `<script>
     var dx = e.clientX - active.x, dy = e.clientY - active.y;
     var a = active; active = null;
     document.body.style.cursor = "";
-    if (a.onDevice && a.moved) {
+    if (a.layer && a.moved) {
+      post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: "layer", layerId: a.layer.getAttribute("data-layer") });
+    } else if (a.onDevice && a.moved) {
       post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: a.alt ? "tilt" : a.shift ? "scale" : "move", dTilt: dx / 8, dScale: Math.max(0.2, 1 + dx / 600) });
     } else if (a.stack && a.moved) {
       post({ type: "store-shots-drag-end", key: key, dx: dx, dy: dy, mode: "text" });
@@ -235,6 +246,6 @@ const DRAG_SCRIPT = `<script>
   document.addEventListener("pointerup", end);
   document.addEventListener("pointercancel", end);
   if (device) device.style.cursor = "move";
-  document.querySelectorAll("[data-text-stack]").forEach(function (el) { el.style.cursor = "move"; });
+  document.querySelectorAll("[data-text-stack],[data-layer]").forEach(function (el) { el.style.cursor = "move"; });
 })();
 </script>`;

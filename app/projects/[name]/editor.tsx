@@ -12,6 +12,7 @@ import type { ReadinessReport } from "@/lib/readiness";
 import type { GenerationSummary } from "@/lib/generate";
 import StorePanel from "./store-panel";
 import BackgroundEditor from "./background-editor";
+import LayerInspector from "./layer-inspector";
 import PreviewCanvas, { type CanvasItem } from "./preview-canvas";
 import { liveImageUrl } from "@/lib/live";
 import styles from "./editor.module.css";
@@ -96,6 +97,7 @@ const EL_GROUPS: Record<string, string[]> = {
 };
 
 function groupOf(sel: string): string {
+  if (sel.startsWith("layer:")) return "layers";
   return sel.startsWith("text") ? "text" : sel;
 }
 
@@ -255,6 +257,19 @@ export default function Editor({ name }: { name: string }) {
         const rtl = (content[locale]?.direction ?? "ltr") === "rtl";
         o.screenshotOffsetX = Math.round((num(o.screenshotOffsetX, 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
         o.screenshotOffsetY = Math.round((num(o.screenshotOffsetY, 0) + ev.data.dy / W) * 100) / 100;
+      } else if (ev.data.mode === "layer" && typeof ev.data.layerId === "string") {
+        const layers = (screen.layers ?? []).map((l) =>
+          l.id === ev.data.layerId
+            ? {
+                ...l,
+                x: Math.round((l.x + ev.data.dx / W) * 1000) / 1000,
+                y: Math.round((l.y + ev.data.dy / W) * 1000) / 1000,
+              }
+            : l,
+        );
+        updateScreen({ layers });
+        setSelectedEl(`layer:${ev.data.layerId}`);
+        return;
       } else if (ev.data.mode === "text") {
         const rtl = (content[locale]?.direction ?? "ltr") === "rtl";
         o.textOffsetX = Math.round((num(o.textOffsetX, 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
@@ -1148,17 +1163,62 @@ export default function Editor({ name }: { name: string }) {
                   </button>
                 </div>
                 <div className={styles.chips}>
-                  {["background", "phone", "text"].map((g) => (
+                  {["background", "phone", "text", "layers"].map((g) => (
                     <button
                       key={g}
                       className={`${styles.chip} ${groupOf(selectedEl) === g ? styles.chipActive : ""}`}
-                      onClick={() => setSelectedEl(g === "text" ? "text:0" : g)}
+                      onClick={() =>
+                        setSelectedEl(
+                          g === "text" ? "text:0" : g === "layers" ? `layer:${screen.layers?.[0]?.id ?? ""}` : g,
+                        )
+                      }
                       title="or click the element in the preview"
                     >
-                      {g === "background" ? "Background" : g === "phone" ? "Phone" : "Text"}
+                      {g === "background"
+                        ? "Background"
+                        : g === "phone"
+                          ? "Phone"
+                          : g === "text"
+                            ? "Text"
+                            : `Elements${screen.layers?.length ? ` (${screen.layers.length})` : ""}`}
                     </button>
                   ))}
                 </div>
+                {groupOf(selectedEl) === "layers" && (
+                  <LayerInspector
+                    projectName={name}
+                    layers={screen.layers ?? []}
+                    selectedLayerId={selectedEl.startsWith("layer:") ? selectedEl.slice(6) : null}
+                    onSelect={(id) => setSelectedEl(`layer:${id}`)}
+                    onChange={(layers) => updateScreen({ layers })}
+                    textOf={(id) => (typeof fields[id] === "string" ? (fields[id] as string) : "")}
+                    onTextChange={(id, text) => setField(id, text)}
+                    onRemoveTextField={(id) => {
+                      setContent((c) => {
+                        const next = { ...c };
+                        for (const l of Object.keys(next)) {
+                          const lc = next[l];
+                          if (lc?.screens[screenId] && id in lc.screens[screenId]) {
+                            const fields2 = { ...lc.screens[screenId] };
+                            delete fields2[id];
+                            next[l] = { ...lc, screens: { ...lc.screens, [screenId]: fields2 } };
+                          }
+                        }
+                        return next;
+                      });
+                      setDirty((d) => ({
+                        ...d,
+                        content: new Set([
+                          ...d.content,
+                          ...snap!.config.locales.filter(
+                            (l) => content[l]?.screens[screenId] && id in content[l].screens[screenId],
+                          ),
+                        ]),
+                      }));
+                    }}
+                    locale={locale}
+                  />
+                )}
                 {groupOf(selectedEl) === "background" && (
                   <BackgroundEditor
                     projectName={name}

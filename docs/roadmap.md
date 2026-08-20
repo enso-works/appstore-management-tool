@@ -38,3 +38,8 @@ Out of scope for this pass: video rendering, hosted/cloud anything, credentials 
   the current screen).
 - Save conflicts (409, file changed on disk) auto-reload etags and retry once — the editor's
   version wins; no more dead-end "reload before saving" error.
+- Element inspector moved above the copy section (Background editor no longer buried).
+- Layers v1 (asset library elements): freely positioned image elements from store/assets
+  (with upload) and extra text elements per screen — draggable in the preview, per-element
+  inspector (width, size, weight, font, colour, align, rotate, opacity), localized text via
+  content fields, validated (missing assets, duplicate ids) and hashed for incremental renders.
