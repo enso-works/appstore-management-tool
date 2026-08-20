@@ -188,10 +188,18 @@ const DRAG_SCRIPT = `<script>
   }
   function updateHandles(hit) {
     clearHandles();
-    if (hit !== "phone" || !device) return;
-    var r = device.getBoundingClientRect();
-    var size = Math.max(28, Math.round(r.width * 0.09));
-    var base = device.style.transform || "";
+    var target = null, isLayer = false, layerId = null;
+    if (hit === "phone" && device) target = device;
+    else if (hit && hit.indexOf("layer:") === 0) {
+      layerId = hit.slice(6);
+      target = document.querySelector('[data-layer="' + layerId + '"]');
+      isLayer = true;
+    }
+    if (!target) return;
+    var el = target;
+    var r = el.getBoundingClientRect();
+    var size = Math.max(28, Math.round(Math.max(r.width, 120) * 0.09));
+    var base = el.style.transform || "";
     var cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     // Rotate: circular handle on the right side, drag around the centre.
     var rot = makeHandle(r.right + size * 1.1, cy, size, true, "grab", "\u21bb");
@@ -200,9 +208,12 @@ const DRAG_SCRIPT = `<script>
       var a = Math.atan2(ev.clientY - cy, ev.clientX - cx);
       if (a0 === null) a0 = a;
       deg = ((a - a0) * 180) / Math.PI;
-      device.style.transform = base + " rotate(" + deg + "deg)";
+      el.style.transform = base + " rotate(" + deg + "deg)";
     }, function () {
-      if (Math.abs(deg) > 0.2) post({ type: "store-shots-drag-end", key: key, mode: "tilt", dTilt: deg });
+      if (Math.abs(deg) > 0.2) {
+        if (isLayer) post({ type: "store-shots-drag-end", key: key, mode: "layer-tilt", layerId: layerId, dTilt: deg });
+        else post({ type: "store-shots-drag-end", key: key, mode: "tilt", dTilt: deg });
+      }
       a0 = null;
     });
     // Scale: square handle on the bottom-right corner, drag away from the centre.
@@ -212,9 +223,12 @@ const DRAG_SCRIPT = `<script>
       var d = Math.hypot(ev.clientX - cx, ev.clientY - cy);
       if (d0 === null) d0 = d;
       factor = Math.max(0.2, d / d0);
-      device.style.transform = base + " scale(" + factor + ")";
+      el.style.transform = base + " scale(" + factor + ")";
     }, function () {
-      if (Math.abs(factor - 1) > 0.005) post({ type: "store-shots-drag-end", key: key, mode: "scale", dScale: factor });
+      if (Math.abs(factor - 1) > 0.005) {
+        if (isLayer) post({ type: "store-shots-drag-end", key: key, mode: "layer-scale", layerId: layerId, dScale: factor });
+        else post({ type: "store-shots-drag-end", key: key, mode: "scale", dScale: factor });
+      }
       d0 = null;
     });
   }

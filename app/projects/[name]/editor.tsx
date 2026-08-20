@@ -270,6 +270,28 @@ export default function Editor({ name }: { name: string }) {
         updateScreen({ layers });
         setSelectedEl(`layer:${ev.data.layerId}`);
         return;
+      } else if (ev.data.mode === "layer-tilt" && typeof ev.data.layerId === "string") {
+        updateScreen({
+          layers: (screen.layers ?? []).map((l) =>
+            l.id === ev.data.layerId
+              ? {
+                  ...l,
+                  rotate:
+                    Math.max(-180, Math.min(180, Math.round((num(l.rotate, 0) + ev.data.dTilt) * 2) / 2)) || undefined,
+                }
+              : l,
+          ),
+        });
+        return;
+      } else if (ev.data.mode === "layer-scale" && typeof ev.data.layerId === "string") {
+        updateScreen({
+          layers: (screen.layers ?? []).map((l) =>
+            l.id === ev.data.layerId
+              ? { ...l, width: Math.max(0.02, Math.min(2, Math.round(l.width * ev.data.dScale * 1000) / 1000)) }
+              : l,
+          ),
+        });
+        return;
       } else if (ev.data.mode === "text") {
         const rtl = (content[locale]?.direction ?? "ltr") === "rtl";
         o.textOffsetX = Math.round((num(o.textOffsetX, 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
