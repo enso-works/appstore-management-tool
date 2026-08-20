@@ -1359,6 +1359,8 @@ export default function Editor({ name }: { name: string }) {
                     onChange={(layers) => updateScreen({ layers })}
                     textOf={(id) => (typeof fields[id] === "string" ? (fields[id] as string) : "")}
                     onTextChange={(id, text) => setField(id, text)}
+                    aspect={target ? target.height / target.width : 2}
+                    slices={screen.panorama?.slices ?? 1}
                     onRemoveTextField={(id) => {
                       setContent((c) => {
                         const next = { ...c };
@@ -1419,6 +1421,49 @@ export default function Editor({ name }: { name: string }) {
                       return body.etag as string;
                     }}
                   />
+                )}
+                {groupOf(selectedEl) === "phone" && (
+                  <div className={styles.inline}>
+                    <button
+                      className={styles.btnSmall}
+                      title="offset X = 0 (template default position)"
+                      onClick={() => setOverrides({ screenshotOffsetX: "" })}
+                    >
+                      Center
+                    </button>
+                    <button
+                      className={styles.btnSmall}
+                      title="clear position, scale and tilt"
+                      onClick={() =>
+                        setOverrides({
+                          screenshotOffsetX: "",
+                          screenshotOffsetY: "",
+                          screenshotScale: "",
+                          deviceTilt: "",
+                        })
+                      }
+                    >
+                      Reset position
+                    </button>
+                  </div>
+                )}
+                {groupOf(selectedEl) === "text" && (
+                  <div className={styles.inline}>
+                    <button
+                      className={styles.btnSmall}
+                      title="clear this slide's text offsets"
+                      onClick={() => {
+                        const slice = Number(selectedEl.split(":")[1] ?? 0);
+                        setOverrides(
+                          slice === 0
+                            ? { textOffsetX: "", textOffsetY: "" }
+                            : { [`textOffsetX${slice + 1}`]: "", [`textOffsetY${slice + 1}`]: "" },
+                        );
+                      }}
+                    >
+                      Reset offsets
+                    </button>
+                  </div>
                 )}
                 {(template?.overrideKeys ?? [])
                   .filter(

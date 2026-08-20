@@ -22,6 +22,10 @@ interface Props {
   /** Remove a text layer's content field from every locale (called on element removal). */
   onRemoveTextField: (id: string) => void;
   locale: string;
+  /** target.height / target.width, for vertical centring. */
+  aspect: number;
+  /** Panorama slices of the screen (1 = normal), for per-slide centring. */
+  slices: number;
 }
 
 let counter = 0;
@@ -49,6 +53,8 @@ export default function LayerInspector({
   onTextChange,
   onRemoveTextField,
   locale,
+  aspect,
+  slices,
 }: Props) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -304,6 +310,46 @@ export default function LayerInspector({
                 className={styles.range}
               />
               <span className={styles.muted}>{Math.round(num(layer.opacity, 1) * 100)}%</span>
+            </span>
+          </label>
+          <label className={styles.row}>
+            <span title="snap to the centre of the nearest slide / vertical centre">Align</span>
+            <span className={styles.inline}>
+              <button
+                className={styles.btnSmall}
+                title="centre horizontally in the nearest slide"
+                onClick={() => {
+                  const slide = Math.max(0, Math.min(slices - 1, Math.floor(layer.x)));
+                  patch(layer.id, { x: slide + 0.5 });
+                }}
+              >
+                ↔ centre
+              </button>
+              <button
+                className={styles.btnSmall}
+                title="centre vertically"
+                onClick={() => patch(layer.id, { y: Math.round((aspect / 2) * 1000) / 1000 })}
+              >
+                ↕ centre
+              </button>
+              <button
+                className={styles.btnSmall}
+                title="duplicate this element"
+                onClick={() => {
+                  const id = freshId(layer.type === "image" ? "img" : "txt", layers);
+                  const copy = {
+                    ...structuredClone(layer),
+                    id,
+                    x: Math.round((layer.x + 0.05) * 1000) / 1000,
+                    y: Math.round((layer.y + 0.05) * 1000) / 1000,
+                  };
+                  onChange([...layers, copy]);
+                  if (layer.type === "text") onTextChange(id, textOf(layer.id));
+                  onSelect(id);
+                }}
+              >
+                Duplicate
+              </button>
             </span>
           </label>
           <label className={styles.row}>
