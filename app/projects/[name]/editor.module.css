@@ -22,10 +22,12 @@
   padding: 0 14px;
   border-bottom: 1px solid var(--line);
   background: var(--card);
-  font-size: 14px;
+  font-size: 13px;
   white-space: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
+  box-shadow: var(--shadow-sm);
+  z-index: 3;
 }
 
 .projName {
@@ -93,9 +95,9 @@
 .left,
 .right {
   overflow-y: auto;
-  background: var(--card);
+  background: var(--panel);
   font-size: 13px;
-  padding: 12px;
+  padding: 14px;
 }
 
 .left {
@@ -149,11 +151,13 @@
   bottom: 10px;
   font-size: 12px;
   color: var(--muted);
-  background: var(--card);
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border-radius: 10px;
+  padding: 4px 9px;
   max-width: calc(100% - 24px);
+  box-shadow: var(--shadow-sm);
 }
 
 .log {
@@ -167,6 +171,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  background: var(--card);
 }
 
 .sheetBtn {
@@ -204,11 +209,22 @@
 }
 
 .sectionTitle {
-  font-weight: 600;
-  margin: 12px 0 6px;
+  font-weight: 650;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin: 16px 0 8px;
   display: flex;
   gap: 6px;
-  align-items: baseline;
+  align-items: center;
+}
+
+.sectionTitle code {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  color: var(--fg);
 }
 
 .sectionTitle:first-child {
@@ -236,12 +252,17 @@
   cursor: pointer;
 }
 
+.screenBtn {
+  transition: background 0.12s;
+}
+
 .screenBtn:hover {
-  background: rgba(127, 127, 127, 0.12);
+  background: var(--accent-soft);
 }
 
 .active {
-  background: rgba(127, 127, 127, 0.18) !important;
+  background: var(--accent-soft) !important;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .order {
@@ -306,10 +327,17 @@
   font: inherit;
   font-size: 13px;
   color: inherit;
-  background: var(--bg);
+  background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 5px 8px;
+  border-radius: var(--radius);
+  padding: 5px 9px;
+  transition: border-color 0.12s;
+}
+
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: var(--line-strong);
 }
 
 .textarea {
@@ -327,13 +355,23 @@
 .btnDanger,
 .btnSmall {
   font: inherit;
-  font-size: 13px;
-  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--card);
   color: inherit;
-  padding: 5px 10px;
+  padding: 5px 11px;
   cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn:hover:not(:disabled),
+.btnSmall:hover:not(:disabled) {
+  border-color: var(--line-strong);
 }
 
 .btn:disabled,
@@ -343,9 +381,13 @@
 }
 
 .btnPrimary {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  filter: brightness(1.08);
 }
 
 .btnDanger {
@@ -372,13 +414,14 @@
 }
 
 .badge {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 650;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
+  letter-spacing: 0.05em;
+  padding: 3px 10px;
   border-radius: 999px;
-  border: 1px solid currentColor;
+  border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
+  background: color-mix(in srgb, currentColor 10%, transparent);
   text-decoration: none;
 }
 
@@ -420,25 +463,38 @@
 
 .tabs {
   display: inline-flex;
+  background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 999px;
   overflow: hidden;
   margin-left: 6px;
+  padding: 2px;
+  gap: 2px;
 }
 
 .tab {
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   background: none;
   border: 0;
-  color: inherit;
-  padding: 4px 10px;
+  border-radius: 999px;
+  color: var(--muted);
+  padding: 3px 11px;
   cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.tab:hover {
+  color: var(--fg);
 }
 
 .tabActive {
-  background: rgba(127, 127, 127, 0.2);
+  background: var(--card);
+  color: var(--fg);
   font-weight: 600;
+  box-shadow: var(--shadow-sm);
 }
 
 .badgeBtn {
@@ -597,7 +653,7 @@
 }
 
 .frameSelected {
-  outline: 12px solid #2563eb;
+  outline: 12px solid var(--accent);
   outline-offset: 6px;
 }
 
@@ -633,11 +689,13 @@
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  background: var(--card);
+  background: color-mix(in srgb, var(--card) 82%, transparent);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 10px;
   padding: 4px 8px;
   color: var(--muted);
+  box-shadow: var(--shadow-sm);
 }
 
 .zoomPct {
@@ -672,11 +730,12 @@
 
 .thumb {
   flex: none;
-  width: 36px;
+  width: 40px;
   overflow: hidden;
-  border-radius: 4px;
+  border-radius: 6px;
   background: #0d0d0f;
   border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
 }
 
 .sliceHead {
@@ -697,18 +756,28 @@
 .chip {
   font: inherit;
   font-size: 12px;
+  font-weight: 500;
   border: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--card);
   color: var(--muted);
   border-radius: 999px;
-  padding: 3px 10px;
+  padding: 3px 11px;
   cursor: pointer;
+  transition:
+    border-color 0.12s,
+    color 0.12s,
+    background 0.12s;
+}
+
+.chip:hover {
+  color: var(--fg);
+  border-color: var(--line-strong);
 }
 
 .chipActive {
-  border-color: #2563eb;
+  border-color: var(--accent);
   color: var(--fg);
-  background: rgba(37, 99, 235, 0.12);
+  background: var(--accent-soft);
 }
 
 .allOverrides {
@@ -769,8 +838,8 @@
 }
 
 .patternActive {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 1px #2563eb inset;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
 .patternNone {
@@ -801,14 +870,19 @@
 }
 
 .presetSwatch {
-  height: 34px;
-  border-radius: 6px;
+  height: 38px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background-repeat: repeat;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 0.12s,
+    border-color 0.12s;
 }
 
 .presetCard:hover .presetSwatch {
-  border-color: #2563eb;
+  border-color: var(--accent);
+  transform: translateY(-1px);
 }
 
 .presetName {

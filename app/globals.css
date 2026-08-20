@@ -1,22 +1,39 @@
 :root {
-  --bg: #f6f7f9;
-  --fg: #161a1f;
-  --muted: #5b6370;
+  --bg: #f4f5f7;
+  --fg: #17181c;
+  --muted: #667085;
   --card: #ffffff;
-  --line: #e1e4e8;
-  --pass: #1a7f37;
-  --warn: #9a6700;
-  --fail: #cf222e;
-  --skip: #6e7781;
+  --panel: #fafbfc;
+  --line: #e4e7ec;
+  --line-strong: #d0d5dd;
+  --accent: #3b6ef6;
+  --accent-soft: rgba(59, 110, 246, 0.12);
+  --pass: #12855f;
+  --warn: #b76e00;
+  --fail: #d92d20;
+  --skip: #667085;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 24px rgba(16, 24, 40, 0.12);
+  --radius: 8px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1216;
-    --fg: #e6e8eb;
-    --muted: #9aa3ad;
-    --card: #161b22;
-    --line: #2b313a;
+    --bg: #0e1013;
+    --fg: #e7e9ee;
+    --muted: #98a2b3;
+    --card: #16181d;
+    --panel: #121418;
+    --line: #262a31;
+    --line-strong: #343a43;
+    --accent: #5b8bff;
+    --accent-soft: rgba(91, 139, 255, 0.16);
+    --pass: #3ecf8e;
+    --warn: #f5a623;
+    --fail: #ff6b5e;
+    --skip: #98a2b3;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -36,8 +53,10 @@ body {
     -apple-system,
     "Segoe UI",
     sans-serif;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.45;
+  font-feature-settings: "cv02", "cv03", "ss01";
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -47,4 +66,40 @@ a {
 code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.92em;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  border-color: transparent;
 }
