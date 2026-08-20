@@ -434,7 +434,60 @@ export default function Editor({ name }: { name: string }) {
   }, [showLive, liveCountry, name, snap]);
 
   // ---- editing -----------------------------------------------------------
+  // ---- undo/redo ---------------------------------------------------------
+  // Session-level snapshots of the two editable documents. Autosave persists
+  // whatever state undo restores, so ⌘Z works across saves too.
+  const historyRef = useRef<{ manifest: Manifest; content: Record<string, LocaleContent> }[]>([]);
+  const redoRef = useRef<{ manifest: Manifest; content: Record<string, LocaleContent> }[]>([]);
+  const stateRef = useRef({ manifest, content });
+  stateRef.current = { manifest, content };
+
+  function pushHistory() {
+    historyRef.current.push({
+      manifest: structuredClone(stateRef.current.manifest),
+      content: structuredClone(stateRef.current.content),
+    });
+    if (historyRef.current.length > 100) historyRef.current.shift();
+    redoRef.current = [];
+  }
+
+  const applySnapshot = useCallback((snapState: { manifest: Manifest; content: Record<string, LocaleContent> }) => {
+    setManifest(snapState.manifest);
+    setContent(snapState.content);
+    setDirty((d) => ({ manifest: true, content: new Set([...d.content, ...Object.keys(snapState.content)]) }));
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      const t = e.target as HTMLElement | null;
+      // Let text inputs keep their native undo.
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      e.preventDefault();
+      if (e.shiftKey) {
+        const next = redoRef.current.pop();
+        if (!next) return;
+        historyRef.current.push({
+          manifest: structuredClone(stateRef.current.manifest),
+          content: structuredClone(stateRef.current.content),
+        });
+        applySnapshot(next);
+      } else {
+        const prev = historyRef.current.pop();
+        if (!prev) return;
+        redoRef.current.push({
+          manifest: structuredClone(stateRef.current.manifest),
+          content: structuredClone(stateRef.current.content),
+        });
+        applySnapshot(prev);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [applySnapshot]);
+
   function setField(field: string, value: string | null) {
+    pushHistory();
     setContent((c) => {
       const lc = c[locale] ?? emptyContent(locale);
       const next: LocaleContent = {
@@ -447,6 +500,7 @@ export default function Editor({ name }: { name: string }) {
   }
 
   function updateScreen(patch: Partial<ScreenDefinition>) {
+    pushHistory();
     setManifest((m) => ({ ...m, screens: m.screens.map((s) => (s.id === screenId ? { ...s, ...patch } : s)) }));
     setDirty((d) => ({ ...d, manifest: true }));
   }
@@ -473,6 +527,7 @@ export default function Editor({ name }: { name: string }) {
   }
 
   function addScreen() {
+    pushHistory();
     const id = newScreenId
       .trim()
       .toLowerCase()
@@ -503,12 +558,14 @@ export default function Editor({ name }: { name: string }) {
       )
     )
       return;
+    pushHistory();
     setManifest((m) => ({ ...m, screens: m.screens.filter((s) => s.id !== screen.id) }));
     setDirty((d) => ({ ...d, manifest: true }));
     setScreenId(screens.find((s) => s.id !== screen.id)?.id ?? "");
   }
 
   function moveScreen(dir: -1 | 1) {
+    pushHistory();
     if (!screen) return;
     const idx = screens.findIndex((s) => s.id === screen.id);
     const other = screens[idx + dir];
