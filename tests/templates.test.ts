@@ -138,7 +138,7 @@ describe("stackLayout", () => {
     expect(end.text.left).toBe(1320 - end.pad - end.text.width);
   });
 
-  it("applies X/Y offsets as fractions of the canvas width", () => {
+  it("applies X/Y offsets as fractions of the canvas width, each element independently", () => {
     const a = stackLayout(base, 500, defaults);
     const b = stackLayout(
       { ...base, overrides: { screenshotOffsetX: 0.1, screenshotOffsetY: -0.2, textOffsetY: 0.05 } },
@@ -147,7 +147,12 @@ describe("stackLayout", () => {
     );
     expect(b.device.left - a.device.left).toBe(132);
     expect(b.text.top - a.text.top).toBe(66);
-    expect(b.device.top - a.device.top).toBe(-264 + 66);
+    // textOffsetY must NOT move the device: only screenshotOffsetY does.
+    expect(b.device.top - a.device.top).toBe(-264);
+    const textOnly = stackLayout({ ...base, overrides: { textOffsetY: 0.3, textOffsetX: 0.1 } }, 500, defaults);
+    expect(textOnly.device.top).toBe(a.device.top);
+    expect(textOnly.device.left).toBe(a.device.left);
+    expect(textOnly.text.left - a.text.left).toBe(132);
   });
 });
 

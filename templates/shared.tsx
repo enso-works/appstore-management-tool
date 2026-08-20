@@ -358,7 +358,10 @@ export function stackLayout(
   const hugsLeft = (side === "start") !== (direction === "rtl"); // visual left
   const textLeft =
     (hugsLeft ? pad : CW - pad - textW) + Math.round(W * (overrides.textOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));
-  const textTop = Math.round(W * 0.09) + Math.round(W * (overrides.textOffsetY ?? 0));
+  // The device anchors to the DEFAULT text position, not the offset one:
+  // dragging the text must never move the phone (and vice versa).
+  const baseTextTop = Math.round(W * 0.09);
+  const textTop = baseTextTop + Math.round(W * (overrides.textOffsetY ?? 0));
 
   const scale = overrides.screenshotScale ?? defaults.scale;
   const devW = Math.round(W * scale);
@@ -369,10 +372,10 @@ export function stackLayout(
   let devTop: number;
   if (narrow) {
     devLeft = hugsLeft ? Math.round(W * defaults.sideDeviceLeft) : Math.round(CW - W * defaults.sideDeviceLeft - devW);
-    devTop = textTop;
+    devTop = baseTextTop;
   } else {
     devLeft = Math.round((CW - devW) / 2);
-    devTop = textTop + textHeight + Math.round(W * defaults.gap);
+    devTop = baseTextTop + textHeight + Math.round(W * defaults.gap);
   }
   devLeft += Math.round(W * (overrides.screenshotOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));
   devTop += Math.round(W * (overrides.screenshotOffsetY ?? 0));
