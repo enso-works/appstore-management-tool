@@ -18,10 +18,15 @@ export const commonOverridesSchema = z.strictObject({
    */
   backgroundImage: z
     .string()
-    .regex(/^(asset:[^\s]+|pattern:(waves|dots|grid))$/, 'use "asset:<path>" or "pattern:waves|dots|grid"')
+    .regex(
+      /^(asset:[^\s]+|pattern:(waves|dots|grid|lines|zigzag|rings|crosses|checker|noise))$/,
+      'use "asset:<path>" or "pattern:<waves|dots|grid|lines|zigzag|rings|crosses|checker|noise>"',
+    )
     .optional(),
-  /** Line colour for built-in patterns (any CSS colour). */
+  /** Line colour for built-in patterns (any CSS colour; ignored by "noise"). */
   patternColor: z.string().min(1).optional(),
+  /** Tile size multiplier for built-in patterns. */
+  patternScale: z.number().min(0.25).max(4).optional(),
   /** Device width as a fraction of the canvas width. */
   screenshotScale: z.number().min(0.3).max(1.8).optional(),
   /** Horizontal nudge of the device, fraction of the target width (negative = towards the start side). Panoramas may go up to +-3. */
@@ -80,18 +85,66 @@ export function defaultBackground(primary: string): string {
   return `linear-gradient(165deg, ${primary} 0%, ${darken(primary, 0.45)} 100%)`;
 }
 
+export const PATTERN_KINDS = [
+  "waves",
+  "dots",
+  "grid",
+  "lines",
+  "zigzag",
+  "rings",
+  "crosses",
+  "checker",
+  "noise",
+] as const;
+export type PatternKind = (typeof PATTERN_KINDS)[number];
+
 /** Built-in repeating patterns as SVG data URIs; `size` is the tile width in px. */
-export function patternDataUri(kind: "waves" | "dots" | "grid", color: string, size: number): string {
+export function patternDataUri(kind: PatternKind, color: string, size: number): string {
   const c = encodeURIComponent(color);
   const sw = Math.max(1, Math.round(size * 0.02));
   let svg: string;
+  const wrap = (inner: string, w = size, h = size) =>
+    `<svg xmlns='http://www.w3.org/2000/svg' width='${w}' height='${h}' viewBox='0 0 ${w} ${h}'>${inner}</svg>`;
   if (kind === "waves") {
     const h = Math.round(size * 0.5);
-    svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${h}' viewBox='0 0 ${size} ${h}'><path d='M0 ${h / 2} Q ${size / 4} 0 ${size / 2} ${h / 2} T ${size} ${h / 2}' fill='none' stroke='${c}' stroke-width='${sw}'/></svg>`;
+    svg = wrap(
+      `<path d='M0 ${h / 2} Q ${size / 4} 0 ${size / 2} ${h / 2} T ${size} ${h / 2}' fill='none' stroke='${c}' stroke-width='${sw}'/>`,
+      size,
+      h,
+    );
   } else if (kind === "dots") {
-    svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><circle cx='${size / 2}' cy='${size / 2}' r='${Math.max(1, size * 0.06)}' fill='${c}'/></svg>`;
+    svg = wrap(`<circle cx='${size / 2}' cy='${size / 2}' r='${Math.max(1, size * 0.06)}' fill='${c}'/>`);
+  } else if (kind === "grid") {
+    svg = wrap(`<path d='M ${size} 0 L 0 0 0 ${size}' fill='none' stroke='${c}' stroke-width='${sw}'/>`);
+  } else if (kind === "lines") {
+    svg = wrap(
+      `<path d='M0 ${size} L ${size} 0 M ${-size / 4} ${size / 4} L ${size / 4} ${-size / 4} M ${(size * 3) / 4} ${(size * 5) / 4} L ${(size * 5) / 4} ${(size * 3) / 4}' stroke='${c}' stroke-width='${sw}'/>`,
+    );
+  } else if (kind === "zigzag") {
+    const h = Math.round(size * 0.4);
+    svg = wrap(
+      `<polyline points='0,${h * 0.75} ${size / 4},${h * 0.25} ${size / 2},${h * 0.75} ${(size * 3) / 4},${h * 0.25} ${size},${h * 0.75}' fill='none' stroke='${c}' stroke-width='${sw}'/>`,
+      size,
+      h,
+    );
+  } else if (kind === "rings") {
+    svg = wrap(
+      `<circle cx='${size / 2}' cy='${size / 2}' r='${size * 0.32}' fill='none' stroke='${c}' stroke-width='${sw}'/>`,
+    );
+  } else if (kind === "crosses") {
+    const a = size * 0.18;
+    svg = wrap(
+      `<path d='M ${size / 2 - a} ${size / 2} H ${size / 2 + a} M ${size / 2} ${size / 2 - a} V ${size / 2 + a}' stroke='${c}' stroke-width='${sw}'/>`,
+    );
+  } else if (kind === "checker") {
+    svg = wrap(
+      `<rect x='0' y='0' width='${size / 2}' height='${size / 2}' fill='${c}'/><rect x='${size / 2}' y='${size / 2}' width='${size / 2}' height='${size / 2}' fill='${c}'/>`,
+    );
   } else {
-    svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><path d='M ${size} 0 L 0 0 0 ${size}' fill='none' stroke='${c}' stroke-width='${sw}'/></svg>`;
+    // noise: deterministic fractal grain; patternColor is ignored (alpha comes from the matrix).
+    svg = wrap(
+      `<filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch' seed='7'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.35 0'/></filter><rect width='${size}' height='${size}' filter='url(#n)'/>`,
+    );
   }
   return `url("data:image/svg+xml;utf8,${svg.replace(/#/g, "%23")}")`;
 }
@@ -105,9 +158,10 @@ export function backgroundCss(input: TemplateRenderInput<CommonOverrides>): stri
   if (img.startsWith("asset:")) {
     return `url("${input.assetUrl(img.slice("asset:".length))}") center / cover no-repeat, ${base}`;
   }
-  const kind = img.slice("pattern:".length) as "waves" | "dots" | "grid";
+  const kind = img.slice("pattern:".length) as PatternKind;
   const color = overrides.patternColor ?? "rgba(0,0,0,0.08)";
-  const tile = Math.round(target.width * (kind === "waves" ? 0.12 : 0.05));
+  const mult = overrides.patternScale ?? 1;
+  const tile = Math.max(8, Math.round(target.width * (kind === "waves" || kind === "zigzag" ? 0.12 : 0.05) * mult));
   return `${patternDataUri(kind, color, tile)} 0 0 / ${tile}px auto repeat, ${base}`;
 }
 

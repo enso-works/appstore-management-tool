@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { templateModules } from "../templates";
-import { stackLayout, withAlpha } from "../templates/shared";
+import { backgroundCss, PATTERN_KINDS, patternDataUri, stackLayout, withAlpha } from "../templates/shared";
 import type { TemplateRenderInput } from "../templates/types";
 import { renderStatic } from "../lib/render/ssr";
 import { targetProfiles } from "../lib/targets";
@@ -237,5 +237,27 @@ describe("panorama per-slice text", () => {
     );
     expect(html).toContain('data-text-stack="0"');
     expect(html).not.toContain('data-text-stack="1"');
+  });
+});
+
+describe("background patterns", () => {
+  it("renders every pattern kind as an SVG data URI", () => {
+    for (const kind of PATTERN_KINDS) {
+      const uri = patternDataUri(kind, "#ff0000", 40);
+      expect(uri).toMatch(/^url\("data:image\/svg\+xml;utf8,/);
+      if (kind !== "noise") expect(uri).toContain("%23ff0000");
+    }
+  });
+
+  it("patternScale changes the tile size and the schema bounds it", () => {
+    const mod = templateModules["hero-top"];
+    const base = input("iphone-6.9-1320x2868", { overrides: { backgroundImage: "pattern:dots" } });
+    const small = backgroundCss({ ...base, overrides: { ...base.overrides } });
+    const big = backgroundCss({ ...base, overrides: { ...base.overrides, patternScale: 2 } });
+    expect(small).toContain("/ 66px");
+    expect(big).toContain("/ 132px");
+    expect(mod.overridesSchema.safeParse({ backgroundImage: "pattern:rings", patternScale: 2 }).success).toBe(true);
+    expect(mod.overridesSchema.safeParse({ patternScale: 9 }).success).toBe(false);
+    expect(mod.overridesSchema.safeParse({ backgroundImage: "pattern:bogus" }).success).toBe(false);
   });
 });
