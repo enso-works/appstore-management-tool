@@ -11,6 +11,7 @@ import {
   listBackgroundAssets,
   projectSnapshot,
   saveBackgroundAsset,
+  saveBrandBackground,
   saveContent,
   saveManifest,
   savePresets,
@@ -176,5 +177,43 @@ describe("background assets", () => {
     expect(() => saveBackgroundAsset(p, "x.png", Buffer.alloc(0))).toThrow(/Empty/);
     expect(() => saveBackgroundAsset(p, "x.png", Buffer.alloc(9 * 1024 * 1024))).toThrow(/too large/);
     expect(() => saveBackgroundAsset(p, "....png", Buffer.from([1]))).toThrow(/no usable characters/);
+  });
+});
+
+describe("brand background default", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+  const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+
+  it("writes, validates and clears brand.background with etag checks", () => {
+    const p = load();
+    const r = saveBrandBackground(
+      p,
+      { background: "#F4F0E7", backgroundImage: "pattern:waves", patternColor: "rgba(0,0,0,0.06)" },
+      etagOf(p.configPath),
+    );
+    expect(r.etag).toMatch(/^[0-9a-f]{64}$/);
+    expect(loadProject(p.configPath).config.brand.background).toEqual({
+      background: "#F4F0E7",
+      backgroundImage: "pattern:waves",
+      patternColor: "rgba(0,0,0,0.06)",
+    });
+    expect(() => saveBrandBackground(load(), { backgroundImage: "pattern:bogus" })).toThrow(HttpError);
+    saveBrandBackground(load(), null);
+    expect(loadProject(p.configPath).config.brand.background).toBeUndefined();
+    expect(() => saveBrandBackground(load(), {}, "stale")).toThrow(/changed on disk/);
+  });
+});
+
+describe("background presets data", () => {
+  it("every curated preset parses against the background schema", async () => {
+    const { BACKGROUND_PRESETS } = await import("../lib/background-presets");
+    const { backgroundValuesSchema } = await import("../lib/schema");
+    expect(BACKGROUND_PRESETS.length).toBeGreaterThan(8);
+    for (const preset of BACKGROUND_PRESETS) {
+      expect(backgroundValuesSchema.safeParse(preset.values).success).toBe(true);
+      expect(preset.id).toMatch(/^[a-z0-9-]+$/);
+    }
   });
 });

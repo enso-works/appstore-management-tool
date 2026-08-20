@@ -6,10 +6,12 @@ import { contentFileFor, loadContent, loadManifest } from "../content";
 import { fileExists, resolveWithin } from "../paths";
 import { discoverProjects } from "../registry";
 import {
+  backgroundValuesSchema,
   formatZodError,
   localeContentSchema,
   manifestSchema,
   projectConfigSchema,
+  type BackgroundValues,
   type LocaleContent,
   type Manifest,
 } from "../schema";
@@ -246,4 +248,27 @@ export function saveBackgroundAsset(project: Project, fileName: string, data: Bu
   fs.writeFileSync(tmp, data);
   fs.renameSync(tmp, abs);
   return { rel: `backgrounds/${name}`, name, bytes: data.length };
+}
+
+/** Update only brand.background in store-shots.config.json (etag-checked, atomic). Empty values remove the default. */
+export function saveBrandBackground(project: Project, values: BackgroundValues | null, ifMatch?: string): SaveResult {
+  const file = project.configPath;
+  const current = etagOf(file);
+  if (ifMatch !== undefined && ifMatch !== current) {
+    throw new HttpError(409, "store-shots.config.json changed on disk since it was loaded; reload before saving");
+  }
+  const cleaned = values
+    ? (Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined && v !== "")) as BackgroundValues)
+    : null;
+  if (cleaned) {
+    const parsed = backgroundValuesSchema.safeParse(cleaned);
+    if (!parsed.success) throw new HttpError(422, "Invalid background", formatZodError(parsed.error));
+  }
+  const raw = JSON.parse(fs.readFileSync(file, "utf8")) as { brand?: Record<string, unknown> };
+  raw.brand = { ...(raw.brand ?? {}) };
+  if (cleaned && Object.keys(cleaned).length) raw.brand.background = cleaned;
+  else delete raw.brand.background;
+  const parsed = projectConfigSchema.safeParse(raw);
+  if (!parsed.success) throw new HttpError(422, "Invalid config", formatZodError(parsed.error));
+  return { etag: writeJsonAtomic(file, raw) };
 }
