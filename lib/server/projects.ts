@@ -288,3 +288,30 @@ export function saveBrandBackground(project: Project, values: BackgroundValues |
   if (!parsed.success) throw new HttpError(422, "Invalid config", formatZodError(parsed.error));
   return { etag: writeJsonAtomic(file, raw) };
 }
+
+/**
+ * Create content files for every configured locale that lacks one, prefilled
+ * with the default locale's copy as translation drafts. Existing files are
+ * never touched.
+ */
+export function bootstrapLocaleContent(project: Project): { created: string[] } {
+  const defaultFile = contentFileFor(project, project.config.defaultLocale);
+  let seed: LocaleContent | undefined;
+  if (fileExists(defaultFile)) {
+    const parsed = localeContentSchema.safeParse(JSON.parse(fs.readFileSync(defaultFile, "utf8")));
+    if (parsed.success) seed = parsed.data;
+  }
+  const created: string[] = [];
+  for (const locale of project.config.locales) {
+    if (locale === project.config.defaultLocale) continue;
+    const file = contentFileFor(project, locale);
+    if (fileExists(file)) continue;
+    const out: Record<string, unknown> = {
+      locale,
+      screens: seed ? structuredClone(seed.screens) : {},
+    };
+    writeJsonAtomic(file, out);
+    created.push(path.relative(project.root, file).split(path.sep).join("/"));
+  }
+  return { created };
+}

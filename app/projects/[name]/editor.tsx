@@ -1075,6 +1075,27 @@ export default function Editor({ name }: { name: string }) {
           <main className={styles.canvas}>
             {(globalIssues.length > 0 || currentScreenIssues.length > 0) && (
               <div className={styles.issueBanner} onPointerDown={(e) => e.stopPropagation()}>
+                {issues.some((i) => i.code === "content.missing-locale") && (
+                  <button
+                    className={styles.btnSmall}
+                    title="create content files for every missing locale, prefilled from the default locale as translation drafts"
+                    onClick={async () => {
+                      const res = await fetch(`/api/projects/${encodeURIComponent(name)}/bootstrap-locales`, {
+                        method: "POST",
+                      });
+                      const body = await res.json();
+                      if (!res.ok) setStatus(`Locale bootstrap failed: ${body.error}`);
+                      else {
+                        await load();
+                        setStatus(
+                          `Created ${body.created.length} locale file(s) prefilled from ${refLocale} — translate them when ready`,
+                        );
+                      }
+                    }}
+                  >
+                    Create missing locale files
+                  </button>
+                )}
                 <button className={styles.issueToggle} onClick={() => setIssuesOpen((v) => !v)}>
                   <span
                     className={

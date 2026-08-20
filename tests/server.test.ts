@@ -12,11 +12,12 @@ import {
   projectSnapshot,
   saveBackgroundAsset,
   saveBrandBackground,
+  bootstrapLocaleContent,
   saveContent,
   saveManifest,
   savePresets,
 } from "../lib/server/projects";
-import { readJson, tempFixture } from "./helpers";
+import { editJson, readJson, tempFixture } from "./helpers";
 
 describe("editor server helpers", () => {
   let fx: ReturnType<typeof tempFixture>;
@@ -214,6 +215,31 @@ describe("background presets data", () => {
     for (const preset of BACKGROUND_PRESETS) {
       expect(backgroundValuesSchema.safeParse(preset.values).success).toBe(true);
       expect(preset.id).toMatch(/^[a-z0-9-]+$/);
+    }
+  });
+});
+
+describe("bootstrapLocaleContent", () => {
+  it("creates missing locale files prefilled from the default and never touches existing ones", () => {
+    const fx = tempFixture();
+    try {
+      editJson(
+        path.join(fx.root, "store-shots.config.json"),
+        (c) => (c.locales = ["en-US", "ar-SA", "de-DE", "fr-FR"]),
+      );
+      const p = loadProject(path.join(fx.root, "store-shots.config.json"));
+      const before = fs.readFileSync(contentFileFor(p, "ar-SA"), "utf8");
+      const r = bootstrapLocaleContent(p);
+      expect(r.created.sort()).toEqual(["store/content/de-DE.json", "store/content/fr-FR.json"]);
+      const de = readJson<{ locale: string; screens: Record<string, { headline: string }> }>(
+        contentFileFor(p, "de-DE"),
+      );
+      expect(de.locale).toBe("de-DE");
+      expect(de.screens.home.headline).toBe("Plan everything in one place");
+      expect(fs.readFileSync(contentFileFor(p, "ar-SA"), "utf8")).toBe(before);
+      expect(bootstrapLocaleContent(p).created).toEqual([]);
+    } finally {
+      fx.cleanup();
     }
   });
 });
