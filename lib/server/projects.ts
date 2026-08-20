@@ -209,15 +209,25 @@ export interface BackgroundAsset {
   bytes: number;
 }
 
-/** Images under store/assets/backgrounds/. */
-export function listBackgroundAssets(project: Project): BackgroundAsset[] {
-  const dir = path.join(project.paths.assets, "backgrounds");
-  if (!fs.existsSync(dir)) return [];
-  return fs
-    .readdirSync(dir)
-    .filter((f) => ASSET_EXTENSIONS.has(path.extname(f).toLowerCase()))
-    .sort()
-    .map((f) => ({ rel: `backgrounds/${f}`, name: f, bytes: fs.statSync(path.join(dir, f)).size }));
+/** All images under store/assets (backgrounds/, logos/, images/, ... — fonts excluded), rel to store/assets. */
+export function listBackgroundAssets(project: Project, subdir?: string): BackgroundAsset[] {
+  const root = project.paths.assets;
+  const out: BackgroundAsset[] = [];
+  const walk = (dir: string, rel: string, depth: number) => {
+    if (!fs.existsSync(dir) || depth > 2) return;
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name.startsWith(".") || e.name === "fonts") continue;
+      const abs = path.join(dir, e.name);
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(abs, r, depth + 1);
+      else if (ASSET_EXTENSIONS.has(path.extname(e.name).toLowerCase())) {
+        out.push({ rel: r, name: e.name, bytes: fs.statSync(abs).size });
+      }
+    }
+  };
+  if (subdir) walk(path.join(root, subdir), subdir, 1);
+  else walk(root, "", 0);
+  return out.sort((a, b) => a.rel.localeCompare(b.rel));
 }
 
 /**
@@ -225,7 +235,13 @@ export function listBackgroundAssets(project: Project): BackgroundAsset[] {
  * sanitised, the extension whitelisted, size capped; existing files are never
  * overwritten (a numeric suffix is added instead).
  */
-export function saveBackgroundAsset(project: Project, fileName: string, data: Buffer): BackgroundAsset {
+export function saveBackgroundAsset(
+  project: Project,
+  fileName: string,
+  data: Buffer,
+  subdir = "backgrounds",
+): BackgroundAsset {
+  if (!/^[a-z0-9-]+$/.test(subdir)) throw new HttpError(422, "Invalid asset directory");
   const rawExt = path.extname(fileName);
   const ext = rawExt.toLowerCase();
   if (!ASSET_EXTENSIONS.has(ext)) throw new HttpError(422, `Unsupported image type "${ext}" (png, jpg, webp, svg)`);
@@ -239,7 +255,7 @@ export function saveBackgroundAsset(project: Project, fileName: string, data: Bu
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
   if (!base) throw new HttpError(422, "File name has no usable characters");
-  const dir = resolveWithin(project.paths.assets, "backgrounds");
+  const dir = resolveWithin(project.paths.assets, subdir);
   fs.mkdirSync(dir, { recursive: true });
   let name = `${base}${ext}`;
   for (let i = 2; fs.existsSync(path.join(dir, name)); i++) name = `${base}-${i}${ext}`;
@@ -247,7 +263,7 @@ export function saveBackgroundAsset(project: Project, fileName: string, data: Bu
   const tmp = path.join(dir, `.${name}.tmp`);
   fs.writeFileSync(tmp, data);
   fs.renameSync(tmp, abs);
-  return { rel: `backgrounds/${name}`, name, bytes: data.length };
+  return { rel: `${subdir}/${name}`, name, bytes: data.length };
 }
 
 /** Update only brand.background in store-shots.config.json (etag-checked, atomic). Empty values remove the default. */

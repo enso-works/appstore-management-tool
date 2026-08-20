@@ -146,6 +146,35 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
           );
         }
       }
+      const layerIds = new Set<string>();
+      for (const layer of screen.layers ?? []) {
+        if (layerIds.has(layer.id)) {
+          issues.error("manifest.layer-duplicate", `Screen "${screen.id}" has two layers with id "${layer.id}"`, {
+            key,
+            file,
+          });
+        }
+        layerIds.add(layer.id);
+        if (layer.type === "image") {
+          let ok = false;
+          try {
+            ok = fileExists(resolveWithin(project.paths.assets, layer.asset));
+          } catch {
+            ok = false;
+          }
+          if (!ok) {
+            issues.error(
+              "manifest.layer-asset-missing",
+              `Screen "${screen.id}" layer "${layer.id}" refers to ${project.config.paths.assets}/${layer.asset}, which does not exist`,
+              {
+                key,
+                file,
+                hint: "upload it in the editor's layer panel or put the file under store/assets/",
+              },
+            );
+          }
+        }
+      }
       const frameName = frameNameFromShell(screen.overrides.shell);
       if (frameName && !getFrame(frameName)) {
         issues.error(
@@ -219,9 +248,12 @@ function validateContent(project: Project, manifest: Manifest, content: Map<stri
         }
       }
       const slices = screen.panorama?.slices ?? 1;
-      const known = templateFields(template).flatMap((f) =>
-        Array.from({ length: slices }, (_, i) => (i === 0 ? f : `${f}${i + 1}`)),
-      );
+      const known = [
+        ...templateFields(template).flatMap((f) =>
+          Array.from({ length: slices }, (_, i) => (i === 0 ? f : `${f}${i + 1}`)),
+        ),
+        ...(screen.layers ?? []).filter((l) => l.type === "text").map((l) => l.id),
+      ];
       for (const f of Object.keys(fields)) {
         if (!known.includes(f)) {
           issues[strict ? "error" : "warn"](

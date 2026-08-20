@@ -295,3 +295,60 @@ describe("project default background", () => {
     expect(mod.overridesSchema.safeParse({ backgroundImage: "none" }).success).toBe(true);
   });
 });
+
+describe("layers", () => {
+  it("renders image and text layers over the template with data-layer handles", async () => {
+    const { renderStatic } = await import("../lib/render/ssr");
+    const mod = templateModules["hero-top"];
+    const html = renderStatic(
+      mod.render(
+        input("iphone-6.9-1320x2868", {
+          layers: [
+            {
+              type: "image",
+              id: "badge",
+              url: "asset://logos/badge.png",
+              x: 0.8,
+              y: 0.2,
+              width: 0.25,
+              rotate: 10,
+              opacity: 0.9,
+            },
+            {
+              type: "text",
+              id: "callout",
+              text: "New!",
+              x: 0.2,
+              y: 0.3,
+              width: 0.3,
+              size: 0.05,
+              weight: 700,
+              align: "center",
+              font: "body",
+              color: "#ff2200",
+            },
+            {
+              type: "text",
+              id: "empty",
+              text: "",
+              x: 0.5,
+              y: 0.5,
+              width: 0.3,
+              size: 0.05,
+              weight: 400,
+              align: "start",
+              font: "body",
+            },
+          ],
+        }),
+      ),
+    );
+    expect(html).toContain('data-layer="badge"');
+    expect(html).toContain("asset://logos/badge.png");
+    expect(html).toContain("rotate(10deg)");
+    expect(html).toContain('data-layer="callout"');
+    expect(html).toContain("New!");
+    expect(html).toContain("color:#ff2200");
+    expect(html).not.toContain('data-layer="empty"'); // empty text layers are dropped
+  });
+});

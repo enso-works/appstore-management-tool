@@ -18,9 +18,14 @@ export async function POST(req: Request, ctx: Ctx) {
   return handle(async () => {
     const { name } = await ctx.params;
     const project = requireProject(name);
-    const body = (await req.json()) as { fileName?: string; dataBase64?: string };
+    const body = (await req.json()) as { fileName?: string; dataBase64?: string; dir?: string };
     if (!body.fileName || !body.dataBase64) throw new HttpError(400, "fileName and dataBase64 required");
-    const asset = saveBackgroundAsset(project, body.fileName, Buffer.from(body.dataBase64, "base64"));
+    const asset = saveBackgroundAsset(
+      project,
+      body.fileName,
+      Buffer.from(body.dataBase64, "base64"),
+      body.dir ?? "backgrounds",
+    );
     return json({ asset, assets: listBackgroundAssets(project) });
   });
 }

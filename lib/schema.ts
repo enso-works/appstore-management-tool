@@ -145,6 +145,42 @@ export type ProjectConfigInput = z.input<typeof projectConfigSchema>;
 
 const screenId = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "screen id: lowercase letters, digits, dashes");
 
+/** Extra freely-positioned elements on a screen (asset library images, badges, extra text). */
+export const layerSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("image"),
+    /** Unique per screen; also the drag/selection handle name. */
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+    /** Path under store/assets, e.g. "logos/badge.png". */
+    asset: safePathFragment,
+    /** Centre position as fractions of the target width (y > 1 is below the first square). */
+    x: z.number().min(-0.5).max(3.5),
+    y: z.number().min(-0.5).max(3.5),
+    /** Width as a fraction of the target width; height follows the image aspect. */
+    width: z.number().min(0.02).max(2).default(0.3),
+    rotate: z.number().min(-180).max(180).optional(),
+    opacity: z.number().min(0.05).max(1).optional(),
+  }),
+  z.strictObject({
+    type: z.literal("text"),
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
+    x: z.number().min(-0.5).max(3.5),
+    y: z.number().min(-0.5).max(3.5),
+    width: z.number().min(0.05).max(2).default(0.5),
+    /** Font size as a fraction of the target width. */
+    size: z.number().min(0.01).max(0.3).default(0.045),
+    weight: z.number().int().min(100).max(900).default(600),
+    color: z.string().min(1).optional(),
+    align: z.enum(["start", "center", "end"]).default("center"),
+    /** "headline" uses brand.headlineFont when configured. */
+    font: z.enum(["body", "headline"]).default("body"),
+    rotate: z.number().min(-180).max(180).optional(),
+    opacity: z.number().min(0.05).max(1).optional(),
+  }),
+]);
+
+export type Layer = z.infer<typeof layerSchema>;
+
 export const screenSchema = z.strictObject({
   id: screenId,
   order: z.number().int().min(1),
@@ -169,6 +205,8 @@ export const screenSchema = z.strictObject({
    */
   panorama: z.strictObject({ slices: z.number().int().min(2).max(3) }).optional(),
   overrides: z.record(z.string(), z.unknown()).prefault({}),
+  /** Extra image/text elements composited over the template. Text layers read content field <layer id>. */
+  layers: z.array(layerSchema).prefault([]),
 });
 
 export const manifestSchema = z.strictObject({

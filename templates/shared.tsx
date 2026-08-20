@@ -166,6 +166,59 @@ export function backgroundCss(input: TemplateRenderInput<CommonOverrides>): stri
   return `${patternDataUri(kind, color, tile)} 0 0 / ${tile}px auto repeat, ${base}`;
 }
 
+/** Extra image/text elements over the template (data-layer for selection/drag). */
+export function LayerElements({ input }: { input: TemplateRenderInput<CommonOverrides> }): ReactElement | null {
+  const layers = input.layers;
+  if (!layers || layers.length === 0) return null;
+  const W = input.target.width;
+  return (
+    <>
+      {layers.map((layer) => {
+        const common: CSSProperties = {
+          position: "absolute",
+          left: Math.round(W * layer.x),
+          top: Math.round(W * layer.y),
+          width: Math.round(W * layer.width),
+          transform: `translate(-50%, -50%)${layer.rotate ? ` rotate(${layer.rotate}deg)` : ""}`,
+          transformOrigin: "50% 50%",
+          opacity: layer.opacity ?? 1,
+        };
+        if (layer.type === "image") {
+          return (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={layer.id}
+              src={layer.url}
+              alt=""
+              data-layer={layer.id}
+              style={{ ...common, height: "auto", display: "block" }}
+            />
+          );
+        }
+        if (!layer.text) return null;
+        return (
+          <div
+            key={layer.id}
+            data-layer={layer.id}
+            style={{
+              ...common,
+              fontSize: Math.round(W * layer.size),
+              lineHeight: 1.2,
+              fontWeight: layer.weight,
+              color: layer.color ?? "inherit",
+              textAlign: layer.align,
+              fontFamily: layer.font === "headline" ? input.brand.headlineFontStack : undefined,
+              overflowWrap: "break-word",
+            }}
+          >
+            {layer.text}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 /** Root artwork element: exact canvas size, clips everything, sets font and direction. */
 export function Artwork({
   input,
@@ -195,6 +248,7 @@ export function Artwork({
       }}
     >
       {children}
+      <LayerElements input={input} />
     </div>
   );
 }

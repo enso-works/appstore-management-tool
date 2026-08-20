@@ -2,7 +2,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { renderStatic } from "./ssr";
 import { getTemplateModule } from "../../templates";
-import type { BrandTheme, TemplateRenderInput } from "../../templates/types";
+import type { BrandTheme, ResolvedLayer, TemplateRenderInput } from "../../templates/types";
 import type { Project } from "../config";
 import { fontFaceCss, fontFamilyCss, resolveFontStack, type ResolvedFont } from "../fonts";
 import { frameNameFromShell, getFrame } from "../frames";
@@ -53,17 +53,24 @@ export function templateInputFor(
   const mod = getTemplateModule(job.screen.template);
   if (!mod) throw new Error(`Unknown template "${job.screen.template}"`);
   const overrides = mod.overridesSchema.parse(job.screen.overrides) as Record<string, unknown>;
+  const fields = content.screens[job.screen.id] ?? {};
+  const layers: ResolvedLayer[] = (job.screen.layers ?? []).map((layer) =>
+    layer.type === "image"
+      ? { ...layer, url: assetUrl(layer.asset) }
+      : { ...layer, text: (fields[layer.id] ?? "") as string },
+  );
   return {
     target: job.target,
     canvasWidth: job.canvasWidth,
     locale: job.locale,
     direction: content.direction ?? "ltr",
-    fields: content.screens[job.screen.id] ?? {},
+    fields,
     sourceImageUrl,
     brand: brandThemeOf(project, stack),
     overrides,
     mode,
     assetUrl,
+    layers,
   };
 }
 

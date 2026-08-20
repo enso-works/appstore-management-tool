@@ -472,6 +472,7 @@ export default function Editor({ name }: { name: string }) {
       template: snap?.templates[0]?.id ?? "hero-top",
       source: { filePattern: "{order}-{id}.png", localized: true },
       overrides: {},
+      layers: [],
     };
     setManifest((m) => ({ ...m, screens: [...m.screens, s] }));
     setDirty((d) => ({ ...d, manifest: true }));

@@ -86,6 +86,27 @@ describe("validateProject on the fixture", () => {
     expect(r.issues.errors.map((i) => i.code)).toContain("content.unknown-field");
   });
 
+  it("validates layers: duplicate ids, missing image assets, and text layer fields are known content fields", () => {
+    writeSolidPng(path.join(fx.root, "store/assets/logos/badge.png"), { width: 10, height: 10, color: [1, 2, 3] });
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens[0].layers = [
+        { type: "image", id: "badge", asset: "logos/badge.png", x: 0.8, y: 0.2, width: 0.2 },
+        { type: "text", id: "callout", x: 0.2, y: 0.3, width: 0.3 },
+      ];
+    });
+    editJson(path.join(fx.root, "store/content/en-US.json"), (c) => (c.screens.home.callout = "New!"));
+    editJson(path.join(fx.root, "store/content/ar-SA.json"), (c) => (c.screens.home.callout = "!جديد"));
+    let r = validateProject(load());
+    expect(r.issues.errors).toEqual([]);
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens[0].layers.push({ type: "image", id: "badge", asset: "logos/nope.png", x: 0.1, y: 0.1, width: 0.2 });
+    });
+    r = validateProject(load());
+    const codes2 = r.issues.errors.map((i) => i.code);
+    expect(codes2).toContain("manifest.layer-duplicate");
+    expect(codes2).toContain("manifest.layer-asset-missing");
+  });
+
   it("flags fields a template does not declare", () => {
     editJson(path.join(fx.root, "store/content/en-US.json"), (c) => (c.screens.home.subtitle = "x"));
     const r = validateProject(load());
@@ -182,6 +203,7 @@ describe("naming", () => {
       template: "hero-top",
       source: { filePattern: "", localized: true },
       overrides: {},
+      layers: [],
     };
     expect(outputFileName(screen, targetProfiles["iphone-6.9-1320x2868"], "png")).toBe("01_my_home_IPHONE_69.png");
     expect(outputFileName(screen, targetProfiles["ipad-13-2064x2752"], "png")).toBe("01_my_home_IPAD_PRO_129.png");

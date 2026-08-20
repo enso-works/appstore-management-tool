@@ -447,11 +447,14 @@ export function inputsHash(
 ): string {
   const fields = content.screens[job.screen.id] ?? {};
   const assets: Record<string, string> = {};
+  const assetRefs: string[] = [];
   const bg = job.screen.overrides.backgroundImage;
-  if (typeof bg === "string" && bg.startsWith("asset:")) {
+  if (typeof bg === "string" && bg.startsWith("asset:")) assetRefs.push(bg.slice("asset:".length));
+  for (const layer of job.screen.layers ?? []) if (layer.type === "image") assetRefs.push(layer.asset);
+  for (const rel of assetRefs) {
     try {
-      const abs = resolveWithin(project.paths.assets, bg.slice("asset:".length));
-      if (fs.existsSync(abs)) assets[bg] = sha256File(abs);
+      const abs = resolveWithin(project.paths.assets, rel);
+      if (fs.existsSync(abs)) assets[rel] = sha256File(abs);
     } catch {
       // invalid asset paths are reported by validate; nothing to hash
     }

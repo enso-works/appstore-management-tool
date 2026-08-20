@@ -58,7 +58,36 @@ export interface TemplateRenderInput<O = Record<string, unknown>> {
     screenY: number;
     screenWidth: number;
   };
+  /** Extra elements composited over the template (image URLs resolved, text pulled from the locale content). */
+  layers?: ResolvedLayer[];
 }
+
+export type ResolvedLayer =
+  | {
+      type: "image";
+      id: string;
+      url: string;
+      x: number;
+      y: number;
+      width: number;
+      rotate?: number;
+      opacity?: number;
+    }
+  | {
+      type: "text";
+      id: string;
+      text: string;
+      x: number;
+      y: number;
+      width: number;
+      size: number;
+      weight: number;
+      color?: string;
+      align: "start" | "center" | "end";
+      font: "body" | "headline";
+      rotate?: number;
+      opacity?: number;
+    };
 
 export interface TemplateModule<S extends z.ZodTypeAny = z.ZodTypeAny> {
   descriptor: TemplateDescriptor;
