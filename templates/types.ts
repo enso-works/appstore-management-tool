@@ -29,6 +29,8 @@ export interface BrandTheme {
   headlineFontStack?: string;
   primary: string;
   onPrimary: string;
+  /** Project-wide default background (config brand.background); screens inherit unless overridden. */
+  backgroundDefaults?: { background?: string; backgroundImage?: string; patternColor?: string; patternScale?: number };
 }
 
 /** Everything a template needs to render one artwork. Identical for preview and export. */

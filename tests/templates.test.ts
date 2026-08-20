@@ -261,3 +261,37 @@ describe("background patterns", () => {
     expect(mod.overridesSchema.safeParse({ backgroundImage: "pattern:bogus" }).success).toBe(false);
   });
 });
+
+describe("project default background", () => {
+  const brandWith = {
+    fontFamily: "Inter",
+    fontStack: '"Inter", sans-serif',
+    primary: "#336699",
+    onPrimary: "#ffffff",
+    backgroundDefaults: {
+      background: "#F4F0E7",
+      backgroundImage: "pattern:waves",
+      patternColor: "rgba(0,0,0,0.06)",
+      patternScale: 2,
+    },
+  };
+
+  it("screens inherit the brand default and overrides win per key", () => {
+    const base = input("iphone-6.9-1320x2868", { brand: brandWith });
+    const css = backgroundCss({ ...base, overrides: {} });
+    expect(css).toContain("#F4F0E7");
+    expect(css).toContain("data:image/svg+xml");
+    expect(css).toContain("/ 317px"); // waves tile 158 x 2
+    const overridden = backgroundCss({ ...base, overrides: { background: "#111111" } });
+    expect(overridden).toContain("#111111");
+    expect(overridden).toContain("data:image/svg+xml"); // texture still inherited
+  });
+
+  it('"none" cancels an inherited texture for one screen', () => {
+    const base = input("iphone-6.9-1320x2868", { brand: brandWith });
+    const css = backgroundCss({ ...base, overrides: { backgroundImage: "none" } });
+    expect(css).toBe("#F4F0E7");
+    const mod = templateModules["hero-top"];
+    expect(mod.overridesSchema.safeParse({ backgroundImage: "none" }).success).toBe(true);
+  });
+});

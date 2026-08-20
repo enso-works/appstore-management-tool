@@ -40,6 +40,20 @@ export const METADATA_FIELDS = [
 ] as const;
 export type MetadataField = (typeof METADATA_FIELDS)[number];
 
+/** "asset:<path under store/assets>", "pattern:<kind>", or "none" (cancels an inherited texture). */
+export const BACKGROUND_IMAGE_RE =
+  /^(asset:[^\s]+|pattern:(waves|dots|grid|lines|zigzag|rings|crosses|checker|noise)|none)$/;
+
+/** Background values shared by the project default (brand.background) and per-screen overrides. */
+export const backgroundValuesSchema = z.strictObject({
+  background: z.string().min(1).optional(),
+  backgroundImage: z.string().regex(BACKGROUND_IMAGE_RE, 'use "asset:<path>", "pattern:<kind>" or "none"').optional(),
+  patternColor: z.string().min(1).optional(),
+  patternScale: z.number().min(0.25).max(4).optional(),
+});
+
+export type BackgroundValues = z.infer<typeof backgroundValuesSchema>;
+
 export const fontConfigSchema = z.strictObject({
   family: z.string().min(1).default("Inter"),
   source: z.enum(["google", "local"]).default("google"),
@@ -75,6 +89,8 @@ export const projectConfigSchema = z.strictObject({
       font: fontConfigSchema.prefault({}),
       /** Optional display face for headlines (e.g. a serif); body copy keeps `font`. */
       headlineFont: fontConfigSchema.optional(),
+      /** Project-wide default background; screens inherit it unless they override (backgroundImage "none" opts out of a texture). */
+      background: backgroundValuesSchema.optional(),
       primary: hexColor.default("#111111"),
       onPrimary: hexColor.default("#FFFFFF"),
     })

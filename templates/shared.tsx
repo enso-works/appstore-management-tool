@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactElement } from "react";
 import { z } from "zod";
+import { BACKGROUND_IMAGE_RE } from "../lib/schema";
 import { ARTWORK_ATTR, type TemplateRenderInput } from "./types";
 
 /**
@@ -16,13 +17,7 @@ export const commonOverridesSchema = z.strictObject({
    * (e.g. "asset:backgrounds/waves.png", cover-fitted) or a built-in pattern:
    * "pattern:waves" | "pattern:dots" | "pattern:grid".
    */
-  backgroundImage: z
-    .string()
-    .regex(
-      /^(asset:[^\s]+|pattern:(waves|dots|grid|lines|zigzag|rings|crosses|checker|noise))$/,
-      'use "asset:<path>" or "pattern:<waves|dots|grid|lines|zigzag|rings|crosses|checker|noise>"',
-    )
-    .optional(),
+  backgroundImage: z.string().regex(BACKGROUND_IMAGE_RE, 'use "asset:<path>", "pattern:<kind>" or "none"').optional(),
   /** Line colour for built-in patterns (any CSS colour; ignored by "noise"). */
   patternColor: z.string().min(1).optional(),
   /** Tile size multiplier for built-in patterns. */
@@ -149,18 +144,24 @@ export function patternDataUri(kind: PatternKind, color: string, size: number): 
   return `url("data:image/svg+xml;utf8,${svg.replace(/#/g, "%23")}")`;
 }
 
-/** Resolve the background layers for an artwork from overrides + brand. */
+/**
+ * Resolve the background layers: per-screen override wins, then the project
+ * default (brand.background), then the brand gradient. backgroundImage "none"
+ * cancels an inherited texture for one screen.
+ */
 export function backgroundCss(input: TemplateRenderInput<CommonOverrides>): string {
   const { overrides, brand, target } = input;
-  const base = overrides.background ?? defaultBackground(brand.primary);
-  const img = overrides.backgroundImage;
+  const inherit = brand.backgroundDefaults ?? {};
+  const base = overrides.background ?? inherit.background ?? defaultBackground(brand.primary);
+  const imgRaw = overrides.backgroundImage ?? inherit.backgroundImage;
+  const img = imgRaw === "none" ? undefined : imgRaw;
   if (!img) return base;
   if (img.startsWith("asset:")) {
     return `url("${input.assetUrl(img.slice("asset:".length))}") center / cover no-repeat, ${base}`;
   }
   const kind = img.slice("pattern:".length) as PatternKind;
-  const color = overrides.patternColor ?? "rgba(0,0,0,0.08)";
-  const mult = overrides.patternScale ?? 1;
+  const color = overrides.patternColor ?? inherit.patternColor ?? "rgba(0,0,0,0.08)";
+  const mult = overrides.patternScale ?? inherit.patternScale ?? 1;
   const tile = Math.max(8, Math.round(target.width * (kind === "waves" || kind === "zigzag" ? 0.12 : 0.05) * mult));
   return `${patternDataUri(kind, color, tile)} 0 0 / ${tile}px auto repeat, ${base}`;
 }

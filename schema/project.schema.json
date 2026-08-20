@@ -184,6 +184,29 @@
           },
           "additionalProperties": false
         },
+        "background": {
+          "type": "object",
+          "properties": {
+            "background": {
+              "type": "string",
+              "minLength": 1
+            },
+            "backgroundImage": {
+              "type": "string",
+              "pattern": "^(asset:[^\\s]+|pattern:(waves|dots|grid|lines|zigzag|rings|crosses|checker|noise)|none)$"
+            },
+            "patternColor": {
+              "type": "string",
+              "minLength": 1
+            },
+            "patternScale": {
+              "type": "number",
+              "minimum": 0.25,
+              "maximum": 4
+            }
+          },
+          "additionalProperties": false
+        },
         "primary": {
           "default": "#111111",
           "type": "string",
