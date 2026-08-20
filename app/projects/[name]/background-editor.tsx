@@ -255,6 +255,23 @@ export default function BackgroundEditor({
               value={typeof overrides.background === "string" ? overrides.background : ""}
               onChange={(e) => setOverride("background", e.target.value)}
             />
+            {"EyeDropper" in window && (
+              <button
+                className={styles.btnSmall}
+                title="pick a colour from anywhere on screen (e.g. the capture)"
+                onClick={async () => {
+                  try {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const r = await new (window as any).EyeDropper().open();
+                    setOverride("background", r.sRGBHex);
+                  } catch {
+                    // cancelled
+                  }
+                }}
+              >
+                ⧉
+              </button>
+            )}
           </span>
         </label>
       )}

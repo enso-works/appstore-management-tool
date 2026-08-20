@@ -902,3 +902,37 @@
   font-weight: 600;
   margin: 2px 0 6px;
 }
+
+.shortcuts {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shortcutsCard {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: var(--shadow-md);
+  padding: 18px 22px;
+  min-width: 380px;
+}
+
+.shortcutsTable {
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.shortcutsTable td {
+  padding: 4px 14px 4px 0;
+  color: var(--muted);
+}
+
+.shortcutsTable td:first-child {
+  color: var(--fg);
+  white-space: nowrap;
+}

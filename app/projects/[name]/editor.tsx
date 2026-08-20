@@ -143,6 +143,7 @@ export default function Editor({ name }: { name: string }) {
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [frames, setFrames] = useState<{ name: string; width: number; height: number }[] | null>(null);
   const [guides, setGuides] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [selectedEl, setSelectedEl] = useState<string>("phone");
   const [showLive, setShowLive] = useState(false);
   const [liveCountry, setLiveCountry] = useState("us");
@@ -477,6 +478,15 @@ export default function Editor({ name }: { name: string }) {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable))
         return;
+      if (e.key === "?") {
+        e.preventDefault();
+        setShowShortcuts((v) => !v);
+        return;
+      }
+      if (e.key === "Escape") {
+        setShowShortcuts(false);
+        return;
+      }
       if (e.key === "g" && !e.metaKey && !e.ctrlKey) {
         e.preventDefault();
         setGuides((v) => !v);
@@ -1626,6 +1636,33 @@ export default function Editor({ name }: { name: string }) {
                 <div className={styles.sectionTitle}>
                   Copy <span className={styles.muted}>{locale}</span>
                 </div>
+                <div className={styles.chips}>
+                  {snap.config.locales.map((l) => {
+                    const f = (content[l]?.screens[screenId] as Fields | undefined) ?? {};
+                    const required = template?.requiredFields ?? [];
+                    const missing =
+                      !content[l] ||
+                      required.some((rf) => !f[rf] || (typeof f[rf] === "string" && !(f[rf] as string).trim()));
+                    const same = l !== refLocale && required.every((rf) => f[rf] === refFields[rf]);
+                    const state = missing ? "error" : same ? "warn" : "ok";
+                    return (
+                      <button
+                        key={l}
+                        className={`${styles.chip} ${l === locale ? styles.chipActive : ""}`}
+                        onClick={() => setLocale(l)}
+                        title={
+                          missing
+                            ? `${l}: missing copy for this screen`
+                            : same
+                              ? `${l}: identical to ${refLocale} (untranslated draft?)`
+                              : `${l}: translated`
+                        }
+                      >
+                        <span className={`${styles.dot} ${styles[state]}`} /> {l}
+                      </button>
+                    );
+                  })}
+                </div>
                 {Array.from({ length: screen.panorama?.slices ?? 1 }, (_, slice) => slice).flatMap((slice) => {
                   const items =
                     template?.requiredFields.concat(template.optionalFields).map((base) => {
@@ -1808,6 +1845,39 @@ export default function Editor({ name }: { name: string }) {
           </pre>
         )}
       </footer>
+      {showShortcuts && (
+        <div className={styles.shortcuts} onClick={() => setShowShortcuts(false)}>
+          <div className={styles.shortcutsCard} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.sectionTitle}>Keyboard and mouse</div>
+            <table className={styles.shortcutsTable}>
+              <tbody>
+                {[
+                  ["drag element", "move phone / text / layer"],
+                  ["⌥ drag phone", "tilt"],
+                  ["⇧ drag phone", "scale"],
+                  ["side / corner handles", "rotate / resize selection"],
+                  ["arrows (+⇧)", "nudge selected element"],
+                  ["⌘Z / ⇧⌘Z", "undo / redo"],
+                  ["⌘/ctrl + wheel or pinch", "zoom at cursor"],
+                  ["drag canvas / wheel", "pan"],
+                  ["+  −  0  1", "zoom in / out / fit / 100%"],
+                  ["g", "layout guides"],
+                  ["double-click frame", "open in Single mode"],
+                  ["click element or chips", "select for the inspector"],
+                  ["?", "this sheet"],
+                ].map(([k, v]) => (
+                  <tr key={k}>
+                    <td>
+                      <code>{k}</code>
+                    </td>
+                    <td>{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
       {status && status !== "Saving…" && (
         <div
           className={`${styles.toast} ${status.startsWith("Save failed") || status.includes("failed") ? styles.toastError : ""}`}
