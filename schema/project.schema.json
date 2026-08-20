@@ -203,6 +203,9 @@
               "type": "number",
               "minimum": 0.25,
               "maximum": 4
+            },
+            "span": {
+              "type": "boolean"
             }
           },
           "additionalProperties": false

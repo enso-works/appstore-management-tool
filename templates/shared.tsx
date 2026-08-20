@@ -172,6 +172,86 @@ export function backgroundCss(input: TemplateRenderInput<CommonOverrides>): stri
   return `${patternDataUri(kind, color, tile)} 0 0 / ${tile}px auto repeat, ${base}`;
 }
 
+/** Split a CSS background value into its top-level comma-separated layers. */
+function cssLayers(value: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = "";
+  for (const ch of value) {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    if (ch === "," && depth === 0) {
+      out.push(cur.trim());
+      cur = "";
+    } else cur += ch;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+/**
+ * Background as style props. Normally the `background` shorthand from
+ * `backgroundCss`; when the project default has `span` and this screen
+ * inherits it, every layer is stretched to the full strip width and shifted
+ * so consecutive screens form one seamless background.
+ */
+export function backgroundStyle(input: TemplateRenderInput<CommonOverrides>): CSSProperties {
+  const { overrides, brand } = input;
+  const inherit = brand.backgroundDefaults ?? {};
+  const strip = input.strip;
+  const span =
+    inherit.span === true &&
+    strip !== undefined &&
+    strip.width > input.canvasWidth &&
+    overrides.background === undefined &&
+    overrides.backgroundImage === undefined;
+  if (!span) return { background: backgroundCss(input) };
+  const off = strip.offsetX;
+  const base = inherit.background ?? defaultBackground(brand.primary);
+  const img = inherit.backgroundImage === "none" ? undefined : inherit.backgroundImage;
+  const images: string[] = [];
+  const sizes: string[] = [];
+  const positions: string[] = [];
+  const repeats: string[] = [];
+  if (img?.startsWith("asset:")) {
+    images.push(`url("${input.assetUrl(img.slice("asset:".length))}")`);
+    sizes.push(`${strip.width}px 100%`);
+    positions.push(`${-off}px 0`);
+    repeats.push("no-repeat");
+  } else if (img?.startsWith("pattern:")) {
+    const kind = img.slice("pattern:".length) as PatternKind;
+    const color = inherit.patternColor ?? "rgba(0,0,0,0.08)";
+    const mult = inherit.patternScale ?? 1;
+    const tile = Math.max(
+      8,
+      Math.round(input.target.width * (kind === "waves" || kind === "zigzag" ? 0.12 : 0.05) * mult),
+    );
+    // Patterns keep their tile size; shifting the phase by the strip offset keeps rows continuous across screens.
+    images.push(patternDataUri(kind, color, tile));
+    sizes.push(`${tile}px auto`);
+    positions.push(`${-off}px 0`);
+    repeats.push("repeat");
+  }
+  let color: string | undefined;
+  for (const layer of cssLayers(base)) {
+    if (layer.includes("(")) {
+      images.push(layer);
+      sizes.push(`${strip.width}px 100%`);
+      positions.push(`${-off}px 0`);
+      repeats.push("no-repeat");
+    } else {
+      color = layer;
+    }
+  }
+  return {
+    backgroundColor: color,
+    backgroundImage: images.length ? images.join(", ") : undefined,
+    backgroundSize: sizes.length ? sizes.join(", ") : undefined,
+    backgroundPosition: positions.length ? positions.join(", ") : undefined,
+    backgroundRepeat: repeats.length ? repeats.join(", ") : undefined,
+  };
+}
+
 /** Extra image/text elements over the template (data-layer for selection/drag). */
 export function LayerElements({ input }: { input: TemplateRenderInput<CommonOverrides> }): ReactElement | null {
   const layers = input.layers;
@@ -245,7 +325,7 @@ export function Artwork({
         width: input.canvasWidth,
         height: target.height,
         overflow: "hidden",
-        background: backgroundCss(input),
+        ...backgroundStyle(input),
         color: input.overrides.textColor ?? brand.onPrimary,
         fontFamily: brand.fontStack,
         direction,

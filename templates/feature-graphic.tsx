@@ -4,7 +4,7 @@ import {
   commonOverridesSchema,
   TextBlock,
   textAlignOf,
-  backgroundCss,
+  backgroundStyle,
   type CommonOverrides,
 } from "./shared";
 import { ARTWORK_ATTR } from "./types";
@@ -54,7 +54,7 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
         width: input.canvasWidth,
         height: H,
         overflow: "hidden",
-        background: backgroundCss(input),
+        ...backgroundStyle(input),
         color: input.overrides.textColor ?? brand.onPrimary,
         fontFamily: brand.fontStack,
         direction,

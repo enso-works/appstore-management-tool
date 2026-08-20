@@ -19,6 +19,8 @@ interface Props {
   configEtag: string;
   /** Persist a new project default; resolves to the fresh config etag. */
   onSaveBrandBackground: (values: BackgroundValues | null, etag: string) => Promise<string | null>;
+  /** Drop background overrides from every screen so the new default shows everywhere. */
+  onClearAllScreens: () => void;
 }
 
 const BG_KEYS = ["background", "backgroundImage", "patternColor", "patternScale"] as const;
@@ -91,6 +93,7 @@ export default function BackgroundEditor({
   brandBackground,
   configEtag,
   onSaveBrandBackground,
+  onClearAllScreens,
 }: Props) {
   const parsed = parseBackground(overrides.background);
   const [mode, setMode] = useState<Mode>(parsed.mode);
@@ -187,14 +190,29 @@ export default function BackgroundEditor({
       <div className={styles.inline}>
         <button
           className={styles.btnSmall}
-          title="make this screen's background the project default (all screens without their own background inherit it)"
+          title="make this screen's background the project default on every screen (drops each screen's own background)"
           onClick={async () => {
-            const etag = await onSaveBrandBackground(effective, configEtag);
-            if (etag) clearOwn();
+            const etag = await onSaveBrandBackground({ ...effective, span: brandBackground?.span }, configEtag);
+            if (etag) onClearAllScreens();
           }}
         >
           Set for all screens
         </button>
+        {brandBackground && (
+          <label
+            className={styles.inline}
+            title="stretch the project default across all screens: each screen shows its slice of one continuous background"
+          >
+            <input
+              type="checkbox"
+              checked={brandBackground.span === true}
+              onChange={async (e) => {
+                await onSaveBrandBackground({ ...brandBackground, span: e.target.checked || undefined }, configEtag);
+              }}
+            />
+            <span className={styles.small}>Span across screens</span>
+          </label>
+        )}
         {screenHasOwn && (
           <button
             className={styles.btnSmall}

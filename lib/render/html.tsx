@@ -71,6 +71,7 @@ export function templateInputFor(
     mode,
     assetUrl,
     layers,
+    strip: job.strip,
   };
 }
 

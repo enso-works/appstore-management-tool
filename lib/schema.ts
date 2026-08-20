@@ -50,6 +50,8 @@ export const backgroundValuesSchema = z.strictObject({
   backgroundImage: z.string().regex(BACKGROUND_IMAGE_RE, 'use "asset:<path>", "pattern:<kind>" or "none"').optional(),
   patternColor: z.string().min(1).optional(),
   patternScale: z.number().min(0.25).max(4).optional(),
+  /** Stretch the project-default background across the whole screenshot strip (each screen shows its slice). */
+  span: z.boolean().optional(),
 });
 
 export type BackgroundValues = z.infer<typeof backgroundValuesSchema>;

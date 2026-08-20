@@ -227,7 +227,15 @@ export default function Editor({ name }: { name: string }) {
         const res = await fetch(`/api/projects/${encodeURIComponent(name)}/preview`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ targetId, locale, screen, fields, direction, interactive: true }),
+          body: JSON.stringify({
+            targetId,
+            locale,
+            screen,
+            fields,
+            direction,
+            interactive: true,
+            strip: target ? stripWindow(manifest, screenId, target.width) : undefined,
+          }),
           signal: controller.signal,
         });
         if (!res.ok) {
@@ -409,6 +417,7 @@ export default function Editor({ name }: { name: string }) {
                 screen: j.screen,
                 fields: j.fields,
                 direction: content[j.locale]?.direction,
+                strip: target ? stripWindow(manifest, j.screen.id, target.width) : undefined,
               }),
               signal: controller.signal,
             });
@@ -621,6 +630,35 @@ export default function Editor({ name }: { name: string }) {
       else overrides[key] = value;
     }
     updateScreen({ overrides });
+  }
+
+  /** A screen's horizontal window into the strip of enabled screens (for span backgrounds). */
+  function stripWindow(m: Manifest, id: string, W: number): { offsetX: number; width: number } {
+    const ordered = [...m.screens]
+      .filter((s) => s.enabled)
+      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+    let acc = 0;
+    let offsetX = 0;
+    for (const s of ordered) {
+      if (s.id === id) offsetX = acc;
+      acc += W * (s.panorama?.slices ?? 1);
+    }
+    return { offsetX, width: acc };
+  }
+
+  /** Remove background overrides from every screen so all inherit the project default. */
+  function clearBackgroundsEverywhere() {
+    pushHistory();
+    const bg = ["background", "backgroundImage", "patternColor", "patternScale"];
+    setManifest((m) => ({
+      ...m,
+      screens: m.screens.map((s) => {
+        const overrides = { ...s.overrides };
+        for (const k of bg) delete overrides[k];
+        return { ...s, overrides };
+      }),
+    }));
+    setDirty((d) => ({ ...d, manifest: true }));
   }
 
   function addScreen() {
@@ -1420,6 +1458,7 @@ export default function Editor({ name }: { name: string }) {
                     defaultBackground={`linear-gradient(165deg, ${snap.config.brand.primary} 0%, #00000088 100%)`}
                     brandBackground={snap.config.brand.background}
                     configEtag={snap.configEtag}
+                    onClearAllScreens={clearBackgroundsEverywhere}
                     onSaveBrandBackground={async (values, etag) => {
                       const res = await fetch(`/api/projects/${encodeURIComponent(name)}/brand-background`, {
                         method: "PUT",

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { templateModules } from "../templates";
-import { backgroundCss, PATTERN_KINDS, patternDataUri, stackLayout, withAlpha } from "../templates/shared";
+import {
+  backgroundCss,
+  backgroundStyle,
+  PATTERN_KINDS,
+  patternDataUri,
+  stackLayout,
+  withAlpha,
+} from "../templates/shared";
 import type { TemplateRenderInput } from "../templates/types";
 import { renderStatic } from "../lib/render/ssr";
 import { targetProfiles } from "../lib/targets";
@@ -101,6 +108,43 @@ describe("template contracts", () => {
       mod.render(input("iphone-6.9-1320x2868", { overrides: { backgroundImage: "asset:backgrounds/x.png" } })),
     );
     expect(html).toContain("asset://backgrounds/x.png");
+  });
+});
+
+describe("backgroundStyle span", () => {
+  const brand = {
+    fontFamily: "Inter",
+    fontStack: '"Inter", sans-serif',
+    primary: "#336699",
+    onPrimary: "#ffffff",
+    backgroundDefaults: { background: "linear-gradient(90deg, #fff 0%, #000 100%), #abcdef", span: true },
+  };
+
+  it("stretches each inherited gradient layer to the strip and shifts by the screen offset", () => {
+    const st = backgroundStyle(input("iphone-6.9-1320x2868", { brand, strip: { offsetX: 2640, width: 6600 } }));
+    expect(st.background).toBeUndefined();
+    expect(st.backgroundImage).toBe("linear-gradient(90deg, #fff 0%, #000 100%)");
+    expect(st.backgroundSize).toBe("6600px 100%");
+    expect(st.backgroundPosition).toBe("-2640px 0");
+    expect(st.backgroundColor).toBe("#abcdef");
+  });
+
+  it("keeps the plain shorthand when the screen has its own background or span is off", () => {
+    const own = backgroundStyle(
+      input("iphone-6.9-1320x2868", {
+        brand,
+        strip: { offsetX: 2640, width: 6600 },
+        overrides: { background: "#111" },
+      }),
+    );
+    expect(own.background).toBe("#111");
+    const noSpan = backgroundStyle(
+      input("iphone-6.9-1320x2868", {
+        brand: { ...brand, backgroundDefaults: { background: "#eee" } },
+        strip: { offsetX: 2640, width: 6600 },
+      }),
+    );
+    expect(noSpan.background).toBe("#eee");
   });
 });
 

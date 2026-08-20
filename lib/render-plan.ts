@@ -25,6 +25,8 @@ export interface RenderJob {
   outputPaths: string[];
   /** Artwork width in px (slices x target.width). */
   canvasWidth: number;
+  /** This screen's window into the full strip (for backgrounds that span all screens). */
+  strip?: { offsetX: number; width: number };
 }
 
 export function padOrder(order: number): string {
@@ -114,6 +116,22 @@ export function buildJob(
   return job;
 }
 
+/** A screen's horizontal window into the strip of all enabled screens (offset and total width in px). */
+export function stripWindowFor(
+  screens: ScreenDefinition[],
+  screenId: string,
+  targetWidth: number,
+): { offsetX: number; width: number } {
+  const ordered = [...screens].filter((s) => s.enabled).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  let acc = 0;
+  let offsetX = 0;
+  for (const s of ordered) {
+    if (s.id === screenId) offsetX = acc;
+    acc += targetWidth * (s.panorama?.slices ?? 1);
+  }
+  return { offsetX, width: acc };
+}
+
 /** Deterministic job list: targets in config order, locales in config order, screens by order. */
 export function buildRenderPlan(project: Project, manifest: Manifest, filter: PlanFilter = {}): RenderJob[] {
   const jobs: RenderJob[] = [];
@@ -128,7 +146,10 @@ export function buildRenderPlan(project: Project, manifest: Manifest, filter: Pl
       if (filter.locales && !filter.locales.includes(locale)) continue;
       for (const screen of screens) {
         const job = buildJob(project, screen, targetId, locale);
-        if (job) jobs.push(job);
+        if (job) {
+          job.strip = stripWindowFor(screens, screen.id, job.target.width);
+          jobs.push(job);
+        }
       }
     }
   }

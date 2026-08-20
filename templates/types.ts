@@ -30,7 +30,14 @@ export interface BrandTheme {
   primary: string;
   onPrimary: string;
   /** Project-wide default background (config brand.background); screens inherit unless overridden. */
-  backgroundDefaults?: { background?: string; backgroundImage?: string; patternColor?: string; patternScale?: number };
+  backgroundDefaults?: {
+    background?: string;
+    backgroundImage?: string;
+    patternColor?: string;
+    patternScale?: number;
+    /** Stretch the default background across the whole strip; each screen renders its window. */
+    span?: boolean;
+  };
 }
 
 /** Everything a template needs to render one artwork. Identical for preview and export. */
@@ -49,6 +56,8 @@ export interface TemplateRenderInput<O = Record<string, unknown>> {
   mode: "preview" | "export";
   /** Resolve a store/assets-relative path (e.g. "backgrounds/waves.png") to a URL the page can load. */
   assetUrl: (relPath: string) => string;
+  /** This screen's window into the full strip of enabled screens (span backgrounds). */
+  strip?: { offsetX: number; width: number };
   /** Resolved device frame when overrides.shell is "frame:<name>" (URL + screen cut-out geometry). */
   frame?: {
     url: string;

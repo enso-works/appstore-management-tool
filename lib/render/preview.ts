@@ -18,6 +18,8 @@ export interface PreviewRequest {
   direction?: "ltr" | "rtl";
   /** Include the drag-to-position script (editor Single mode). */
   interactive?: boolean;
+  /** This screen's window into the full strip (span backgrounds); computed by the editor from its draft. */
+  strip?: { offsetX: number; width: number };
 }
 
 export interface PreviewResult {
@@ -41,6 +43,9 @@ export function previewHtml(
   if (!getTemplateModule(screen.template)) throw new Error(`Unknown template "${screen.template}"`);
   const job = buildJob(project, screen, req.targetId, req.locale);
   if (!job) throw new Error(`Target "${req.targetId}" is not available for this screen`);
+  if (req.strip && Number.isFinite(req.strip.offsetX) && Number.isFinite(req.strip.width)) {
+    job.strip = { offsetX: req.strip.offsetX, width: req.strip.width };
+  }
   const fields: Record<string, string | null> = {};
   for (const [k, v] of Object.entries(req.fields ?? {})) if (v !== undefined) fields[k] = v;
   const content: LocaleContent = {
