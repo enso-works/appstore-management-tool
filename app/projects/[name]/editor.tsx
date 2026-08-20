@@ -12,6 +12,7 @@ import type { ReadinessReport } from "@/lib/readiness";
 import type { GenerationSummary } from "@/lib/generate";
 import StorePanel from "./store-panel";
 import BackgroundEditor from "./background-editor";
+import ColorField from "./color-field";
 import LayerInspector from "./layer-inspector";
 import PreviewCanvas, { type CanvasItem } from "./preview-canvas";
 import { liveImageUrl } from "@/lib/live";
@@ -39,7 +40,7 @@ const OVERRIDE_CONTROLS: Record<
   string,
   {
     label: string;
-    kind: "text" | "number" | "select";
+    kind: "text" | "number" | "select" | "color";
     min?: number;
     max?: number;
     step?: number;
@@ -53,7 +54,7 @@ const OVERRIDE_CONTROLS: Record<
     kind: "text",
     hint: "asset:backgrounds/<file> (under store/assets) or pattern:waves | pattern:dots | pattern:grid",
   },
-  patternColor: { label: "Pattern colour", kind: "text", hint: "CSS colour for pattern lines, e.g. rgba(0,0,0,0.08)" },
+  patternColor: { label: "Pattern colour", kind: "color", hint: "CSS colour for pattern lines, e.g. rgba(0,0,0,0.08)" },
   screenshotScale: { label: "Phone scale", kind: "number", min: 0.3, max: 1.8, step: 0.01 },
   screenshotOffsetX: {
     label: "Phone offset X",
@@ -84,10 +85,10 @@ const OVERRIDE_CONTROLS: Record<
   textOffsetX: { label: "Text offset X", kind: "number", min: -1, max: 1, step: 0.01 },
   textOffsetY: { label: "Text offset Y", kind: "number", min: -0.3, max: 1, step: 0.01 },
   textAlign: { label: "Text align", kind: "select", options: ["start", "center", "end"] },
-  textColor: { label: "Text colour", kind: "text", hint: "CSS colour; default brand.onPrimary" },
+  textColor: { label: "Text colour", kind: "color", hint: "CSS colour; default brand.onPrimary" },
   shell: { label: "Device shell", kind: "select", options: ["dark", "light", "none"] },
   cardPosition: { label: "Card position", kind: "select", options: ["top", "bottom"] },
-  cardColor: { label: "Card colour", kind: "text", hint: "CSS colour; default brand.primary at 93%" },
+  cardColor: { label: "Card colour", kind: "color", hint: "CSS colour; default brand.primary at 93%" },
 };
 
 const EL_GROUPS: Record<string, string[]> = {
@@ -1638,6 +1639,13 @@ export default function Editor({ name }: { name: string }) {
                               placeholder="–"
                             />
                           </span>
+                        ) : c.kind === "color" ? (
+                          <ColorField
+                            value={(v as string) ?? ""}
+                            onChange={(nv) => setOverride(key, nv)}
+                            fallback={key === "textColor" ? snap.config.brand.onPrimary : snap.config.brand.primary}
+                            presets={[snap.config.brand.primary, snap.config.brand.onPrimary]}
+                          />
                         ) : (
                           <input
                             className={styles.input}
@@ -1683,6 +1691,12 @@ export default function Editor({ name }: { name: string }) {
                               value={(v as number) ?? ""}
                               onChange={(e) => setOverride(key, e.target.value === "" ? "" : Number(e.target.value))}
                               placeholder="–"
+                            />
+                          ) : c.kind === "color" ? (
+                            <ColorField
+                              value={(v as string) ?? ""}
+                              onChange={(nv) => setOverride(key, nv)}
+                              presets={[snap.config.brand.primary, snap.config.brand.onPrimary]}
                             />
                           ) : (
                             <input

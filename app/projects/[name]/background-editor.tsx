@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { BACKGROUND_PRESETS } from "@/lib/background-presets";
 import type { BackgroundValues } from "@/lib/schema";
 import { PATTERN_KINDS, patternDataUri, type PatternKind } from "@/templates/shared";
+import ColorField from "./color-field";
 import styles from "./editor.module.css";
 
 interface Props {
@@ -263,15 +264,10 @@ export default function BackgroundEditor({
         <label className={styles.row}>
           <span>Colour</span>
           <span className={styles.inline}>
-            <input
-              type="color"
-              value={toHex6(parsed.solid)}
-              onChange={(e) => setOverride("background", e.target.value)}
-            />
-            <input
-              className={`${styles.input} ${styles.hex}`}
+            <ColorField
               value={typeof overrides.background === "string" ? overrides.background : ""}
-              onChange={(e) => setOverride("background", e.target.value)}
+              onChange={(v) => setOverride("background", v)}
+              fallback={toHex6(parsed.solid)}
             />
             {"EyeDropper" in window && (
               <button
@@ -377,16 +373,11 @@ export default function BackgroundEditor({
           <label className={styles.row}>
             <span>Pattern colour</span>
             <span className={styles.inline}>
-              <input
-                type="color"
-                value={toHex6(patternColor.startsWith("#") ? patternColor : "#000000")}
-                onChange={(e) => setOverride("patternColor", e.target.value + "14")}
-                title="picks a colour at low opacity; fine-tune in the text field"
-              />
-              <input
-                className={`${styles.input} ${styles.hex}`}
-                value={patternColor}
-                onChange={(e) => setOverride("patternColor", e.target.value)}
+              <ColorField
+                value={typeof overrides.patternColor === "string" ? overrides.patternColor : ""}
+                onChange={(v) => setOverride("patternColor", v)}
+                placeholder={patternColor}
+                fallback={patternColor}
               />
             </span>
           </label>

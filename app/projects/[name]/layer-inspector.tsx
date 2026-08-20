@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Layer } from "@/lib/schema";
+import ColorField from "./color-field";
 import styles from "./editor.module.css";
 
 interface Asset {
@@ -266,10 +267,9 @@ export default function LayerInspector({
               </label>
               <label className={styles.row}>
                 <span>Colour</span>
-                <input
-                  className={styles.input}
+                <ColorField
                   value={layer.color ?? ""}
-                  onChange={(e) => patch(layer.id, { color: e.target.value || undefined })}
+                  onChange={(v) => patch(layer.id, { color: v || undefined })}
                   placeholder="inherit"
                 />
               </label>
