@@ -43,3 +43,19 @@ Out of scope for this pass: video rendering, hosted/cloud anything, credentials 
   (with upload) and extra text elements per screen — draggable in the preview, per-element
   inspector (width, size, weight, font, colour, align, rotate, opacity), localized text via
   content fields, validated (missing assets, duplicate ids) and hashed for incremental renders.
+
+## UX pass (2026-08-20)
+
+- Undo/redo (cmd+Z / shift+cmd+Z) across manifest and copy edits, drags included; autosave
+  persists whatever undo restores. Text inputs keep their native undo.
+- Arrow keys nudge the selected element (phone / text / layer); shift = coarse steps.
+- Hover shows a faint dashed outline on anything draggable in the preview.
+- Screen settings (template, order, capture, panorama) collapsed behind a summary; the panel
+  now leads with Element inspector and Copy.
+- Layer stacking controls (back/front) in the element inspector.
+- Double-click a frame in Strip/Locales to open it in Single mode.
+
+Known further UX debt, in priority order: rotate/scale handles on layers and text (phone has
+them); marquee-select and multi-nudge; per-slice text offsets on panoramas; bulk "create
+missing locale files" action; generation progress inline on the canvas; empty-state guidance
+for new apps (no captures yet).
