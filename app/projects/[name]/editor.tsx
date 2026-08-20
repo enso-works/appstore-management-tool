@@ -1086,6 +1086,10 @@ export default function Editor({ name }: { name: string }) {
                 items={canvasItems}
                 selectedId={canvasSelectedId}
                 onSelect={onCanvasSelect}
+                onOpen={(id) => {
+                  onCanvasSelect(id);
+                  setCanvasMode("single");
+                }}
                 mode={canvasMode}
                 storeLook={storeLook}
                 interactive

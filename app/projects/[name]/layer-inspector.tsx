@@ -306,6 +306,40 @@ export default function LayerInspector({
               <span className={styles.muted}>{Math.round(num(layer.opacity, 1) * 100)}%</span>
             </span>
           </label>
+          <label className={styles.row}>
+            <span title="later elements draw on top">Stacking</span>
+            <span className={styles.inline}>
+              <button
+                className={styles.btnSmall}
+                title="move down (drawn earlier)"
+                disabled={layers.indexOf(layer) === 0}
+                onClick={() => {
+                  const i = layers.indexOf(layer);
+                  const next = [...layers];
+                  [next[i - 1], next[i]] = [next[i], next[i - 1]];
+                  onChange(next);
+                }}
+              >
+                ↓ back
+              </button>
+              <button
+                className={styles.btnSmall}
+                title="move up (drawn on top)"
+                disabled={layers.indexOf(layer) === layers.length - 1}
+                onClick={() => {
+                  const i = layers.indexOf(layer);
+                  const next = [...layers];
+                  [next[i], next[i + 1]] = [next[i + 1], next[i]];
+                  onChange(next);
+                }}
+              >
+                ↑ front
+              </button>
+              <span className={styles.muted}>
+                {layers.indexOf(layer) + 1}/{layers.length}
+              </span>
+            </span>
+          </label>
           <div className={styles.inline}>
             <span className={styles.small}>drag it in the preview to position</span>
             <span className={styles.spacer} />

@@ -34,6 +34,8 @@ export interface PreviewCanvasProps {
   belowRow?: { label: string; images: string[] };
   /** Element to highlight in the single-mode iframe: "phone" | "background" | "text:<slice>". */
   highlightEl?: string | null;
+  /** Double-click on a frame (strip/locales): open it in Single mode. */
+  onOpen?: (id: string) => void;
 }
 
 type Zoom = "fit" | number;
@@ -61,6 +63,7 @@ export default function PreviewCanvas({
   interactive = false,
   belowRow,
   highlightEl,
+  onOpen,
 }: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -234,11 +237,22 @@ export default function PreviewCanvas({
     drag.current = null;
     setDragging(false);
     if (moved < 4) {
-      // A click (not a drag): select the frame under the cursor.
+      // A click (not a drag): select the frame under the cursor; a double click opens it.
       const el = (e.target as HTMLElement).closest("[data-frame-id]") as HTMLElement | null;
-      if (el?.dataset.frameId) onSelect(el.dataset.frameId);
+      if (el?.dataset.frameId) {
+        const id = el.dataset.frameId;
+        const now = Date.now();
+        if (lastClick.current && lastClick.current.id === id && now - lastClick.current.at < 350) {
+          lastClick.current = null;
+          onOpen?.(id);
+        } else {
+          lastClick.current = { id, at: now };
+          onSelect(id);
+        }
+      }
     }
   };
+  const lastClick = useRef<{ id: string; at: number } | null>(null);
 
   const labelFont = Math.max(9, Math.round(W * 0.045 * effS));
 
