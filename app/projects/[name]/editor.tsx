@@ -1572,17 +1572,44 @@ export default function Editor({ name }: { name: string }) {
                     const c = OVERRIDE_CONTROLS[key] ?? { label: key, kind: "text" as const };
                     const v = screen.overrides[key];
                     if (key === "shell") {
-                      const current = typeof v === "string" ? v : "";
+                      const famKey = target?.family ?? "iphone";
+                      const current =
+                        typeof v === "string"
+                          ? v
+                          : v && typeof v === "object"
+                            ? ((v as Record<string, string>)[famKey] ?? "")
+                            : "";
                       const family = target?.family === "ipad" ? "iPad" : "iPhone";
+                      const families = [...new Set(snap.targets.map((t) => t.family))];
+                      // With several device families, the shell is stored per family so
+                      // the iPhone target can wear an iPhone frame and the iPad an iPad one.
+                      const setShell = (value: string) => {
+                        const prev = screen.overrides.shell;
+                        if (families.length <= 1 && typeof prev !== "object") {
+                          setOverride("shell", value);
+                          return;
+                        }
+                        const map: Record<string, string> =
+                          prev && typeof prev === "object"
+                            ? { ...(prev as Record<string, string>) }
+                            : typeof prev === "string" && prev
+                              ? Object.fromEntries(families.filter((f) => f !== famKey).map((f) => [f, prev]))
+                              : {};
+                        if (value) map[famKey] = value;
+                        else delete map[famKey];
+                        setOverride("shell", Object.keys(map).length ? map : "");
+                      };
                       return (
                         <label key={key} className={styles.row}>
-                          <span title="neutral CSS shell or an official device frame (store-shots frames setup)">
-                            Device shell
+                          <span
+                            title={`neutral CSS shell or an official device frame (store-shots frames setup)${families.length > 1 ? `; applies to the ${famKey} target — switch the target above to set the other device` : ""}`}
+                          >
+                            Device shell{families.length > 1 ? ` (${famKey})` : ""}
                           </span>
                           <select
                             className={styles.select}
                             value={current}
-                            onChange={(e) => setOverride("shell", e.target.value)}
+                            onChange={(e) => setShell(e.target.value)}
                           >
                             <option value="">default (dark shell)</option>
                             <optgroup label="Neutral">

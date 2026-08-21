@@ -12,7 +12,7 @@ import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
 import { requiredFontFamilies, resolveFontStack } from "./fonts";
 import { GlyphChecker, suggestFamilyFor } from "./glyphs";
-import { frameNameFromShell, framesAvailable, getFrame } from "./frames";
+import { frameNameFromShell, framesAvailable, getFrame, shellValues } from "./frames";
 
 export interface ValidationResult {
   issues: IssueList;
@@ -175,8 +175,9 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
           }
         }
       }
-      const frameName = frameNameFromShell(screen.overrides.shell);
-      if (frameName && !getFrame(frameName)) {
+      for (const shellValue of shellValues(screen.overrides.shell)) {
+        const frameName = frameNameFromShell(shellValue);
+        if (!frameName || getFrame(frameName)) continue;
         issues.error(
           "manifest.frame-missing",
           `Screen "${screen.id}" uses device frame "${frameName}", which is not available locally`,

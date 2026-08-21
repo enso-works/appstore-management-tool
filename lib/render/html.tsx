@@ -5,7 +5,7 @@ import { getTemplateModule } from "../../templates";
 import type { BrandTheme, ResolvedLayer, TemplateRenderInput } from "../../templates/types";
 import type { Project } from "../config";
 import { fontFaceCss, fontFamilyCss, resolveFontStack, type ResolvedFont } from "../fonts";
-import { frameNameFromShell, getFrame } from "../frames";
+import { frameNameFromShell, getFrame, resolveShell } from "../frames";
 import type { RenderJob } from "../render-plan";
 import type { LocaleContent } from "../schema";
 
@@ -53,6 +53,9 @@ export function templateInputFor(
   const mod = getTemplateModule(job.screen.template);
   if (!mod) throw new Error(`Unknown template "${job.screen.template}"`);
   const overrides = mod.overridesSchema.parse(job.screen.overrides) as Record<string, unknown>;
+  // Templates always see one concrete shell value for the target being rendered.
+  overrides.shell = resolveShell(overrides.shell, job.target.family) ?? "";
+  if (overrides.shell === "") delete overrides.shell;
   const fields = content.screens[job.screen.id] ?? {};
   const layers: ResolvedLayer[] = (job.screen.layers ?? []).map((layer) =>
     layer.type === "image"
@@ -109,7 +112,7 @@ export function renderArtworkHtml(
     );
   }
   const input = templateInputFor(project, job, content, urls.sourceImage, "export", stack, urls.assetUrl);
-  const frameName = frameNameFromShell(job.screen.overrides.shell);
+  const frameName = frameNameFromShell(resolveShell(job.screen.overrides.shell, job.target.family));
   if (frameName) {
     const frame = getFrame(frameName);
     if (!frame) {

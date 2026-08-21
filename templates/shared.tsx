@@ -3,6 +3,11 @@ import { z } from "zod";
 import { BACKGROUND_IMAGE_RE } from "../lib/schema";
 import { ARTWORK_ATTR, type TemplateRenderInput } from "./types";
 
+const shellValueSchema = z.union([
+  z.enum(["dark", "light", "none"]),
+  z.string().regex(/^frame:.+/, 'use "frame:<device frame name>"'),
+]);
+
 /**
  * Overrides every template accepts. Semantic controls plus enough positional
  * freedom to recreate hand-made store art: the device can be scaled, nudged in
@@ -47,9 +52,17 @@ export const commonOverridesSchema = z.strictObject({
   textAlign: z.enum(["start", "center", "end"]).optional(),
   /** Text colour override (any CSS colour); default brand.onPrimary. */
   textColor: z.string().min(1).optional(),
-  /** Neutral shell ("dark" | "light" | "none") or an official device frame: "frame:<name>" (see `store-shots frames list`). */
+  /**
+   * Neutral shell ("dark" | "light" | "none") or an official device frame:
+   * "frame:<name>" (see `store-shots frames list`). Either one value for every
+   * target, or a map keyed by target family ({ "iphone": ..., "ipad": ... })
+   * when the same screen needs a different frame per device.
+   */
   shell: z
-    .union([z.enum(["dark", "light", "none"]), z.string().regex(/^frame:.+/, 'use "frame:<device frame name>"')])
+    .union([
+      shellValueSchema,
+      z.record(z.string().min(1), shellValueSchema),
+    ])
     .optional(),
 });
 

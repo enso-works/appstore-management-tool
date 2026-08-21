@@ -144,6 +144,30 @@ export function frameNameFromShell(shell: unknown): string | undefined {
   return typeof shell === "string" && shell.startsWith("frame:") ? shell.slice("frame:".length).trim() : undefined;
 }
 
+/**
+ * A shell override is either one value for every target ("dark" | "light" |
+ * "none" | "frame:<name>") or a map keyed by target family ({ iphone, ipad,
+ * ... }), so one screen can wear an iPhone frame on the iPhone target and an
+ * iPad frame on the iPad target.
+ */
+export function resolveShell(shell: unknown, family: string): string | undefined {
+  if (typeof shell === "string") return shell;
+  if (shell && typeof shell === "object") {
+    const v = (shell as Record<string, unknown>)[family];
+    return typeof v === "string" ? v : undefined;
+  }
+  return undefined;
+}
+
+/** Every concrete shell value an override can resolve to (for validation). */
+export function shellValues(shell: unknown): string[] {
+  if (typeof shell === "string") return [shell];
+  if (shell && typeof shell === "object") {
+    return Object.values(shell as Record<string, unknown>).filter((v): v is string => typeof v === "string");
+  }
+  return [];
+}
+
 /** Run `fastlane frameit download_frames` (the only network step; explicit user action). */
 export function downloadFrames(log: (line: string) => void = () => {}): number {
   const bin = fastlaneBinary();

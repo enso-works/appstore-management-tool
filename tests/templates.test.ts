@@ -230,6 +230,25 @@ describe("device frames", () => {
     expect(mod.overridesSchema.safeParse({ shell: "frame:Apple iPhone 16 Pro Max Black Titanium" }).success).toBe(true);
     expect(mod.overridesSchema.safeParse({ shell: "bogus" }).success).toBe(false);
   });
+
+  it("accepts and resolves a per-family shell map", async () => {
+    const mod = templateModules["hero-top"];
+    const perFamily = { iphone: "frame:Apple iPhone 16 Pro Max Black Titanium", ipad: "frame:Apple iPad Pro 13" };
+    expect(mod.overridesSchema.safeParse({ shell: perFamily }).success).toBe(true);
+    expect(mod.overridesSchema.safeParse({ shell: { iphone: "bogus" } }).success).toBe(false);
+
+    const { resolveShell, shellValues } = await import("../lib/frames");
+    expect(resolveShell(perFamily, "iphone")).toBe("frame:Apple iPhone 16 Pro Max Black Titanium");
+    expect(resolveShell(perFamily, "ipad")).toBe("frame:Apple iPad Pro 13");
+    expect(resolveShell(perFamily, "phone")).toBeUndefined();
+    expect(resolveShell("light", "ipad")).toBe("light");
+    expect(resolveShell(undefined, "ipad")).toBeUndefined();
+    expect(shellValues(perFamily).sort()).toEqual([
+      "frame:Apple iPad Pro 13",
+      "frame:Apple iPhone 16 Pro Max Black Titanium",
+    ]);
+    expect(shellValues("dark")).toEqual(["dark"]);
+  });
 });
 
 describe("feature graphic", () => {
