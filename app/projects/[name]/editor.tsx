@@ -11,6 +11,7 @@ import type { FitResult } from "@/lib/render/fit";
 import type { ReadinessReport } from "@/lib/readiness";
 import type { GenerationSummary } from "@/lib/generate";
 import StorePanel from "./store-panel";
+import ReleasePanel from "./release-panel";
 import BackgroundEditor from "./background-editor";
 import ColorField from "./color-field";
 import LayerInspector from "./layer-inspector";
@@ -138,7 +139,7 @@ export default function Editor({ name }: { name: string }) {
   });
   const [showLog, setShowLog] = useState(false);
   const [newScreenId, setNewScreenId] = useState("");
-  const [view, setView] = useState<"screens" | "store">("screens");
+  const [view, setView] = useState<"screens" | "store" | "release">("screens");
   const [canvasMode, setCanvasMode] = useState<"single" | "strip" | "locales">("single");
   const [storeLook, setStoreLook] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -1011,6 +1012,13 @@ export default function Editor({ name }: { name: string }) {
           >
             Store
           </button>
+          <button
+            className={`${styles.tab} ${view === "release" ? styles.tabActive : ""}`}
+            onClick={() => setView("release")}
+            title="review the generated screenshots and sign off each locale"
+          >
+            Release
+          </button>
         </span>
         {view === "screens" && (
           <>
@@ -1108,6 +1116,11 @@ export default function Editor({ name }: { name: string }) {
         </button>
       </header>
 
+      {view === "release" && (
+        <div className={styles.storeArea}>
+          <ReleasePanel name={name} locales={snap.config.locales} readiness={snap.readiness} />
+        </div>
+      )}
       {view === "store" && (
         <div className={styles.storeArea}>
           <StorePanel

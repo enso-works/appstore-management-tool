@@ -412,9 +412,10 @@ function safeAppVersion(project: Project): string | undefined {
   }
 }
 
-function readToolVersion(): string {
+export function readToolVersion(): string {
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.resolve(import.meta.dirname, "..", "package.json"), "utf8")) as {
+    const here = import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname);
+    const pkg = JSON.parse(fs.readFileSync(path.resolve(here, "..", "package.json"), "utf8")) as {
       version?: string;
     };
     return pkg.version ?? "0";
@@ -427,7 +428,7 @@ function readToolVersion(): string {
 let templatesHashCache: string | undefined;
 export function templatesSourceHash(): string {
   if (templatesHashCache) return templatesHashCache;
-  const dir = path.resolve(import.meta.dirname, "..", "templates");
+  const dir = path.resolve(import.meta.dirname ?? path.dirname(new URL(import.meta.url).pathname), "..", "templates");
   const h = crypto.createHash("sha256");
   for (const name of fs.readdirSync(dir).sort()) {
     if (/\.tsx?$/.test(name)) h.update(name).update(fs.readFileSync(path.join(dir, name)));

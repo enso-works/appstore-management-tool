@@ -23,11 +23,13 @@ const MIME: Record<string, string> = {
 };
 
 /**
- * Serve a raw capture or a font file to the preview. Only two roots are
- * reachable (the app's store/raw and the fonts dirs) and every path is
- * resolved inside them; anything else is 404.
+ * Serve a raw capture, generated output or font file to the editor. Only the
+ * named roots are reachable and every path is resolved inside its root;
+ * anything else is 404.
  *   ?kind=raw&path=iphone/en-US/01-home.png
  *   ?kind=asset&path=backgrounds/waves.png
+ *   ?kind=shot&path=en-US/01_hero_IPHONE_69.png     (fastlane/screenshots)
+ *   ?kind=sheet&path=en-US_IPHONE_69.png            (store/generated/sheets)
  *   ?kind=font&src=app|bundled&path=inter/inter-400.ttf
  */
 export async function GET(req: Request, ctx: Ctx) {
@@ -40,10 +42,12 @@ export async function GET(req: Request, ctx: Ctx) {
     let root: string;
     if (kind === "raw") root = project.paths.raw;
     else if (kind === "asset") root = project.paths.assets;
+    else if (kind === "shot") root = project.paths.outputScreenshots;
+    else if (kind === "sheet") root = path.join(project.paths.generated, "sheets");
     else if (kind === "devframe") root = framesDir();
     else if (kind === "font")
       root = url.searchParams.get("src") === "bundled" ? bundledFontsDir() : appFontsDir(project);
-    else throw new HttpError(400, "kind must be raw, asset, font or devframe");
+    else throw new HttpError(400, "kind must be raw, asset, shot, sheet, font or devframe");
     let abs: string;
     try {
       abs = resolveWithin(root, rel);
