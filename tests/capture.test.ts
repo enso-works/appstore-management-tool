@@ -185,14 +185,18 @@ describe("capture --all", () => {
     expect(r.captured).toHaveLength(1);
     expect(r.skipped).toEqual([{ screenId: "planning", reason: "no source.deepLink in the manifest" }]);
     expect(calls.some((c) => c[2] === "openurl" && c[4] === "demo://home")).toBe(true);
-    // The app is terminated before the deep link so SpringBoard routes it
-    // straight through instead of asking "Open in <App>?".
-    expect(sleeps).toEqual([500, 10]);
+    // The app is restarted and frontmost before the deep link opens, so
+    // SpringBoard routes it directly instead of asking "Open in <App>?"
+    // (the confirmation appears for custom schemes opened from the home
+    // screen and would be screenshotted instead of the app).
+    expect(sleeps).toEqual([500, 1500, 10]);
     const termIdx = calls.findIndex((c) => c[2] === "terminate");
+    const launchIdx = calls.findIndex((c) => c[2] === "launch");
     const openIdx = calls.findIndex((c) => c[2] === "openurl");
     const shotIdx = calls.findIndex((c) => c[2] === "io");
     expect(termIdx).toBeGreaterThanOrEqual(0);
-    expect(termIdx).toBeLessThan(openIdx);
+    expect(termIdx).toBeLessThan(launchIdx);
+    expect(launchIdx).toBeLessThan(openIdx);
     expect(openIdx).toBeLessThan(shotIdx);
   });
 

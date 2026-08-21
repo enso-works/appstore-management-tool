@@ -210,12 +210,15 @@ export async function captureAll(project: Project, opts: CaptureAllOptions): Pro
         ? booted.find((b) => b.udid === opts.udid)
         : booted.find((b) => (/ipad|tablet/i.test(opts.device) ? b.family === "iPad" : b.family === "iPhone"));
       if (!sim) throw new Error(`no booted ${opts.device} simulator`);
-      // Terminate first: opening a custom scheme while the app is already
-      // frontmost makes SpringBoard show an "Open in <App>?" confirmation,
-      // which blocks the run. From cold, the link routes straight through.
+      // Restart the app and open the URL while it is frontmost: SpringBoard
+      // shows an "Open in <App>?" confirmation for custom schemes opened from
+      // the home screen (seen on the iOS 18.0 iPad runtime), which blocks the
+      // run and gets screenshotted; a frontmost app receives the link directly.
       if (project.config.bundleId) {
         spawn("xcrun", ["simctl", "terminate", sim.udid, project.config.bundleId], { encoding: "utf8" });
         await sleep(500);
+        spawn("xcrun", ["simctl", "launch", sim.udid, project.config.bundleId], { encoding: "utf8" });
+        await sleep(1500);
       }
       const open = spawn("xcrun", ["simctl", "openurl", sim.udid, screen.source.deepLink], { encoding: "utf8" });
       if (open.status !== 0) throw new Error(`openurl failed: ${open.stderr || open.stdout || `exit ${open.status}`}`);
