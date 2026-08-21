@@ -128,6 +128,27 @@ export const projectConfigSchema = z.strictObject({
     .prefault({}),
   /** Named override presets applied to screens from the editor ("apply preset"). */
   presets: z.record(z.string().min(1), z.record(z.string(), z.unknown())).prefault({}),
+  /** Automated capture: how to put the simulator into a known state (plan section 7.5). */
+  capture: z
+    .strictObject({
+      /**
+       * AsyncStorage entries written into the simulator's app container before
+       * each capture run, so screens never show an empty streak or onboarding.
+       * Values are stored as JSON; strings are written through unchanged.
+       * `{today}` and `{today-N}` in any string resolve to YYYY-MM-DD at run
+       * time, which keeps a seeded streak from going stale between runs.
+       */
+      state: z.record(z.string().min(1), z.unknown()).prefault({}),
+      /** Folder under Library/Application Support/<bundleId> that holds AsyncStorage. */
+      storageDir: safePathFragment.default("RCTAsyncLocalStorage_V1"),
+      /** App Store locale -> iOS AppleLanguages value, when the two differ. */
+      appleLanguages: z.record(localeCode, z.string().min(1)).prefault({}),
+      /** Seconds to wait after opening a deep link before the screenshot. */
+      settleSeconds: z.number().min(0).max(60).default(2),
+      /** Seconds to wait for SpringBoard after switching the simulator language. */
+      languageSettleSeconds: z.number().min(0).max(120).default(8),
+    })
+    .prefault({}),
   fastlane: z
     .strictObject({
       enabled: z.boolean().default(true),

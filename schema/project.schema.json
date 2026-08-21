@@ -342,6 +342,51 @@
         "additionalProperties": {}
       }
     },
+    "capture": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "state": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "minLength": 1
+          },
+          "additionalProperties": {}
+        },
+        "storageDir": {
+          "default": "RCTAsyncLocalStorage_V1",
+          "type": "string",
+          "minLength": 1
+        },
+        "appleLanguages": {
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "settleSeconds": {
+          "default": 2,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 60
+        },
+        "languageSettleSeconds": {
+          "default": 8,
+          "type": "number",
+          "minimum": 0,
+          "maximum": 120
+        }
+      },
+      "additionalProperties": false
+    },
     "fastlane": {
       "default": {},
       "type": "object",

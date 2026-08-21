@@ -215,6 +215,40 @@ store-shots capture --device iphone --locale en-US --screen home
 
 Raw captures at a smaller device (Braele's 1206×2622) remain usable: templates place the capture inside a shell at template-defined scale, so the raw pixel size only needs a matching aspect ratio.
 
+### 7.5 Unattended capture across locales (Phase 9)
+
+7.4 still describes the manual path, which stays available. `capture --locales`
+adds the automated one: for each locale it sets the simulator language,
+restarts SpringBoard, seeds a known app state, then walks every enabled screen
+that declares `source.deepLink`. The simulator language is restored afterwards
+unless `--keep-language` is passed.
+
+```text
+store-shots capture --locales all --device iphone --clean-status-bar
+```
+
+Three things make it work unattended:
+
+- **Deep links from cold.** Opening a custom scheme while the app is frontmost
+  makes SpringBoard show an "Open in <App>?" confirmation, which stalls the
+  run. `captureAll` now terminates the app first, so the link routes straight
+  through.
+- **Language via defaults + SpringBoard.** `-AppleLanguages` as a launch
+  argument does not reach an Expo app here. Writing the global domain and
+  kickstarting SpringBoard does, and costs a few seconds rather than the ~30s
+  of a shutdown/boot cycle. `capture.appleLanguages` maps a store locale onto a
+  different iOS language tag when the two differ (Braele: `da -> da-DK`).
+- **Seeded state.** `capture.state` in `store-shots.config.json` declares
+  AsyncStorage keys to write into the simulator container before capturing, so
+  screens never show onboarding or an empty streak. `{today}` and `{today-N}`
+  resolve at run time, which stops a seeded streak going stale between runs.
+  Objects are JSON-stringified; the app must be stopped first or it rewrites
+  the file from memory.
+
+Limits: a screen must be reachable by URL. State internal to a flow (Braele's
+onboarding intent step) still needs a manual capture or its own route. Seeding
+assumes AsyncStorage's inline manifest, which is what these Expo apps use.
+
 ## 8. Configuration
 
 ### 8.1 `store-shots.config.json` (per app)
@@ -628,3 +662,4 @@ Recheck Apple and fastlane docs when bumping the device registry or the fastlane
 - [x] Phase 7 — hardening (2026-08-19: incremental rendering by input checksum with stale-file cleanup and `--force`, `capture` helper with clean status bar and overwrite guard, lane-exists preflight, template authoring + troubleshooting docs; CI JSON via `--json` on validate/generate/readiness)
 - [x] Post-v1 — editor canvas: zoom (pinch/⌘+wheel/buttons/keys), drag-to-pan, Strip mode (every screen of the locale/target side by side, per-screen status, click to select) with an App Store look toggle (2026-08-19)
 - [x] Phase 8 — Google Play, first cut (2026-08-19: `play-phone-1080x1920` target (opt-in per app via config.targets + sourceDevices), output into `fastlane/metadata/android/<play-locale>/images/phoneScreenshots/` (supply layout), App Store -> Play locale mapping (da -> da-DK ...), readiness scans per-platform dirs, generated manifest paths are app-root-relative. Not yet: feature graphic template, Play text metadata (title 30 / short 80 / full 4000) in the Store tab, `supply` lane wiring)
+- [x] Phase 9 — unattended capture across locales (2026-08-21: `capture --locales all|<list>` drives language switch, `capture.state` seeding with `{today}` placeholders, deep-link capture from cold, language restore; Braele manifest given deep links and `localized: true`, all seven locales captured on iPhone)

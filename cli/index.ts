@@ -14,7 +14,7 @@ import { addGoogleFont, appFontsDir, checkFont, listFonts, resolveFont } from ".
 import { listMetadataLocales, readMetadataLocale } from "../lib/metadata";
 import { METADATA_FIELDS } from "../lib/schema";
 import { LANE_KEYS, preflightLane, runLane, type LaneKey } from "../lib/fastlane";
-import { captureAll, captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
+import { captureAll, captureLocales, captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
 import { writeContactSheets } from "../lib/sheet";
 import { downloadFrames, framesAvailable, framesDir, listFrames } from "../lib/frames";
 
@@ -420,6 +420,9 @@ program
   .description("Screenshot a booted simulator into store/raw/<device>/<locale>/ with the name the manifest expects")
   .option("--screen <id>", "screen id from store/manifest.json (required unless --list or --all)")
   .option("--all", "capture every enabled screen that declares source.deepLink, in order")
+  .option("--locales <list>", 'capture each locale unattended: "all" or a comma-separated list (implies --all)')
+  .option("--no-seed", "skip the capture.state seeding declared in store-shots.config.json")
+  .option("--keep-language", "leave the simulator in the last captured language instead of restoring it")
   .option("--settle <seconds>", "wait after opening each deep link (default 2)")
   .option("--device <device>", "raw-capture device folder (iphone | ipad)", "iphone")
   .option("--locale <locale>", "locale folder (default: the project's default locale)")
@@ -432,6 +435,9 @@ program
     async (opts: {
       screen?: string;
       all?: boolean;
+      locales?: string;
+      seed?: boolean;
+      keepLanguage?: boolean;
       settle?: string;
       device: string;
       locale?: string;
@@ -449,6 +455,38 @@ program
       }
       const project = openProject(opts.project);
       const locale = opts.locale ?? project.config.defaultLocale;
+      if (opts.locales) {
+        const wanted =
+          opts.locales === "all"
+            ? project.config.locales
+            : opts.locales
+                .split(",")
+                .map((l) => l.trim())
+                .filter(Boolean);
+        const unknown = wanted.filter((l) => !project.config.locales.includes(l));
+        if (unknown.length) {
+          console.error(`not in config.locales: ${unknown.join(", ")}`);
+          process.exit(2);
+        }
+        const r = await captureLocales(project, {
+          device: opts.device,
+          locales: wanted,
+          udid: opts.udid,
+          cleanStatusBar: opts.cleanStatusBar,
+          settleSeconds: opts.settle ? Number(opts.settle) : undefined,
+          noSeed: opts.seed === false,
+          keepLanguage: opts.keepLanguage,
+          log: (l) => console.log(l),
+        });
+        console.log("");
+        let failed = 0;
+        for (const p of r.perLocale) {
+          console.log(`${p.locale}: ${p.captured} captured, ${p.skipped.length} skipped`);
+          for (const sk of p.skipped) console.log(`  skipped ${sk.screenId}: ${sk.reason}`);
+          if (!p.captured) failed++;
+        }
+        process.exit(failed === r.perLocale.length ? 1 : 0);
+      }
       if (opts.all) {
         const r = await captureAll(project, {
           device: opts.device,

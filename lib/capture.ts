@@ -210,6 +210,13 @@ export async function captureAll(project: Project, opts: CaptureAllOptions): Pro
         ? booted.find((b) => b.udid === opts.udid)
         : booted.find((b) => (/ipad|tablet/i.test(opts.device) ? b.family === "iPad" : b.family === "iPhone"));
       if (!sim) throw new Error(`no booted ${opts.device} simulator`);
+      // Terminate first: opening a custom scheme while the app is already
+      // frontmost makes SpringBoard show an "Open in <App>?" confirmation,
+      // which blocks the run. From cold, the link routes straight through.
+      if (project.config.bundleId) {
+        spawn("xcrun", ["simctl", "terminate", sim.udid, project.config.bundleId], { encoding: "utf8" });
+        await sleep(500);
+      }
       const open = spawn("xcrun", ["simctl", "openurl", sim.udid, screen.source.deepLink], { encoding: "utf8" });
       if (open.status !== 0) throw new Error(`openurl failed: ${open.stderr || open.stdout || `exit ${open.status}`}`);
       log(`open ${screen.source.deepLink}`);
@@ -224,4 +231,213 @@ export async function captureAll(project: Project, opts: CaptureAllOptions): Pro
     }
   }
   return { captured, skipped };
+}
+
+/* ------------------------------------------------------------------ *
+ * Automated capture (plan section 7.5)
+ *
+ * Everything below removes the manual half of section 7.4: instead of the
+ * operator switching the simulator language, navigating by hand and running
+ * `capture` once per screen, `captureLocales` drives the whole matrix.
+ * ------------------------------------------------------------------ */
+
+/** Resolve `{today}` / `{today-N}` inside seeded state to YYYY-MM-DD. */
+export function resolveDatePlaceholders(value: string, today: Date): string {
+  return value.replace(/\{today(?:-(\d+))?\}/g, (_m, back?: string) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (back ? Number(back) : 0));
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}-${m}-${day}`;
+  });
+}
+
+function resolveDeep(value: unknown, today: Date): unknown {
+  if (typeof value === "string") return resolveDatePlaceholders(value, today);
+  if (Array.isArray(value)) return value.map((v) => resolveDeep(v, today));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, resolveDeep(v, today)]));
+  }
+  return value;
+}
+
+/**
+ * Write the app's AsyncStorage manifest inside the simulator container.
+ * AsyncStorage keeps small values inline in `manifest.json`, so seeding is a
+ * single JSON write; the app must not be running or it will overwrite this
+ * from its in-memory cache on the next mutation.
+ */
+export function seedAppState(opts: {
+  udid: string;
+  bundleId: string;
+  state: Record<string, unknown>;
+  storageDir: string;
+  today?: Date;
+  exec?: typeof execFileSync;
+}): { file: string; keys: string[] } | null {
+  const exec = opts.exec ?? execFileSync;
+  const keys = Object.keys(opts.state);
+  if (!keys.length) return null;
+  let container: string;
+  try {
+    container = (
+      exec("xcrun", ["simctl", "get_app_container", opts.udid, opts.bundleId, "data"], { encoding: "utf8" }) as string
+    ).trim();
+  } catch (err) {
+    throw new Error(`app ${opts.bundleId} is not installed on ${opts.udid}: ${(err as Error).message}`);
+  }
+  const dir = path.join(container, "Library", "Application Support", opts.bundleId, opts.storageDir);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, "manifest.json");
+  const today = opts.today ?? new Date();
+  const existing: Record<string, string> = fs.existsSync(file)
+    ? (JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, string>)
+    : {};
+  for (const [key, raw] of Object.entries(opts.state)) {
+    const value = resolveDeep(raw, today);
+    existing[key] = typeof value === "string" ? value : JSON.stringify(value);
+  }
+  fs.writeFileSync(file, JSON.stringify(existing));
+  return { file, keys };
+}
+
+/** The AppleLanguages value for a store locale (config override, else the locale itself). */
+export function appleLanguageFor(locale: string, overrides: Record<string, string> = {}): string {
+  return overrides[locale] ?? locale;
+}
+
+/** Read the simulator's current language so a run can put it back. */
+export function currentSimulatorLanguage(udid: string, exec: typeof execFileSync = execFileSync): string | null {
+  try {
+    const out = exec("xcrun", ["simctl", "spawn", udid, "defaults", "read", "-g", "AppleLanguages"], {
+      encoding: "utf8",
+    }) as string;
+    const m = out.match(/"?([A-Za-z]{2,3}(?:-[A-Za-z]{2,4})?)"?/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Switch the simulator language and restart SpringBoard so apps pick it up.
+ * Launch arguments (`-AppleLanguages`) do not survive here, and a full
+ * shutdown/boot costs about half a minute per locale; kickstarting SpringBoard
+ * is the cheap way that actually works.
+ */
+export function setSimulatorLanguage(opts: {
+  udid: string;
+  language: string;
+  locale?: string;
+  spawn?: typeof spawnSync;
+}): void {
+  const spawn = opts.spawn ?? spawnSync;
+  const run = (args: string[]) => {
+    const r = spawn("xcrun", args, { encoding: "utf8" });
+    if (r.status !== 0) throw new Error(`${args.join(" ")} failed: ${r.stderr || r.stdout || `exit ${r.status}`}`);
+  };
+  run(["simctl", "spawn", opts.udid, "defaults", "write", "-g", "AppleLanguages", "-array", opts.language]);
+  run([
+    "simctl",
+    "spawn",
+    opts.udid,
+    "defaults",
+    "write",
+    "-g",
+    "AppleLocale",
+    "-string",
+    (opts.locale ?? opts.language).replace("-", "_"),
+  ]);
+  // Not fatal: some runtimes reject the service name but still apply the change.
+  spawn("xcrun", ["simctl", "spawn", opts.udid, "launchctl", "kickstart", "-k", "system/com.apple.SpringBoard"], {
+    encoding: "utf8",
+  });
+}
+
+export interface CaptureLocalesOptions {
+  device: string;
+  /** Store locales to capture, in order. */
+  locales: string[];
+  udid?: string;
+  cleanStatusBar?: boolean;
+  settleSeconds?: number;
+  /** Skip seeding even when the config declares capture.state. */
+  noSeed?: boolean;
+  /** Leave the simulator in the last captured language instead of restoring. */
+  keepLanguage?: boolean;
+  today?: Date;
+  log?: (line: string) => void;
+  exec?: typeof execFileSync;
+  spawn?: typeof spawnSync;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+export interface CaptureLocalesResult {
+  perLocale: { locale: string; captured: number; skipped: { screenId: string; reason: string }[] }[];
+  restoredLanguage: string | null;
+}
+
+/**
+ * Capture every enabled deep-linked screen for each locale, unattended:
+ * switch the simulator language, seed a known app state, then walk the screens.
+ */
+export async function captureLocales(project: Project, opts: CaptureLocalesOptions): Promise<CaptureLocalesResult> {
+  const exec = opts.exec ?? execFileSync;
+  const spawn = opts.spawn ?? spawnSync;
+  const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const log = opts.log ?? (() => {});
+  const cfg = project.config;
+
+  const booted = listBootedSimulators(exec);
+  const sim = opts.udid
+    ? booted.find((b) => b.udid === opts.udid)
+    : booted.find((b) => (/ipad|tablet/i.test(opts.device) ? b.family === "iPad" : b.family === "iPhone"));
+  if (!sim) throw new Error(`no booted ${opts.device} simulator (try: capture --list)`);
+
+  const originalLanguage = currentSimulatorLanguage(sim.udid, exec);
+  const perLocale: CaptureLocalesResult["perLocale"] = [];
+
+  try {
+    for (const locale of opts.locales) {
+      const language = appleLanguageFor(locale, cfg.capture.appleLanguages);
+      log(`\n[${locale}] language -> ${language}`);
+      setSimulatorLanguage({ udid: sim.udid, language, locale, spawn });
+      await sleep((cfg.capture.languageSettleSeconds ?? 8) * 1000);
+
+      if (!opts.noSeed && cfg.bundleId && Object.keys(cfg.capture.state).length) {
+        // Seed with the app stopped, or it rewrites the file from memory.
+        spawn("xcrun", ["simctl", "terminate", sim.udid, cfg.bundleId], { encoding: "utf8" });
+        await sleep(500);
+        const seeded = seedAppState({
+          udid: sim.udid,
+          bundleId: cfg.bundleId,
+          state: cfg.capture.state,
+          storageDir: cfg.capture.storageDir,
+          today: opts.today,
+          exec,
+        });
+        if (seeded) log(`[${locale}] seeded ${seeded.keys.length} storage keys`);
+      }
+
+      const r = await captureAll(project, {
+        device: opts.device,
+        locale,
+        udid: sim.udid,
+        cleanStatusBar: opts.cleanStatusBar,
+        settleSeconds: opts.settleSeconds ?? cfg.capture.settleSeconds,
+        log: (l) => log(`[${locale}] ${l}`),
+        exec,
+        spawn,
+        sleep,
+      });
+      perLocale.push({ locale, captured: r.captured.length, skipped: r.skipped });
+    }
+  } finally {
+    if (!opts.keepLanguage && originalLanguage) {
+      setSimulatorLanguage({ udid: sim.udid, language: originalLanguage, spawn });
+      log(`\nrestored simulator language to ${originalLanguage}`);
+    }
+  }
+
+  return { perLocale, restoredLanguage: opts.keepLanguage ? null : originalLanguage };
 }
