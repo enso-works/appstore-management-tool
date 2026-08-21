@@ -310,7 +310,13 @@ export default function PreviewCanvas({
                       height: H,
                       border: 0,
                       background: "#000",
-                      pointerEvents: interactive && mode === "single" ? "auto" : "none",
+                      // Single mode: the one shown frame is editable. Strip mode:
+                      // only the selected frame takes the pointer, so every other
+                      // frame stays click-to-select and drag-to-pan.
+                      pointerEvents:
+                        interactive && (mode === "single" || (mode === "strip" && item.id === selectedId))
+                          ? "auto"
+                          : "none",
                       display: "block",
                       transform: `translateX(${-slice * sW}px) scale(${effS})`,
                       transformOrigin: "0 0",

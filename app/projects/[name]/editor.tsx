@@ -419,6 +419,9 @@ export default function Editor({ name }: { name: string }) {
                 screen: j.screen,
                 fields: j.fields,
                 direction: content[j.locale]?.direction,
+                // The drag script is inert unless the canvas grants the frame
+                // pointer events (Strip mode, selected frame).
+                interactive: true,
                 strip: target ? stripWindow(manifest, j.screen.id, target.width) : undefined,
               }),
               signal: controller.signal,
@@ -1276,7 +1279,7 @@ export default function Editor({ name }: { name: string }) {
                     <span>
                       {target.width}×{target.height}
                       {canvasMode === "strip"
-                        ? ` · ${canvasItems.length} screens · ${locale}`
+                        ? ` · ${canvasItems.length} screens · ${locale} · selected frame: drag phone/text to move, ⌥ tilt, ⇧ scale`
                         : canvasMode === "locales"
                           ? ` · ${screenId} · ${canvasItems.length} locales`
                           : " · drag phone to move, ⌥ tilt, ⇧ scale"}
@@ -1985,6 +1988,7 @@ export default function Editor({ name }: { name: string }) {
                   ["+  −  0  1", "zoom in / out / fit / 100%"],
                   ["g", "layout guides"],
                   ["double-click frame", "open in Single mode"],
+                  ["drag on selected frame (Strip)", "position phone/text like Single mode"],
                   ["double-click screen row", "open in Single mode"],
                   ["click element or chips", "select for the inspector"],
                   ["?", "this sheet"],
