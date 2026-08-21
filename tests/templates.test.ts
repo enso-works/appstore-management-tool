@@ -225,6 +225,30 @@ describe("device frames", () => {
     expect(html).not.toContain("box-shadow"); // no CSS shell when a real frame is used
   });
 
+  it("cover-crops the capture to the measured cut-out height", async () => {
+    const { renderStatic } = await import("../lib/render/ssr");
+    const mod = templateModules["hero-top"];
+    const html = renderStatic(
+      mod.render(
+        input("iphone-6.9-1320x2868", {
+          overrides: { shell: "frame:Test Frame" },
+          frame: {
+            url: "frame://test.png",
+            frameWidth: 1470,
+            frameHeight: 3000,
+            screenX: 75,
+            screenY: 66,
+            screenWidth: 1320,
+            screenHeight: 2000,
+          },
+        }),
+      ),
+    );
+    // Device width 0.8 * 1320 = 1056 -> s = 0.8; clip box = cut-out height * s.
+    expect(html).toContain("height:1600px");
+    expect(html).toContain("overflow:hidden");
+  });
+
   it("accepts frame:<name> in the shell override schema", () => {
     const mod = templateModules["hero-top"];
     expect(mod.overridesSchema.safeParse({ shell: "frame:Apple iPhone 16 Pro Max Black Titanium" }).success).toBe(true);

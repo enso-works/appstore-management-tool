@@ -128,6 +128,7 @@ export function renderArtworkHtml(
       screenX: frame.screenX,
       screenY: frame.screenY,
       screenWidth: frame.screenWidth,
+      screenHeight: frame.screenHeight,
       screenRadius: frame.screenRadius,
     };
   }

@@ -22,10 +22,12 @@ export interface DeviceFrame {
   file: string;
   frameWidth: number;
   frameHeight: number;
-  /** Screen cut-out (from offsets.json): left/top offset and width in frame pixels. */
+  /** Screen cut-out: left/top offset and size in frame pixels (measured from the alpha channel; offsets.json is the fallback). */
   screenX: number;
   screenY: number;
   screenWidth: number;
+  /** Cut-out height; absent when only offsets.json (which has no height) was available. */
+  screenHeight?: number;
   /** Corner radius of the screen cut-out in frame pixels (0 = square corners). */
   screenRadius: number;
 }
@@ -64,6 +66,48 @@ function offsetsFor(fileName: string): { offset: string; width: number } | undef
 }
 
 const radiusCache = new Map<string, number>();
+const cutoutCache = new Map<string, { x: number; y: number; width: number; height: number } | null>();
+
+/**
+ * Measure the screen cut-out directly from the frame PNG's alpha channel: the
+ * transparent span through the image centre, horizontally and vertically.
+ * offsets.json is fuzzy-matched by device name and is wrong for several iPad
+ * frames (an entry written for an older file of a different size wins the
+ * match), so the pixels are the authority and offsets.json only a fallback.
+ */
+export function measureScreenCutout(file: string): { x: number; y: number; width: number; height: number } | undefined {
+  const hit = cutoutCache.get(file);
+  if (hit !== undefined) return hit ?? undefined;
+  let out: { x: number; y: number; width: number; height: number } | null = null;
+  try {
+    const info = readPngInfo(file);
+    const png = decodeRgbaRows(file, info.height);
+    if (png) {
+      const alpha = (x: number, y: number) => png.rows[(y * png.width + x) * 4 + 3];
+      const cx = Math.floor(png.width / 2);
+      const cy = Math.floor(info.height / 2);
+      if (alpha(cx, cy) < 16) {
+        let x0 = cx;
+        while (x0 > 0 && alpha(x0 - 1, cy) < 16) x0--;
+        let x1 = cx;
+        while (x1 < png.width - 1 && alpha(x1 + 1, cy) < 16) x1++;
+        let y0 = cy;
+        while (y0 > 0 && alpha(cx, y0 - 1) < 16) y0--;
+        let y1 = cy;
+        while (y1 < info.height - 1 && alpha(cx, y1 + 1) < 16) y1++;
+        // A sane cut-out sits inside the frame; a span reaching an edge means
+        // the centre is part of the transparent background, not a cut-out.
+        if (x0 > 0 && y0 > 0 && x1 < png.width - 1 && y1 < info.height - 1) {
+          out = { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
+        }
+      }
+    }
+  } catch {
+    out = null;
+  }
+  cutoutCache.set(file, out);
+  return out ?? undefined;
+}
 
 /**
  * Corner radius of the frame's screen cut-out, measured from the alpha
@@ -107,11 +151,25 @@ function measureScreenRadius(file: string, screenX: number, screenY: number): nu
 export function getFrame(name: string): DeviceFrame | undefined {
   const file = path.join(framesDir(), `${name}.png`);
   if (!fileExists(file)) return undefined;
+  const info = readPngInfo(file);
+  const measured = measureScreenCutout(file);
+  if (measured) {
+    return {
+      name,
+      file,
+      frameWidth: info.width,
+      frameHeight: info.height,
+      screenX: measured.x,
+      screenY: measured.y,
+      screenWidth: measured.width,
+      screenHeight: measured.height,
+      screenRadius: measureScreenRadius(file, measured.x, measured.y),
+    };
+  }
   const off = offsetsFor(name);
   if (!off) return undefined;
   const m = /^\+?(\d+)\+(\d+)$/.exec(off.offset.trim());
   if (!m) return undefined;
-  const info = readPngInfo(file);
   return {
     name,
     file,

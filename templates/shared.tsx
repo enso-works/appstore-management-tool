@@ -375,7 +375,11 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
     // the requested device width; the capture sits exactly in the cut-out.
     const s = width / frame.screenWidth;
     const tilt = input.overrides.deviceTilt ?? 0;
-    const screenH = height; // capture height at requested width
+    // With a measured cut-out height the capture is cover-cropped to exactly
+    // the cut-out, so a capture of a different aspect never spills past the
+    // bezel or leaves a gap; without it (offsets.json fallback) the capture's
+    // own height is trusted, as before.
+    const screenH = frame.screenHeight ? frame.screenHeight * s : height;
     return (
       <div
         data-device=""
@@ -389,22 +393,33 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
           transformOrigin: "50% 50%",
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={input.sourceImageUrl}
-          alt=""
-          data-source=""
+        <div
           style={{
             position: "absolute",
             left: frame.screenX * s,
             top: frame.screenY * s,
             width,
             height: screenH,
-            objectFit: "cover",
-            objectPosition: "top center",
+            overflow: "hidden",
             borderRadius: frame.screenRadius ? frame.screenRadius * s : undefined,
           }}
-        />
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={input.sourceImageUrl}
+            alt=""
+            data-source=""
+            style={{
+              position: "absolute",
+              left: 0,
+              top: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              objectPosition: "top center",
+            }}
+          />
+        </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={frame.url}

@@ -66,6 +66,8 @@ export interface TemplateRenderInput<O = Record<string, unknown>> {
     screenX: number;
     screenY: number;
     screenWidth: number;
+    /** Cut-out height in frame pixels; when present the capture is cover-cropped to exactly the cut-out. */
+    screenHeight?: number;
     /** Screen cut-out corner radius in frame pixels; clips the capture so it stays inside rounded screens. */
     screenRadius?: number;
   };
