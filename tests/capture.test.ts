@@ -190,6 +190,11 @@ describe("capture --all", () => {
     // (the confirmation appears for custom schemes opened from the home
     // screen and would be screenshotted instead of the app).
     expect(sleeps).toEqual([500, 1500, 10]);
+    // The custom scheme is pre-approved so SpringBoard never shows the
+    // "Open in <App>?" confirmation (it would be screenshotted instead).
+    expect(
+      calls.some((c) => c.includes("com.apple.launchservices.schemeapproval") && c.some((a) => a.includes("-->demo"))),
+    ).toBe(true);
     const termIdx = calls.findIndex((c) => c[2] === "terminate");
     const launchIdx = calls.findIndex((c) => c[2] === "launch");
     const openIdx = calls.findIndex((c) => c[2] === "openurl");

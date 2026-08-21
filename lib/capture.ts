@@ -191,6 +191,7 @@ export async function captureAll(project: Project, opts: CaptureAllOptions): Pro
   const screens = [...manifest.screens].filter((s) => s.enabled).sort((a, b) => a.order - b.order);
   const captured: CaptureResult[] = [];
   const skipped: { screenId: string; reason: string }[] = [];
+  const approvedSchemes = new Set<string>();
   for (const screen of screens as ScreenDefinition[]) {
     if (!screen.source.deepLink) {
       skipped.push({ screenId: screen.id, reason: "no source.deepLink in the manifest" });
@@ -210,10 +211,31 @@ export async function captureAll(project: Project, opts: CaptureAllOptions): Pro
         ? booted.find((b) => b.udid === opts.udid)
         : booted.find((b) => (/ipad|tablet/i.test(opts.device) ? b.family === "iPad" : b.family === "iPhone"));
       if (!sim) throw new Error(`no booted ${opts.device} simulator`);
-      // Restart the app and open the URL while it is frontmost: SpringBoard
-      // shows an "Open in <App>?" confirmation for custom schemes opened from
-      // the home screen (seen on the iOS 18.0 iPad runtime), which blocks the
-      // run and gets screenshotted; a frontmost app receives the link directly.
+      // Pre-approve the custom scheme for simctl openurl: some runtimes
+      // (seen on the iOS 18.0 iPad simulator) otherwise show an
+      // "Open in <App>?" confirmation that blocks the run and gets
+      // screenshotted instead of the app.
+      const scheme = screen.source.deepLink.split(":")[0];
+      if (project.config.bundleId && scheme && !approvedSchemes.has(`${sim.udid}/${scheme}`)) {
+        spawn(
+          "xcrun",
+          [
+            "simctl",
+            "spawn",
+            sim.udid,
+            "defaults",
+            "write",
+            "com.apple.launchservices.schemeapproval",
+            `com.apple.CoreSimulator.CoreSimulatorBridge-->${scheme}`,
+            "-string",
+            project.config.bundleId,
+          ],
+          { encoding: "utf8" },
+        );
+        approvedSchemes.add(`${sim.udid}/${scheme}`);
+      }
+      // Restart the app and open the URL while it is frontmost: a frontmost
+      // app receives the link directly and starts from a clean screen.
       if (project.config.bundleId) {
         spawn("xcrun", ["simctl", "terminate", sim.udid, project.config.bundleId], { encoding: "utf8" });
         await sleep(500);
