@@ -1133,6 +1133,10 @@ export default function Editor({ name }: { name: string }) {
                     <button
                       className={`${styles.screenBtn} ${s.id === screenId ? styles.active : ""}`}
                       onClick={() => setScreenId(s.id)}
+                      onDoubleClick={() => {
+                        setScreenId(s.id);
+                        setCanvasMode("single");
+                      }}
                       title={st.title}
                     >
                       <span
@@ -1941,6 +1945,7 @@ export default function Editor({ name }: { name: string }) {
                   ["+  −  0  1", "zoom in / out / fit / 100%"],
                   ["g", "layout guides"],
                   ["double-click frame", "open in Single mode"],
+                  ["double-click screen row", "open in Single mode"],
                   ["click element or chips", "select for the inspector"],
                   ["?", "this sheet"],
                 ].map(([k, v]) => (
