@@ -175,6 +175,13 @@ export interface AddFontOptions {
   weights?: number[];
   /** Destination fonts dir (app store/assets/fonts or the bundled dir). */
   destDir: string;
+  /**
+   * Keep whatever requested weights the family actually has instead of failing
+   * when one is missing (Google silently drops absent weights). Used by the
+   * editor UI, where the caller cannot know the family's weights up front;
+   * the CLI keeps the strict default so scripts fail loudly.
+   */
+  allowMissingWeights?: boolean;
   fetchImpl?: typeof fetch;
 }
 
@@ -220,7 +227,7 @@ export async function addGoogleFont(opts: AddFontOptions): Promise<AddFontResult
     files.push({ path: `${slug}/${name}`, weight: face.weight, style: face.style, sha256: sha256File(abs) });
   }
   const missing = weights.filter((w) => !files.some((f) => f.weight === w));
-  if (missing.length) {
+  if (missing.length && !opts.allowMissingWeights) {
     // Google silently drops weights a family does not have; say so rather than render with the wrong weight.
     throw new Error(
       `"${family}" has no weight(s) ${missing.join(", ")} on Google Fonts; available: ${[...new Set(files.map((f) => f.weight))].join(", ")}`,

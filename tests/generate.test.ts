@@ -479,6 +479,15 @@ describe("fonts", () => {
           fetchImpl,
         }),
       ).rejects.toThrow(/no weight\(s\) 900/);
+      // allowMissingWeights (editor UI): keep the weights the family has instead of failing.
+      const partial = await addGoogleFont({
+        family: "Demo Sans",
+        weights: [400, 900],
+        destDir: path.join(p.paths.assets, "fonts"),
+        allowMissingWeights: true,
+        fetchImpl,
+      });
+      expect(partial.files.map((f) => f.weight)).toEqual([400, 700]);
     } finally {
       fx.cleanup();
     }
