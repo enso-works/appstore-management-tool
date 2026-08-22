@@ -86,19 +86,46 @@ export function measureScreenCutout(file: string): { x: number; y: number; width
       const alpha = (x: number, y: number) => png.rows[(y * png.width + x) * 4 + 3];
       const cx = Math.floor(png.width / 2);
       const cy = Math.floor(info.height / 2);
-      if (alpha(cx, cy) < 16) {
-        let x0 = cx;
-        while (x0 > 0 && alpha(x0 - 1, cy) < 16) x0--;
-        let x1 = cx;
-        while (x1 < png.width - 1 && alpha(x1 + 1, cy) < 16) x1++;
-        let y0 = cy;
-        while (y0 > 0 && alpha(cx, y0 - 1) < 16) y0--;
-        let y1 = cy;
-        while (y1 < info.height - 1 && alpha(cx, y1 + 1) < 16) y1++;
-        // A sane cut-out sits inside the frame; a span reaching an edge means
-        // the centre is part of the transparent background, not a cut-out.
-        if (x0 > 0 && y0 > 0 && x1 < png.width - 1 && y1 < info.height - 1) {
-          out = { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
+      /** Contiguous transparent span through (x, y) along one axis, or null. */
+      const span = (x: number, y: number, dx: number, dy: number): [number, number] | null => {
+        if (alpha(x, y) >= 16) return null;
+        let a0 = dx ? x : y;
+        while (a0 > 0 && alpha(dx ? a0 - 1 : x, dy ? a0 - 1 : y) < 16) a0--;
+        let a1 = dx ? x : y;
+        const max = (dx ? png.width : info.height) - 1;
+        while (a1 < max && alpha(dx ? a1 + 1 : x, dy ? a1 + 1 : y) < 16) a1++;
+        return [a0, a1];
+      };
+      const h0 = span(cx, cy, 1, 0);
+      if (h0) {
+        let [x0, x1] = h0;
+        // The Dynamic Island / notch is opaque artwork INSIDE the cut-out, at
+        // the top centre: a single centre-column scan stops at its bottom edge
+        // and reports the screen ~150px too low. Sample several columns clear
+        // of the island (and rows clear of nothing, symmetrically) and take
+        // the union.
+        let y0 = Infinity;
+        let y1 = -Infinity;
+        for (const f of [0.2, 0.5, 0.8]) {
+          const v = span(Math.round(x0 + (x1 - x0) * f), cy, 0, 1);
+          if (v) {
+            y0 = Math.min(y0, v[0]);
+            y1 = Math.max(y1, v[1]);
+          }
+        }
+        if (Number.isFinite(y0)) {
+          for (const f of [0.2, 0.8]) {
+            const hSpan = span(cx, Math.round(y0 + (y1 - y0) * f), 1, 0);
+            if (hSpan) {
+              x0 = Math.min(x0, hSpan[0]);
+              x1 = Math.max(x1, hSpan[1]);
+            }
+          }
+          // A sane cut-out sits inside the frame; a span reaching an edge means
+          // the centre is part of the transparent background, not a cut-out.
+          if (x0 > 0 && y0 > 0 && x1 < png.width - 1 && y1 < info.height - 1) {
+            out = { x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
+          }
         }
       }
     }

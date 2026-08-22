@@ -9,18 +9,31 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
  * transparent outer margin (real frameit art has both, which is why a naive
  * "bounding box of transparency" measurement goes wrong).
  */
-async function writeFrame(file: string, opts: { w: number; h: number; cut: { x: number; y: number; w: number; h: number }; margin: number }) {
-  const { w, h, cut, margin } = opts;
+async function writeFrame(
+  file: string,
+  opts: {
+    w: number;
+    h: number;
+    cut: { x: number; y: number; w: number; h: number };
+    margin: number;
+    /** Opaque Dynamic-Island-style pill INSIDE the cut-out, top centre. */
+    island?: { w: number; h: number };
+  },
+) {
+  const { w, h, cut, margin, island } = opts;
   const buf = Buffer.alloc(w * h * 4);
+  const ix0 = island ? cut.x + Math.floor((cut.w - island.w) / 2) : 0;
+  const iy0 = island ? cut.y + 8 : 0;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const o = (y * w + x) * 4;
       const inCut = x >= cut.x && x < cut.x + cut.w && y >= cut.y && y < cut.y + cut.h;
       const inMargin = x < margin || y < margin || x >= w - margin || y >= h - margin;
+      const inIsland = island ? x >= ix0 && x < ix0 + island.w && y >= iy0 && y < iy0 + island.h : false;
       buf[o] = 40;
       buf[o + 1] = 40;
       buf[o + 2] = 40;
-      buf[o + 3] = inCut || inMargin ? 0 : 255;
+      buf[o + 3] = (inCut && !inIsland) || inMargin ? 0 : 255;
     }
   }
   await sharp(buf, { raw: { width: w, height: h, channels: 4 } }).png().toFile(file);
@@ -41,6 +54,14 @@ describe("frame screen cut-out measurement", () => {
   it("measures the cut-out from the alpha channel, ignoring the transparent outer margin", async () => {
     const file = path.join(dir, "Test Tablet.png");
     await writeFrame(file, { w: 200, h: 300, cut: { x: 20, y: 30, w: 160, h: 220 }, margin: 5 });
+    const { measureScreenCutout } = await import("../lib/frames");
+    expect(measureScreenCutout(file)).toEqual({ x: 20, y: 30, width: 160, height: 220 });
+  });
+
+  it("measures past an opaque Dynamic Island at the top centre of the cut-out", async () => {
+    const file = path.join(dir, "Test Phone.png");
+    // Island spans the centre column: a naive centre scan would report y=30+8+24.
+    await writeFrame(file, { w: 200, h: 300, cut: { x: 20, y: 30, w: 160, h: 220 }, margin: 5, island: { w: 60, h: 24 } });
     const { measureScreenCutout } = await import("../lib/frames");
     expect(measureScreenCutout(file)).toEqual({ x: 20, y: 30, width: 160, height: 220 });
   });
