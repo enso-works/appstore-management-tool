@@ -31,7 +31,11 @@ interface Snapshot {
   readiness: ReadinessReport;
   templates: TemplateDescriptor[];
   targets: TargetProfile[];
-  fonts: { stack: { family: string; source: string }[]; missing: string[] };
+  fonts: {
+    stack: { family: string; source: string }[];
+    missing: string[];
+    available: { app: { family: string }[]; bundled: { family: string }[] };
+  };
   configEtag: string;
 }
 
@@ -833,6 +837,79 @@ export default function Editor({ name }: { name: string }) {
   }
   saveRef.current = save;
 
+  // ---- fonts -------------------------------------------------------------
+  const [fontBusy, setFontBusy] = useState(false);
+  const [fontStatus, setFontStatus] = useState("");
+  const [newFontFamily, setNewFontFamily] = useState("");
+
+  /** Local families for the pickers: app fonts first, then bundled, then any configured-but-missing family. */
+  const fontChoices = useMemo(() => {
+    if (!snap) return [] as { family: string; source: string }[];
+    const out: { family: string; source: string }[] = snap.fonts.available.app.map((f) => ({
+      family: f.family,
+      source: "app",
+    }));
+    for (const f of snap.fonts.available.bundled) {
+      if (!out.some((o) => o.family.toLowerCase() === f.family.toLowerCase()))
+        out.push({ family: f.family, source: "bundled" });
+    }
+    for (const family of [snap.config.brand.font.family, snap.config.brand.headlineFont?.family ?? ""]) {
+      if (family && !out.some((o) => o.family.toLowerCase() === family.toLowerCase()))
+        out.push({ family, source: "missing" });
+    }
+    return out;
+  }, [snap]);
+
+  async function setBrandFontFamily(kind: "font" | "headlineFont", family: string | null) {
+    if (!snap || (kind === "font" && !family)) return; // the body font cannot be cleared, only replaced
+    setFontBusy(true);
+    setFontStatus("");
+    try {
+      const payload = (ifMatch: string) =>
+        kind === "font" ? { font: { family: family as string }, ifMatch } : { headlineFont: family ? { family } : null, ifMatch };
+      const send = (ifMatch: string) =>
+        fetch(`/api/projects/${encodeURIComponent(name)}/fonts`, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload(ifMatch)),
+        });
+      let res = await send(snap.configEtag);
+      if (res.status === 409) {
+        // config changed on disk (CLI, another window): reload the etag and retry once, the editor wins.
+        const fresh = await fetch(`/api/projects/${encodeURIComponent(name)}`, { cache: "no-store" });
+        if (fresh.ok) res = await send(((await fresh.json()) as Snapshot).configEtag);
+      }
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error + (body.details ? `: ${(body.details as string[]).join("; ")}` : ""));
+      setSnap((sn) => (sn ? { ...sn, config: body.config, configEtag: body.etag, fonts: body.fonts } : sn));
+    } catch (err) {
+      setFontStatus(`Font change failed: ${(err as Error).message}`);
+    }
+    setFontBusy(false);
+  }
+
+  async function addFontFromGoogle() {
+    const family = newFontFamily.trim();
+    if (!family || !snap || fontBusy) return;
+    setFontBusy(true);
+    setFontStatus(`Downloading "${family}" from Google Fonts…`);
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(name)}/fonts`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ family }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error);
+      setSnap((sn) => (sn ? { ...sn, fonts: body.fonts } : sn));
+      setNewFontFamily("");
+      setFontStatus(`Added ${body.family} (${body.count} file(s)) — pick it above`);
+    } catch (err) {
+      setFontStatus(`Add failed: ${(err as Error).message}`);
+    }
+    setFontBusy(false);
+  }
+
   // ---- generate ----------------------------------------------------------
   async function generate(scope: "screen" | "locale" | "all") {
     if (isDirty && !confirm("You have unsaved edits. Generate from the files on disk anyway?")) return;
@@ -1204,6 +1281,60 @@ export default function Editor({ name }: { name: string }) {
                 <span className={styles.error}> missing: {snap.fonts.missing.join(", ")}</span>
               )}
             </p>
+            <label className={styles.row}>
+              <span>Body</span>
+              <select
+                className={styles.select}
+                value={snap.config.brand.font.family}
+                disabled={fontBusy}
+                onChange={(e) => void setBrandFontFamily("font", e.target.value)}
+              >
+                {fontChoices.map((f) => (
+                  <option key={f.family} value={f.family}>
+                    {f.family} ({f.source})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.row}>
+              <span>Headline</span>
+              <select
+                className={styles.select}
+                value={snap.config.brand.headlineFont?.family ?? ""}
+                disabled={fontBusy}
+                onChange={(e) => void setBrandFontFamily("headlineFont", e.target.value || null)}
+              >
+                <option value="">same as body</option>
+                {fontChoices.map((f) => (
+                  <option key={f.family} value={f.family}>
+                    {f.family} ({f.source})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className={styles.addRow}>
+              <input
+                value={newFontFamily}
+                onChange={(e) => setNewFontFamily(e.target.value)}
+                placeholder="Google font, e.g. Fraunces"
+                className={styles.input}
+                disabled={fontBusy}
+                onKeyDown={(e) => e.key === "Enter" && void addFontFromGoogle()}
+              />
+              <button
+                className={styles.btn}
+                onClick={() => void addFontFromGoogle()}
+                disabled={fontBusy || !newFontFamily.trim()}
+                title="download the family from Google Fonts into store/assets/fonts/ (once; rendering never fetches)"
+              >
+                Add
+              </button>
+            </div>
+            {fontStatus && (
+              <p className={styles.small}>
+                <span className={fontStatus.includes("failed") ? styles.error : undefined}>{fontStatus}</span>
+              </p>
+            )}
           </aside>
 
           <main className={styles.canvas}>
