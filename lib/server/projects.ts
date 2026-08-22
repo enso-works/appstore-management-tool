@@ -290,6 +290,39 @@ export function saveBrandBackground(project: Project, values: BackgroundValues |
 }
 
 /**
+ * Update the brand font families in store-shots.config.json (etag-checked,
+ * atomic). Only `family` changes; weights/fallbacks of an existing entry are
+ * kept. `headlineFont: null` removes the headline face (headlines fall back to
+ * the body font).
+ */
+export function saveBrandFonts(
+  project: Project,
+  update: { font?: { family: string }; headlineFont?: { family: string } | null },
+  ifMatch?: string,
+): SaveResult {
+  const file = project.configPath;
+  const current = etagOf(file);
+  if (ifMatch !== undefined && ifMatch !== current) {
+    throw new HttpError(409, "store-shots.config.json changed on disk since it was loaded; reload before saving");
+  }
+  const raw = JSON.parse(fs.readFileSync(file, "utf8")) as { brand?: Record<string, unknown> };
+  raw.brand = { ...(raw.brand ?? {}) };
+  if (update.font) {
+    raw.brand.font = { ...((raw.brand.font as Record<string, unknown>) ?? {}), family: update.font.family };
+  }
+  if (update.headlineFont === null) delete raw.brand.headlineFont;
+  else if (update.headlineFont) {
+    raw.brand.headlineFont = {
+      ...((raw.brand.headlineFont as Record<string, unknown>) ?? {}),
+      family: update.headlineFont.family,
+    };
+  }
+  const parsed = projectConfigSchema.safeParse(raw);
+  if (!parsed.success) throw new HttpError(422, "Invalid config", formatZodError(parsed.error));
+  return { etag: writeJsonAtomic(file, raw) };
+}
+
+/**
  * Create content files for every configured locale that lacks one, prefilled
  * with the default locale's copy as translation drafts. Existing files are
  * never touched.
