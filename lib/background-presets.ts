@@ -20,9 +20,11 @@ export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   {
     id: "sea-mist",
     name: "Sea mist",
+    // Symmetric across the strip: green at both edges, white mist in the centre
+    // (like an App Store banner), dark base keeping depth at the bottom.
     values: {
       background:
-        "radial-gradient(140% 100% at 100% 0%, rgba(62,182,168,0.75) 0%, rgba(62,182,168,0) 58%), radial-gradient(95% 95% at 0% 0%, rgba(216,226,222,0.95) 0%, rgba(216,226,222,0) 55%), linear-gradient(100deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 50%), linear-gradient(175deg, #a8b7b3 0%, #7d938e 40%, #54706b 72%, #3f5e5a 100%)",
+        "linear-gradient(90deg, rgba(233,238,236,0) 0%, rgba(233,238,236,0.6) 38%, rgba(233,238,236,0.72) 46%, rgba(233,238,236,0.72) 54%, rgba(233,238,236,0.6) 62%, rgba(233,238,236,0) 100%), linear-gradient(90deg, rgba(62,182,168,0.5) 0%, rgba(62,182,168,0) 30%, rgba(62,182,168,0) 70%, rgba(62,182,168,0.5) 100%), linear-gradient(175deg, #a8b7b3 0%, #7d938e 40%, #54706b 72%, #3f5e5a 100%)",
     },
   },
   {
