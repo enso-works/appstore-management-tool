@@ -106,7 +106,12 @@ lib/
   capture.ts      xcrun simctl screenshot into store/raw/<device>/<locale>/ (never overwrites without --force)
   server/         project lookup, atomic JSON saves with etags, HTTP error mapping
   templates/registry.ts  thin adapter over ../templates
-templates/        React templates: types, shared pieces (artwork root, device shell, text block, stack layout, patterns), hero-top, split-caption, full-bleed-card
+templates/        React templates: types, shared pieces (artwork root, device shell, text block, stack layout, patterns),
+                  decor.tsx (vector shapes, glow, halo), and the templates themselves — hero-top, split-caption,
+                  full-bleed-card, feature-graphic, zoom-detail, statement, stat-hero, diagonal-band, spotlight,
+                  overlap-headline, and seven full-strip layouts (see docs/templates.md)
+app/templates/    the in-app template catalogue (pick an app + a template, adds the screen)
+public/template-previews/  committed catalogue examples; regenerate with `npm run previews`
 assets/fonts/     bundled Inter (OFL)
 schema/           generated JSON Schemas referenced by $schema in app files
 fixtures/demo-app two screens, en-US + ar-SA, both targets; used by tests

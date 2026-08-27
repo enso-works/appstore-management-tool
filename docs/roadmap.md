@@ -20,6 +20,29 @@ ticked here when done. Plan context: `store-tool-plan.md`.
 
 Out of scope for this pass: video rendering, hosted/cloud anything, credentials in the tool.
 
+## Template pack (2026-08-27)
+
+- Six single-screen templates: `zoom-detail` (a cropped part of the capture in a floating
+  card or circle, optional blurred backdrop + locator ring), `statement` (typographic
+  interstitial with no capture at all), `stat-hero` (oversized figure behind the device),
+  `diagonal-band` (angled colour field or ribbon the device crosses), `spotlight` (device in
+  a pool of light under a row of chips), `overlap-headline` (oversized headline running
+  behind the device).
+- Seven full-strip templates — `strip-banner`, `strip-story`, `strip-arc`, `strip-alternate`,
+  `strip-quote`, `strip-hero`, `strip-marquee` — composing 2-3 consecutive screenshots as one
+  artwork, chosen in the editor's new **Full strip** tab.
+- **Listing** tab: the generated screenshots inside the store product page (real icon, name,
+  subtitle and description from the metadata), clipped to a phone viewport, next to the full
+  set with the fold marked — what a visitor actually sees before scrolling. Screens that have
+  not been generated yet render as live drafts, so the listing is never empty.
+- Template catalogue at `/templates`: every layout with a committed example, its fields and
+  its controls; pick an app and "use" a template to add a screen and open the editor on it.
+  Examples regenerate with `npm run previews`.
+- Supporting mechanics: `templates/decor.tsx` (deterministic SVG shapes, glow, halo),
+  `descriptor.usesCapture` (screens that need no raw capture), `descriptor.strip`,
+  `panorama.perSliceSources` (one capture per slice), per-device overlap checking, and a
+  `boolean` override control in the editor.
+
 ## Follow-up (2026-08-20)
 
 - Panorama per-slide copy: `headline2/caption2/eyebrow2` (and `...3`) render one text stack per
