@@ -44,6 +44,8 @@ export interface CaptureOptions {
   device: string; // raw-capture device folder, e.g. "iphone" | "ipad"
   locale: string;
   screenId: string;
+  /** 1-based slice of a panorama screen with per-slice captures (default 1). */
+  slice?: number;
   udid?: string;
   /** Override the status bar to 9:41, full battery/signal before capturing. */
   cleanStatusBar?: boolean;
@@ -68,6 +70,7 @@ export function capturePathFor(
   device: string,
   locale: string,
   screenId: string,
+  slice = 1,
 ): { file: string; targetId?: string } {
   const { manifest } = loadManifest(project);
   const screen = manifest?.screens.find((s) => s.id === screenId);
@@ -80,11 +83,18 @@ export function capturePathFor(
   const targetId = project.config.targets.find((t) => sourceDeviceFor(project, t) === device);
   const job = buildJob(project, screen, targetId ?? project.config.targets[0], locale);
   if (!job) throw new Error(`Cannot resolve a capture path for ${device}/${locale}/${screenId}`);
+  // A strip with per-slice captures has one file per slice; --slice picks which one.
+  if (slice < 1 || slice > job.sourcePaths.length) {
+    throw new Error(
+      `Screen "${screenId}" has ${job.sourcePaths.length} capture${job.sourcePaths.length === 1 ? "" : "s"}; --slice must be between 1 and ${job.sourcePaths.length}.`,
+    );
+  }
+  const sourcePath = job.sourcePaths[slice - 1];
   // buildJob uses the target's source device; when the requested device differs (no target maps to it),
   // substitute it in the path so the file still lands under raw/<device>/.
   const file = targetId
-    ? job.sourcePath
-    : job.sourcePath.replace(`${path.sep}${job.sourceDevice}${path.sep}`, `${path.sep}${device}${path.sep}`);
+    ? sourcePath
+    : sourcePath.replace(`${path.sep}${job.sourceDevice}${path.sep}`, `${path.sep}${device}${path.sep}`);
   if (job.sourceError) throw new Error(job.sourceError);
   return { file, targetId };
 }
@@ -112,7 +122,7 @@ export function captureScreen(project: Project, opts: CaptureOptions): CaptureRe
       `No booted ${opts.device} simulator found. Booted: ${booted.map((b) => b.name).join(", ") || "none"}`,
     );
 
-  const { file, targetId } = capturePathFor(project, opts.device, opts.locale, opts.screenId);
+  const { file, targetId } = capturePathFor(project, opts.device, opts.locale, opts.screenId, opts.slice ?? 1);
   if (fs.existsSync(file) && !opts.force) {
     throw new Error(`${file} already exists; pass --force to overwrite it`);
   }

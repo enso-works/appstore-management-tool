@@ -7,7 +7,7 @@ import { readPngInfo } from "./png";
 import { buildRenderPlan, ordersOf, type RenderJob } from "./render-plan";
 import type { LocaleContent, Manifest } from "./schema";
 import { getTarget } from "./targets";
-import { getTemplate, templateFields, templateIds } from "./templates/registry";
+import { getTemplate, templateFields, templateIds, templateUsesCapture } from "./templates/registry";
 import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
 import { requiredFontFamilies, resolveFontStack } from "./fonts";
@@ -283,38 +283,54 @@ function validateContent(project: Project, manifest: Manifest, content: Map<stri
 function validateSources(project: Project, plan: RenderJob[], issues: IssueList) {
   const seen = new Set<string>();
   for (const job of plan) {
-    if (seen.has(job.sourcePath)) continue; // one report per file
-    seen.add(job.sourcePath);
-    const file = displayRelative(project.root, job.sourcePath);
+    if (!templateUsesCapture(job.screen.template)) continue; // template never shows the capture
     if (job.sourceError) {
+      // One report per screen, not per target x locale sharing the same pattern.
+      if (seen.has(job.sourceError)) continue;
+      seen.add(job.sourceError);
       issues.error("source.escape", job.sourceError, {
         key: job.key,
         file: displayRelative(project.root, project.paths.manifest),
       });
       continue;
     }
-    if (!fileExists(job.sourcePath)) {
-      issues.error("source.missing", `Raw capture not found`, {
-        key: job.key,
-        file,
-        hint: `capture it with: store-shots capture --device ${job.sourceDevice} --locale ${job.sourceLocale} --screen ${job.screen.id}`,
-      });
-      continue;
+    // A panorama with per-slice sources has one capture per slice; each is checked once.
+    job.sourcePaths.forEach((sourcePath, slice) => validateOneSource(project, job, sourcePath, slice, seen, issues));
+  }
+}
+
+function validateOneSource(
+  project: Project,
+  job: RenderJob,
+  sourcePath: string,
+  slice: number,
+  seen: Set<string>,
+  issues: IssueList,
+) {
+  if (seen.has(sourcePath)) return; // one report per file
+  seen.add(sourcePath);
+  const file = displayRelative(project.root, sourcePath);
+  if (!fileExists(sourcePath)) {
+    issues.error("source.missing", `Raw capture not found`, {
+      key: job.key,
+      file,
+      hint: `capture it with: store-shots capture --device ${job.sourceDevice} --locale ${job.sourceLocale} --screen ${job.screen.id}${slice > 0 ? ` --slice ${slice + 1}` : ""}`,
+    });
+    return;
+  }
+  try {
+    const info = readPngInfo(sourcePath);
+    const expected = job.target.width / job.target.height;
+    const actual = info.width / info.height;
+    if (Math.abs(expected - actual) > 0.01) {
+      issues.warn(
+        "source.aspect",
+        `Raw capture is ${info.width}x${info.height} (aspect ${actual.toFixed(3)}) but target ${job.target.id} is ${expected.toFixed(3)}`,
+        { key: job.key, file, hint: "capture from a simulator with the target's aspect ratio" },
+      );
     }
-    try {
-      const info = readPngInfo(job.sourcePath);
-      const expected = job.target.width / job.target.height;
-      const actual = info.width / info.height;
-      if (Math.abs(expected - actual) > 0.01) {
-        issues.warn(
-          "source.aspect",
-          `Raw capture is ${info.width}x${info.height} (aspect ${actual.toFixed(3)}) but target ${job.target.id} is ${expected.toFixed(3)}`,
-          { key: job.key, file, hint: "capture from a simulator with the target's aspect ratio" },
-        );
-      }
-    } catch (err) {
-      issues.error("source.invalid", (err as Error).message, { key: job.key, file });
-    }
+  } catch (err) {
+    issues.error("source.invalid", (err as Error).message, { key: job.key, file });
   }
 }
 

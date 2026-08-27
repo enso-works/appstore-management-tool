@@ -7,6 +7,7 @@ import { buildRenderPlan } from "./render-plan";
 import { readGeneratedManifest } from "./generated-manifest";
 import { inputsHash, templatesSourceHash, readToolVersion } from "./generate";
 import { fileExists } from "./paths";
+import { templateUsesCapture } from "./templates/registry";
 
 /* ------------------------------------------------------------------ *
  * Release review (editor Release tab)
@@ -125,14 +126,19 @@ export function releaseStatus(project: Project): ReleaseStatus {
         groups.set(key, set);
       }
       const content = validation.content.get(job.locale);
-      const sourceMissing = job.sourceError ?? (!fs.existsSync(job.sourcePath) ? "raw capture not found" : undefined);
+      const needsCapture = templateUsesCapture(job.screen.template);
+      const sourceMissing =
+        job.sourceError ??
+        (needsCapture && job.sourcePaths.some((p) => !fs.existsSync(p)) ? "raw capture not found" : undefined);
       const hash =
         content && !sourceMissing
           ? inputsHash(project, job, content, toolVersion, fontHashes, templatesHash)
           : undefined;
       job.outputPaths.forEach((abs, slice) => {
         const rel = path.relative(outRoot, abs).split(path.sep).join("/");
-        const entry = manifest?.files.find((f) => f.path === path.relative(project.root, abs).split(path.sep).join("/"));
+        const entry = manifest?.files.find(
+          (f) => f.path === path.relative(project.root, abs).split(path.sep).join("/"),
+        );
         const exists = fs.existsSync(abs);
         let state: ShotState;
         let reason: string | undefined;

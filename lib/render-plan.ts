@@ -13,8 +13,13 @@ export interface RenderJob {
   /** Locale whose raw capture is used (differs from `locale` when source.localized is false). */
   sourceLocale: string;
   sourceDevice: string;
-  /** Absolute path of the raw capture (inside paths.raw). */
+  /** Absolute path of the raw capture (inside paths.raw); slice 1's for panoramas. */
   sourcePath: string;
+  /**
+   * One capture per slice (length === slices). Identical entries unless the
+   * screen sets `panorama.perSliceSources`, which gives each slice its own file.
+   */
+  sourcePaths: string[];
   /** Set when the interpolated source path escaped paths.raw; the job cannot render. */
   sourceError?: string;
   /** Absolute path of the output PNG (first slice for panoramas). */
@@ -35,14 +40,15 @@ export function padOrder(order: number): string {
 
 export function interpolatePattern(
   pattern: string,
-  vars: { order: number; id: string; locale: string; device: string; target: string },
+  vars: { order: number; id: string; locale: string; device: string; target: string; slice?: number },
 ): string {
   return pattern
     .replaceAll("{order}", padOrder(vars.order))
     .replaceAll("{id}", vars.id)
     .replaceAll("{locale}", vars.locale)
     .replaceAll("{device}", vars.device)
-    .replaceAll("{target}", vars.target);
+    .replaceAll("{target}", vars.target)
+    .replaceAll("{slice}", String(vars.slice ?? 1));
 }
 
 /** 01_home_IPHONE_69.png — numeric prefix keeps order; token avoids collisions. Panorama slices use order+slice. */
@@ -79,14 +85,19 @@ export function buildJob(
   if (screen.targets && !screen.targets.includes(targetId)) return undefined;
   const device = sourceDeviceFor(project, targetId);
   const sourceLocale = screen.source.localized ? locale : project.config.defaultLocale;
-  const file = interpolatePattern(screen.source.filePattern, {
-    order: screen.order,
-    id: screen.id,
-    locale: sourceLocale,
-    device,
-    target: targetId,
-  });
   const slices = target.family === "feature-graphic" ? 1 : (screen.panorama?.slices ?? 1);
+  const perSlice = slices > 1 && screen.panorama?.perSliceSources === true;
+  const fileFor = (slice: number) =>
+    interpolatePattern(screen.source.filePattern, {
+      order: screen.order + (perSlice ? slice : 0),
+      id: screen.id,
+      locale: sourceLocale,
+      device,
+      target: targetId,
+      slice: slice + 1,
+    });
+  const files = Array.from({ length: slices }, (_, i) => fileFor(perSlice ? i : 0));
+  const file = files[0];
   const dir = outputDirFor(target, locale, project.paths);
   const outputPaths =
     target.family === "feature-graphic"
@@ -102,13 +113,15 @@ export function buildJob(
     sourceLocale,
     sourceDevice: device,
     sourcePath: path.join(project.paths.raw, device, sourceLocale, file),
+    sourcePaths: files.map((f) => path.join(project.paths.raw, device, sourceLocale, f)),
     outputPath: outputPaths[0],
     slices,
     outputPaths,
     canvasWidth: target.width * slices,
   };
   try {
-    job.sourcePath = resolveWithin(project.paths.raw, path.join(device, sourceLocale, file));
+    job.sourcePaths = files.map((f) => resolveWithin(project.paths.raw, path.join(device, sourceLocale, f)));
+    job.sourcePath = job.sourcePaths[0];
   } catch (err) {
     if (!(err instanceof PathEscapeError)) throw err;
     job.sourceError = `source path "${path.join(device, sourceLocale, file)}" escapes ${project.config.paths.raw}`;

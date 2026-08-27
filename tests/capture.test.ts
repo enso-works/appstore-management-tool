@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   appleLanguageFor,
   captureAll,
+  capturePathFor,
   captureLocales,
   captureScreen,
   listBootedSimulators,
@@ -359,5 +360,31 @@ describe("captureLocales", () => {
     });
     const languageWrites = calls.filter((c) => c.includes("AppleLanguages")).map((c) => c[c.length - 1]);
     expect(languageWrites).toEqual(["en-US"]);
+  });
+});
+
+describe("capture --slice", () => {
+  let fx: { root: string; cleanup: () => void };
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+  const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+
+  it("targets the slice's own file for a strip with per-slice captures", () => {
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      const screens = (m as { screens: Record<string, unknown>[] }).screens;
+      screens[0].template = "strip-banner";
+      screens[0].panorama = { slices: 3, perSliceSources: true };
+      screens[0].overrides = {};
+    });
+    const project = load();
+    expect(capturePathFor(project, "iphone", "en-US", "home").file).toMatch(/01-home\.png$/);
+    expect(capturePathFor(project, "iphone", "en-US", "home", 2).file).toMatch(/02-home\.png$/);
+    expect(capturePathFor(project, "iphone", "en-US", "home", 3).file).toMatch(/03-home\.png$/);
+    expect(() => capturePathFor(project, "iphone", "en-US", "home", 4)).toThrow(/--slice must be between 1 and 3/);
+  });
+
+  it("a plain screen has one slice", () => {
+    expect(capturePathFor(load(), "iphone", "en-US", "home").file).toMatch(/01-home\.png$/);
+    expect(() => capturePathFor(load(), "iphone", "en-US", "home", 2)).toThrow(/--slice must be between 1 and 1/);
   });
 });

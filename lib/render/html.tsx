@@ -12,6 +12,8 @@ import type { LocaleContent } from "../schema";
 export interface ArtworkUrls {
   /** URL of the raw capture as the page will load it. */
   sourceImage: string;
+  /** One URL per panorama slice; defaults to [sourceImage] when absent. */
+  sliceImages?: string[];
   /** Maps an absolute font file path to a URL the page can load. */
   fontUrl: (absPath: string) => string;
   /** Maps a store/assets-relative path to a URL the page can load. */
@@ -49,6 +51,7 @@ export function templateInputFor(
   mode: "preview" | "export",
   stack?: ResolvedFont[],
   assetUrl: (relPath: string) => string = (rel) => pathToFileURL(path.join(project.paths.assets, rel)).href,
+  sliceImageUrls?: string[],
 ): TemplateRenderInput {
   const mod = getTemplateModule(job.screen.template);
   if (!mod) throw new Error(`Unknown template "${job.screen.template}"`);
@@ -69,6 +72,7 @@ export function templateInputFor(
     direction: content.direction ?? "ltr",
     fields,
     sourceImageUrl,
+    sliceImageUrls: sliceImageUrls?.length ? sliceImageUrls : undefined,
     brand: brandThemeOf(project, stack),
     overrides,
     mode,
@@ -111,7 +115,16 @@ export function renderArtworkHtml(
       `Font "${project.config.brand.font.family}" is not available locally. Run: store-shots fonts add "${project.config.brand.font.family}" --project ${project.root}`,
     );
   }
-  const input = templateInputFor(project, job, content, urls.sourceImage, "export", stack, urls.assetUrl);
+  const input = templateInputFor(
+    project,
+    job,
+    content,
+    urls.sourceImage,
+    "export",
+    stack,
+    urls.assetUrl,
+    urls.sliceImages,
+  );
   const frameName = frameNameFromShell(resolveShell(job.screen.overrides.shell, job.target.family));
   if (frameName) {
     const frame = getFrame(frameName);

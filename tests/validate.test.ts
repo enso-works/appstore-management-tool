@@ -147,6 +147,54 @@ describe("validateProject on the fixture", () => {
     expect(issue?.hint).toMatch(/capture --device iphone --locale ar-SA --screen home/);
   });
 
+  it("needs no raw capture for a capture-less template", () => {
+    // statement is pure typography: deleting the capture must not fail validation.
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens[0].template = "statement";
+      m.screens[0].overrides = {};
+    });
+    fs.rmSync(path.join(fx.root, "store/raw/iphone/en-US/01-home.png"));
+    fs.rmSync(path.join(fx.root, "store/raw/iphone/ar-SA/01-home.png"));
+    fs.rmSync(path.join(fx.root, "store/raw/ipad/en-US/01-home.png"));
+    fs.rmSync(path.join(fx.root, "store/raw/ipad/ar-SA/01-home.png"));
+    const r = validateProject(load());
+    expect(r.issues.errors.map((i) => i.code)).not.toContain("source.missing");
+  });
+
+  it("resolves one capture per slice when panorama.perSliceSources is set", () => {
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens = [m.screens[0]];
+      m.screens[0].template = "strip-banner";
+      m.screens[0].panorama = { slices: 2, perSliceSources: true };
+      m.screens[0].overrides = {};
+    });
+    const job = validateProject(load()).plan.find((j) => j.key === "iphone-6.9-1320x2868/en-US/home")!;
+    expect(job.sourcePaths).toHaveLength(2);
+    expect(job.sourcePaths[0].endsWith(path.join("iphone", "en-US", "01-home.png"))).toBe(true);
+    // Slice 2 takes the next order: 02-home.png, which the fixture does not have.
+    expect(job.sourcePaths[1].endsWith(path.join("iphone", "en-US", "02-home.png"))).toBe(true);
+    const missing = validateProject(load()).issues.errors.filter((i) => i.code === "source.missing");
+    expect(missing.some((i) => i.file?.endsWith("02-home.png"))).toBe(true);
+
+    // With the second capture in place the plan validates.
+    for (const dev of ["iphone", "ipad"])
+      for (const loc of ["en-US", "ar-SA"])
+        fs.copyFileSync(
+          path.join(fx.root, `store/raw/${dev}/${loc}/01-home.png`),
+          path.join(fx.root, `store/raw/${dev}/${loc}/02-home.png`),
+        );
+    expect(validateProject(load()).issues.errors).toEqual([]);
+  });
+
+  it("keeps one capture for the whole artwork without perSliceSources", () => {
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens = [m.screens[0]];
+      m.screens[0].panorama = { slices: 2 };
+    });
+    const job = validateProject(load()).plan.find((j) => j.key === "iphone-6.9-1320x2868/en-US/home")!;
+    expect(job.sourcePaths).toEqual([job.sourcePath, job.sourcePath]);
+  });
+
   it("warns when a raw capture has the wrong aspect ratio", () => {
     writeSolidPng(path.join(fx.root, "store/raw/iphone/en-US/01-home.png"), {
       width: 100,

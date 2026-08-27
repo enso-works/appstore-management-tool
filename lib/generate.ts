@@ -12,6 +12,7 @@ import { renderArtworkHtml } from "./render/html";
 import type { RenderJob, PlanFilter } from "./render-plan";
 import { buildRenderPlan } from "./render-plan";
 import type { GeneratedManifest, LocaleContent } from "./schema";
+import { templateUsesCapture } from "./templates/registry";
 import { validateProject } from "./validate";
 
 export interface GenerateOptions {
@@ -206,14 +207,16 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
         });
       };
       const blocking = issues.items.filter((i) => issueBlocksJob(i, job));
-      if (!blocking.length && (job.sourceError || !fs.existsSync(job.sourcePath))) {
+      const needsCapture = templateUsesCapture(job.screen.template);
+      const missingSource = needsCapture ? job.sourcePaths.find((p) => !fs.existsSync(p)) : undefined;
+      if (!blocking.length && needsCapture && (job.sourceError || missingSource)) {
         // validateSources reports a missing file once; a second job sharing it must still be skipped, not crash.
         blocking.push({
           level: "error",
           code: "source.missing",
           message: job.sourceError ?? "Raw capture not found",
           key: job.key,
-          file: displayRelative(project.root, job.sourcePath),
+          file: displayRelative(project.root, missingSource ?? job.sourcePath),
         });
       }
       if (blocking.length) {
@@ -245,6 +248,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
       try {
         const { html } = renderArtworkHtml(project, job, content, {
           sourceImage: pathToFileURL(job.sourcePath).href,
+          sliceImages: job.sourcePaths.map((p) => pathToFileURL(p).href),
           fontUrl: (p) => pathToFileURL(p).href,
           assetUrl: (rel) => pathToFileURL(path.join(project.paths.assets, rel)).href,
         });
@@ -472,7 +476,7 @@ export function inputsHash(
       fields,
       brand: project.config.brand,
       output: project.config.output,
-      source: sha256File(job.sourcePath),
+      source: templateUsesCapture(job.screen.template) ? job.sourcePaths.map((p) => sha256File(p)) : null,
       fonts: fontHashes,
       assets,
     }),

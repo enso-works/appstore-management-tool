@@ -419,6 +419,7 @@ program
   .command("capture")
   .description("Screenshot a booted simulator into store/raw/<device>/<locale>/ with the name the manifest expects")
   .option("--screen <id>", "screen id from store/manifest.json (required unless --list or --all)")
+  .option("--slice <n>", "which slice of a full-strip screen to capture (1-based; default 1)")
   .option("--all", "capture every enabled screen that declares source.deepLink, in order")
   .option("--locales <list>", 'capture each locale unattended: "all" or a comma-separated list (implies --all)')
   .option("--no-seed", "skip the capture.state seeding declared in store-shots.config.json")
@@ -434,6 +435,7 @@ program
   .action(
     async (opts: {
       screen?: string;
+      slice?: string;
       all?: boolean;
       locales?: string;
       seed?: boolean;
@@ -509,6 +511,7 @@ program
           device: opts.device,
           locale,
           screenId: opts.screen!,
+          slice: opts.slice ? Number(opts.slice) : undefined,
           udid: opts.udid,
           cleanStatusBar: opts.cleanStatusBar,
           force: opts.force,

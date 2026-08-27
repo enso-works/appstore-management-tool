@@ -5,6 +5,7 @@ import { loadProject } from "../lib/config";
 import { contentFileFor } from "../lib/content";
 import { previewHtml } from "../lib/render/preview";
 import {
+  addScreenFromTemplate,
   duplicateScreen,
   etagOf,
   HttpError,
@@ -125,6 +126,23 @@ describe("editor server helpers", () => {
     );
     expect(r.job.sourceExists).toBe(false);
     expect(r.html).toContain("data:image/svg+xml");
+  });
+
+  it("preview does not report a missing capture for a template that draws none", () => {
+    const p = load();
+    fs.rmSync(path.join(fx.root, "store/raw/iphone/en-US/01-home.png"));
+    const r = previewHtml(
+      p,
+      {
+        targetId: "iphone-6.9-1320x2868",
+        locale: "en-US",
+        screen: { id: "home", order: 1, template: "statement" },
+        fields: { headline: "No phone here" },
+      },
+      { sourceImage: () => "/x", fontUrl: () => "/f", assetUrl: () => "/a" },
+    );
+    expect(r.job.sourceExists).toBe(true);
+    expect(r.html).not.toContain("<img");
   });
 });
 

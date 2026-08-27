@@ -226,7 +226,17 @@ export const screenSchema = z.strictObject({
    * consecutive files (order, order+1, ...). The following order numbers are
    * reserved for the slices.
    */
-  panorama: z.strictObject({ slices: z.number().int().min(2).max(3) }).optional(),
+  panorama: z
+    .strictObject({
+      slices: z.number().int().min(2).max(3),
+      /**
+       * Resolve one raw capture per slice instead of repeating slice 1's:
+       * slice i uses `order + i` and `{slice}` = i + 1 in `source.filePattern`.
+       * Strip templates (one composition across the whole set) need this.
+       */
+      perSliceSources: z.boolean().optional(),
+    })
+    .optional(),
   overrides: z.record(z.string(), z.unknown()).prefault({}),
   /** Extra image/text elements composited over the template. Text layers read content field <layer id>. */
   layers: z.array(layerSchema).prefault([]),

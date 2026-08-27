@@ -40,6 +40,48 @@ describe("generate on the fixture", () => {
     expect(manifest.files.map((f) => f.path)).toEqual([...manifest.files.map((f) => f.path)].sort());
   }, 60_000);
 
+  it("renders a capture-less template with no raw file present", async () => {
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens[0].template = "statement";
+      m.screens[0].overrides = { decor: "arc", background: "#123456" };
+    });
+    for (const rel of [
+      "store/raw/iphone/en-US/01-home.png",
+      "store/raw/iphone/ar-SA/01-home.png",
+      "store/raw/ipad/en-US/01-home.png",
+      "store/raw/ipad/ar-SA/01-home.png",
+    ])
+      fs.rmSync(path.join(fx.root, rel));
+    const s = await generateProject(load(), { renderer });
+    expect(s.failed).toBe(0);
+    expect(s.skipped).toBe(0);
+    expect(readPngInfo(out("en-US/01_home_IPHONE_69.png"))).toMatchObject({ width: 1320, height: 2868 });
+  }, 60_000);
+
+  it("renders a full-strip screen once and slices it, one capture per slice", async () => {
+    // Slice 2 resolves to 02-home.png; the fixture only ships 01-home / 02-planning.
+    for (const dev of ["iphone", "ipad"])
+      for (const loc of ["en-US", "ar-SA"])
+        fs.copyFileSync(
+          path.join(fx.root, `store/raw/${dev}/en-US/02-planning.png`),
+          path.join(fx.root, `store/raw/${dev}/${loc}/02-home.png`),
+        );
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      m.screens = [m.screens[0]];
+      m.screens[0].template = "strip-banner";
+      m.screens[0].panorama = { slices: 2, perSliceSources: true };
+      m.screens[0].overrides = {};
+    });
+    const s = await generateProject(load(), { renderer });
+    expect(s.failed).toBe(0);
+    // One job per target x locale, two output files each.
+    expect(s.filesWritten).toHaveLength(8);
+    expect(readPngInfo(out("en-US/01_home_IPHONE_69.png"))).toMatchObject({ width: 1320, height: 2868 });
+    expect(readPngInfo(out("en-US/02_home_IPHONE_69.png"))).toMatchObject({ width: 1320, height: 2868 });
+    const manifest = readGeneratedManifest(load())!;
+    expect(manifest.files.filter((f) => f.slice === 1)).toHaveLength(4);
+  }, 60_000);
+
   it("is deterministic: a second run produces byte-identical files", async () => {
     const p = load();
     await generateProject(p, { renderer });

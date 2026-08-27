@@ -3,6 +3,7 @@ import type { Project } from "../config";
 import { directionForLocale } from "../locales";
 import { fileExists } from "../paths";
 import { buildJob } from "../render-plan";
+import { templateUsesCapture } from "../templates/registry";
 import { formatZodError, screenSchema, type LocaleContent, type ScreenDefinition } from "../schema";
 import { IN_PAGE_CHECKS_SOURCE } from "./checks";
 import { FIT_SOURCE } from "./fit";
@@ -53,9 +54,16 @@ export function previewHtml(
     direction: req.direction ?? directionForLocale(req.locale),
     screens: { [screen.id]: fields },
   };
-  const sourceExists = !job.sourceError && fileExists(job.sourcePath);
+  // A template that draws no capture (statement) is never "missing" one.
+  const needsCapture = templateUsesCapture(screen.template);
+  const sourceExists = !needsCapture || (!job.sourceError && fileExists(job.sourcePath));
+  // A strip with per-slice captures shows the placeholder only for the slices
+  // that are actually missing, so the rest of the composition stays reviewable.
+  const sliceUrl = (abs: string) =>
+    !job.sourceError && fileExists(abs) ? urls.sourceImage(abs) : MISSING_SOURCE_DATA_URI;
   const { html } = renderArtworkHtml(project, job, content, {
-    sourceImage: sourceExists ? urls.sourceImage(job.sourcePath) : MISSING_SOURCE_DATA_URI,
+    sourceImage: sourceExists && !job.sourceError ? sliceUrl(job.sourcePath) : MISSING_SOURCE_DATA_URI,
+    sliceImages: job.sourcePaths.map(sliceUrl),
     fontUrl: urls.fontUrl,
     assetUrl: urls.assetUrl,
     frameUrl: urls.frameUrl,

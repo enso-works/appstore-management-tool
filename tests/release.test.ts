@@ -64,11 +64,26 @@ describe("release", () => {
     expect(home.reason).toBeTruthy();
   });
 
+  it("does not block a capture-less template that has no raw file", () => {
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      (m as { screens: { template: string; overrides: unknown }[] }).screens[0].template = "statement";
+      (m as { screens: { template: string; overrides: unknown }[] }).screens[0].overrides = {};
+    });
+    for (const dev of ["iphone", "ipad"])
+      for (const loc of ["en-US", "ar-SA"]) fs.rmSync(path.join(fx.root, `store/raw/${dev}/${loc}/01-home.png`));
+    const set = releaseStatus(load()).sets.find((s) => s.target === "iphone-6.9-1320x2868" && s.locale === "en-US")!;
+    const home = set.shots.find((s) => s.screen === "home")!;
+    expect(home.reason ?? "").not.toMatch(/raw capture/);
+    expect(home.state).toBe("missing"); // not yet generated, but not blocked
+  });
+
   it("tracks ok -> stale with the renderer's inputs hash", () => {
     const project = load();
     const validation = validateProject(project);
     const plan = buildRenderPlan(project, validation.manifest!);
-    const job = plan.find((j) => j.target.id === "iphone-6.9-1320x2868" && j.locale === "en-US" && j.screen.id === "home")!;
+    const job = plan.find(
+      (j) => j.target.id === "iphone-6.9-1320x2868" && j.locale === "en-US" && j.screen.id === "home",
+    )!;
     const { stack } = resolveFontStack(project);
     const hash = inputsHash(
       project,
@@ -88,7 +103,15 @@ describe("release", () => {
         generatedAt: "2026-08-21T00:00:00.000Z",
         appVersion: "1.2.0",
         files: [
-          { path: rel, target: job.target.id, locale: "en-US", screen: "home", slice: 0, sha256: "x", inputsSha256: hash },
+          {
+            path: rel,
+            target: job.target.id,
+            locale: "en-US",
+            screen: "home",
+            slice: 0,
+            sha256: "x",
+            inputsSha256: hash,
+          },
         ],
       }),
     );
