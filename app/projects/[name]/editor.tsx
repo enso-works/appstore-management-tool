@@ -327,12 +327,12 @@ function emptyContent(locale: string): LocaleContent {
   return { locale, screens: {} };
 }
 
-export default function Editor({ name }: { name: string }) {
+export default function Editor({ name, initialScreenId }: { name: string; initialScreenId?: string }) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string>("");
   const [locale, setLocale] = useState<string>("");
-  const [screenId, setScreenId] = useState<string>("");
+  const [screenId, setScreenId] = useState<string>(initialScreenId ?? "");
   const [content, setContent] = useState<Record<string, LocaleContent>>({});
   const [manifest, setManifest] = useState<Manifest>({ screens: [] });
   const [etags, setEtags] = useState<{ manifest: string; content: Record<string, string> }>({
@@ -401,8 +401,10 @@ export default function Editor({ name }: { name: string }) {
     setIssues(data.validation.issues);
     setTargetId((t) => t || data.config.targets[0]);
     setLocale((l) => l || data.config.defaultLocale);
-    const first = [...(data.manifest?.screens ?? [])].sort((a, b) => a.order - b.order)[0];
-    setScreenId((s) => s || first?.id || "");
+    const screens = data.manifest?.screens ?? [];
+    const first = [...screens].sort((a, b) => a.order - b.order)[0];
+    // A ?screen= that no longer exists falls back to the first one.
+    setScreenId((s) => (s && screens.some((x) => x.id === s) ? s : first?.id || ""));
   }, [name]);
 
   useEffect(() => {
@@ -1297,6 +1299,9 @@ export default function Editor({ name }: { name: string }) {
           ←
         </Link>
         <strong className={styles.projName}>{snap.config.projectName}</strong>
+        <Link href={`/templates?project=${encodeURIComponent(name)}`} className={styles.tab} title="browse templates">
+          Templates
+        </Link>
         <span className={styles.tabs}>
           <button
             className={`${styles.tab} ${view === "screens" ? styles.tabActive : ""}`}

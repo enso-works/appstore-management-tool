@@ -9,6 +9,7 @@
     "cli": "tsx cli/index.ts",
     "schemas": "tsx scripts/gen-schemas.ts",
     "fixtures": "tsx scripts/make-fixture.ts",
+    "previews": "tsx scripts/template-previews.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint",

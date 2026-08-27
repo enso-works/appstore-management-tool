@@ -857,3 +857,20 @@ describe("strip templates", () => {
     expect((html.match(/<img src="cap:\/\/only"/g) ?? []).length).toBe(3);
   });
 });
+
+describe("template catalogue", () => {
+  it("every template has a summary and a committed preview image", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const dir = path.resolve(import.meta.dirname, "..", "public", "template-previews");
+    for (const mod of Object.values(templateModules)) {
+      const { id, summary } = mod.descriptor;
+      // Both feed /templates: a missing one means the catalogue shows a gap.
+      expect(summary, `${id} has no descriptor.summary`).toBeTruthy();
+      expect(
+        fs.existsSync(path.join(dir, `${id}.jpg`)),
+        `no preview for ${id} — add an example to scripts/template-previews.ts and run: npm run previews`,
+      ).toBe(true);
+    }
+  });
+});

@@ -14,6 +14,9 @@ export default function HomePage() {
         Apps in this workspace with a <code>store-shots.config.json</code>. Run{" "}
         <code>npx store-shots init --project &lt;app&gt;</code> to add one.
       </p>
+      <p className={styles.muted}>
+        Not sure what a screen should look like? <Link href="/templates">Browse the templates</Link> and start from one.
+      </p>
       {projects.length === 0 && <p>No projects found.</p>}
       <ul className={styles.list}>
         {projects.map((p) => {
@@ -29,7 +32,8 @@ export default function HomePage() {
               {p.project && (
                 <p className={styles.muted}>
                   {p.project.config.locales.length} locales · {p.project.config.targets.length} targets ·{" "}
-                  <Link href={`/projects/${encodeURIComponent(p.name)}`}>open</Link>
+                  <Link href={`/projects/${encodeURIComponent(p.name)}`}>open editor</Link> ·{" "}
+                  <Link href={`/templates?project=${encodeURIComponent(p.name)}`}>start from a template</Link>
                 </p>
               )}
               {report && (

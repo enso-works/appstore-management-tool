@@ -11,12 +11,15 @@ import {
   localeContentSchema,
   manifestSchema,
   projectConfigSchema,
+  screenSchema,
   type BackgroundValues,
   type LocaleContent,
   type Manifest,
 } from "../schema";
+import { targetProfiles } from "../targets";
+import { getTemplate } from "../templates/registry";
 
-/** Look a project up by its workspace-relative directory name (e.g. "breathe"). */
+/** Look a project up by its workspace-relative directory name (e.g. "braele"). */
 export function findProject(name: string): Project | undefined {
   return discoverProjects().find((p) => p.name === name)?.project;
 }
@@ -197,6 +200,78 @@ export function duplicateScreen(
     }
   }
   return { manifestEtag, contentEtags };
+}
+
+/**
+ * Add a screen using a given template (the catalogue's "use this template"
+ * action). Strip templates get their panorama set up, so the new screen already
+ * covers the right number of consecutive store screenshots.
+ *
+ * The screen is appended after everything else and starts with no copy: the
+ * editor opens on it and the required fields show as missing until they are
+ * filled, which is the same state a hand-added screen starts in.
+ */
+export function addScreenFromTemplate(
+  project: Project,
+  templateId: string,
+  requestedId?: string,
+  ifMatch?: string,
+): { id: string; manifestEtag: string } {
+  const descriptor = getTemplate(templateId);
+  if (!descriptor) throw new HttpError(404, `No template "${templateId}"`);
+  const manifestRaw = JSON.parse(fs.readFileSync(project.paths.manifest, "utf8")) as {
+    screens: Record<string, unknown>[];
+  };
+  const screens = manifestRaw.screens as ({ id: string; order: number; panorama?: { slices: number } } & Record<
+    string,
+    unknown
+  >)[];
+  if (ifMatch !== undefined && ifMatch !== etagOf(project.paths.manifest)) {
+    throw new HttpError(409, "manifest.json changed on disk since it was loaded; reload before saving");
+  }
+  const base = (requestedId ?? templateId)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!base) throw new HttpError(422, "id must contain lowercase letters, digits or dashes");
+  if (requestedId && screens.some((s) => s.id === base)) throw new HttpError(409, `Screen "${base}" already exists`);
+  // Without an explicit id, the template id is a good name — suffixed when taken.
+  let id = base;
+  for (let n = 2; screens.some((s) => s.id === id); n++) id = `${base}-${n}`;
+
+  const order = Math.max(0, ...screens.map((s) => s.order + ((s.panorama?.slices ?? 1) - 1))) + 1;
+  const screen: { id: string; order: number; panorama?: { slices: number; perSliceSources?: boolean } } & Record<
+    string,
+    unknown
+  > = {
+    id,
+    order,
+    enabled: true,
+    template: templateId,
+    source: { filePattern: "{order}-{id}.png", localized: true },
+    overrides: {},
+  };
+  if (descriptor.strip) screen.panorama = { slices: 3, perSliceSources: true };
+  // A template that serves one device family (the Play feature graphic) is pinned
+  // to the matching targets; without one the screen could never render, so say so
+  // instead of adding something dead.
+  if (descriptor.families.length === 1) {
+    const targets = project.config.targets.filter((t) => {
+      const target = targetProfiles[t as keyof typeof targetProfiles];
+      return target && descriptor.families.includes(target.family);
+    });
+    if (targets.length === 0) {
+      throw new HttpError(
+        422,
+        `"${descriptor.name}" only renders for ${descriptor.families.join(", ")} targets; add one to targets in store-shots.config.json first`,
+      );
+    }
+    screen.targets = targets;
+  }
+  const parsed = screenSchema.safeParse(screen);
+  if (!parsed.success) throw new HttpError(422, "Invalid screen", formatZodError(parsed.error));
+  screens.push(screen);
+  return { id, manifestEtag: writeJsonAtomic(project.paths.manifest, manifestRaw) };
 }
 
 const ASSET_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".svg"]);

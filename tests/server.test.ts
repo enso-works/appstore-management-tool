@@ -146,6 +146,55 @@ describe("editor server helpers", () => {
   });
 });
 
+describe("add a screen from a template", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+  const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+  const screens = () =>
+    readJson<{ screens: Record<string, unknown>[] }>(path.join(fx.root, "store/manifest.json")).screens;
+
+  it("appends a screen after the existing ones, named after the template", () => {
+    const r = addScreenFromTemplate(load(), "stat-hero");
+    expect(r.id).toBe("stat-hero");
+    const added = screens().find((s) => s.id === "stat-hero")!;
+    expect(added).toMatchObject({ order: 3, enabled: true, template: "stat-hero" });
+    expect(added.panorama).toBeUndefined();
+  });
+
+  it("suffixes the id when the template was already used", () => {
+    addScreenFromTemplate(load(), "statement");
+    const again = addScreenFromTemplate(load(), "statement");
+    expect(again.id).toBe("statement-2");
+    expect(screens().map((s) => s.order)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("sets up the panorama for a strip template", () => {
+    const r = addScreenFromTemplate(load(), "strip-banner");
+    const added = screens().find((s) => s.id === r.id)!;
+    expect(added.panorama).toEqual({ slices: 3, perSliceSources: true });
+    // The strip covers orders 3-5, so the next screen starts at 6.
+    expect(addScreenFromTemplate(load(), "hero-top")).toMatchObject({ id: "hero-top" });
+    expect(screens().find((s) => s.id === "hero-top")!.order).toBe(6);
+  });
+
+  it("refuses a template whose only device family the project does not target", () => {
+    // The fixture has no Play feature-graphic target, so the banner has nowhere to render.
+    expect(() => addScreenFromTemplate(load(), "feature-graphic")).toThrow(/only renders for feature-graphic/);
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+      (c as { targets: string[] }).targets.push("play-feature-1024x500");
+    });
+    const r = addScreenFromTemplate(load(), "feature-graphic");
+    expect(screens().find((s) => s.id === r.id)!.targets).toEqual(["play-feature-1024x500"]);
+  });
+
+  it("rejects an unknown template, a taken id and a stale etag", () => {
+    expect(() => addScreenFromTemplate(load(), "nope")).toThrow(/No template/);
+    expect(() => addScreenFromTemplate(load(), "hero-top", "home")).toThrow(/already exists/);
+    expect(() => addScreenFromTemplate(load(), "hero-top", undefined, "not-the-etag")).toThrow(/changed on disk/);
+  });
+});
+
 describe("duplicate and presets", () => {
   let fx: ReturnType<typeof tempFixture>;
   beforeEach(() => (fx = tempFixture()));
