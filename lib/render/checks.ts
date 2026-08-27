@@ -46,9 +46,15 @@ export const IN_PAGE_CHECKS_SOURCE = `(function (tolerance) {
   for (var i = 0; i < imgs.length; i++) {
     if (!imgs[i].complete || imgs[i].naturalWidth === 0) result.missingImages.push(imgs[i].getAttribute("src") || "(no src)");
   }
-  var device = doc.querySelector("[data-device]");
-  // Templates that intentionally lay text over the capture (full-bleed card) opt out.
-  var dr = device && device.getAttribute("data-device-overlap") !== "allowed" ? device.getBoundingClientRect() : null;
+  // Every device counts: strip templates place one per slice, and text on slice 3
+  // must be checked against slice 3's phone. Templates that intentionally lay
+  // text over the capture (full-bleed card, stat-hero) opt out per device.
+  var deviceEls = doc.querySelectorAll("[data-device]");
+  var deviceRects = [];
+  for (var d = 0; d < deviceEls.length; d++) {
+    if (deviceEls[d].getAttribute("data-device-overlap") === "allowed") continue;
+    deviceRects.push(deviceEls[d].getBoundingClientRect());
+  }
   function intersects(a, b) {
     return a.left < b.right - tolerance && a.right > b.left + tolerance && a.top < b.bottom - tolerance && a.bottom > b.top + tolerance;
   }
@@ -66,7 +72,13 @@ export const IN_PAGE_CHECKS_SOURCE = `(function (tolerance) {
     if (e.scrollWidth > e.clientWidth + tolerance || e.scrollHeight > vLimit) {
       result.overflow.push({ id: id, scrollWidth: e.scrollWidth, clientWidth: e.clientWidth, scrollHeight: e.scrollHeight, clientHeight: e.clientHeight });
     }
-    if (dr && intersects(e.getBoundingClientRect(), dr)) result.textOverlapsDevice.push(id);
+    var er = e.getBoundingClientRect();
+    for (var r = 0; r < deviceRects.length; r++) {
+      if (intersects(er, deviceRects[r])) {
+        result.textOverlapsDevice.push(id);
+        break;
+      }
+    }
   }
   return result;
 })(${OVERFLOW_TOLERANCE_PX})`;

@@ -21,6 +21,7 @@ export const overridesSchema = commonOverridesSchema;
 export const descriptor = {
   id: "feature-graphic",
   name: "Feature Graphic",
+  summary: "The 1024x500 Google Play banner: copy on the start side, the capture in a tilted card on the other.",
   requiredFields: ["headline"],
   optionalFields: ["caption"],
   families: ["feature-graphic"] as "feature-graphic"[],
@@ -44,6 +45,16 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
   const offX = Math.round(W * (input.overrides.screenshotOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));
   const offY = Math.round(W * (input.overrides.screenshotOffsetY ?? 0));
   const devLeft = (direction === "rtl" ? Math.round(W * 0.06) : Math.round(W * 0.62)) + offX;
+  // A tilted card's bounding box is wider than the card. Measure that growth and
+  // keep the text column clear of it, or the overlap check fires on the stock
+  // layout (the default tilt alone was enough).
+  const rad = (Math.abs(tilt) * Math.PI) / 180;
+  const grow = Math.round((devW * Math.cos(rad) + devH * Math.sin(rad) - devW) / 2);
+  const gap = Math.round(W * 0.02);
+  // Floor at 1px, not at a comfortable minimum: a nudged card (screenshotOffsetX)
+  // must be able to squeeze the column rather than overlap it. Copy that no longer
+  // fits is then reported by the overflow check, which is the honest failure.
+  const textWidth = Math.max(1, (direction === "rtl" ? W - (devLeft + devW + grow) : devLeft - grow) - pad - gap);
 
   return (
     <div
@@ -67,7 +78,7 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
           insetInlineStart: pad,
           top: 0,
           bottom: 0,
-          width: Math.round(W * 0.52),
+          width: textWidth,
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",

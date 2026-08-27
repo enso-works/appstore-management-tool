@@ -4,6 +4,7 @@ import {
   COMMON_OVERRIDE_KEYS,
   commonOverridesSchema,
   DeviceShell,
+  sliceField,
   stackLayout,
   TextBlock,
   textAlignOf,
@@ -54,6 +55,7 @@ export function stackFieldBudget(
 export const descriptor = {
   id: "hero-top",
   name: "Hero Top",
+  summary: "Copy on top, device centred below running off the bottom edge. The workhorse.",
   requiredFields: ["headline"],
   optionalFields: ["eyebrow", "caption"],
   families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
@@ -64,10 +66,6 @@ export const descriptor = {
 };
 
 /** Shared by hero-top and split-caption: the text stack (eyebrow / headline / caption) + device. */
-/** Field name for slice i (0-based): headline, headline2, headline3 ... */
-export function sliceField(base: string, slice: number): string {
-  return slice === 0 ? base : `${base}${slice + 1}`;
-}
 
 export function renderTextAndDevice(
   input: TemplateRenderInput<CommonOverrides>,

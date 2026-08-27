@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { templateModules } from "../templates";
+import { screenTemplateIds, stripTemplateIds, templateModules } from "../templates";
 import {
   backgroundCss,
   backgroundStyle,
@@ -8,6 +8,7 @@ import {
   stackLayout,
   withAlpha,
 } from "../templates/shared";
+import { DECOR_KINDS, lighten } from "../templates/decor";
 import type { TemplateRenderInput } from "../templates/types";
 import { renderStatic } from "../lib/render/ssr";
 import { targetProfiles } from "../lib/targets";
@@ -53,13 +54,14 @@ describe("template contracts", () => {
             expect(html).toContain(`width:${t.width}px;height:${t.height}px`);
             expect(html).toContain(`dir="${direction}"`);
             expect(html).toContain('data-check="headline"');
-            expect(html).toContain("data-device");
+            // Capture-less templates (statement) place no device.
+            if (mod.descriptor.usesCapture !== false) expect(html).toContain("data-device");
             expect(html).not.toContain("contenteditable");
           }
         });
       }
 
-      it("applies tilt, background image and text colour overrides", () => {
+      it("applies background image and text colour overrides (and tilt where there is a device)", () => {
         const html = renderStatic(
           mod.render(
             input("iphone-6.9-1320x2868", {
@@ -73,7 +75,7 @@ describe("template contracts", () => {
             }),
           ),
         );
-        expect(html).toContain("rotate(7deg)");
+        if (mod.descriptor.usesCapture !== false) expect(html).toContain("rotate(7deg)");
         expect(html).toContain("data:image/svg+xml");
         expect(html).toContain("%23ff0000");
         expect(html).toContain("color:#123456");
@@ -293,6 +295,52 @@ describe("feature graphic", () => {
     expect(html).toContain('data-check="headline"');
     expect(html).toContain("data-device");
   });
+
+  it("keeps the text column clear of the tilted card's bounding box", async () => {
+    const { renderStatic } = await import("../lib/render/ssr");
+    const mod = templateModules["feature-graphic"];
+    const html = renderStatic(
+      mod.render(
+        input("play-feature-1024x500" as never, {
+          target: targetProfiles["play-feature-1024x500"],
+          canvasWidth: 1024,
+          fields: { headline: "Braele", caption: "Breathe & relax" },
+        }),
+      ),
+    );
+    // Card: 0.34 x 1024 wide at 0.62 x 1024, tilted -8deg; its box grows sideways
+    // by (w cos + h sin - w) / 2. The column must stop before that, or the
+    // in-page overlap check fires on the stock layout.
+    const devW = Math.round(1024 * 0.34);
+    const devH = Math.round(devW * (2868 / 1320));
+    const rad = (8 * Math.PI) / 180;
+    const grow = Math.round((devW * Math.cos(rad) + devH * Math.sin(rad) - devW) / 2);
+    const limit = Math.round(1024 * 0.62) - grow - Math.round(500 * 0.12) - Math.round(1024 * 0.02);
+    expect(html).toContain(`width:${limit}px`);
+  });
+
+  it("keeps that clearance when the card is nudged towards the copy", async () => {
+    const { renderStatic } = await import("../lib/render/ssr");
+    const mod = templateModules["feature-graphic"];
+    const html = renderStatic(
+      mod.render(
+        input("play-feature-1024x500" as never, {
+          target: targetProfiles["play-feature-1024x500"],
+          canvasWidth: 1024,
+          fields: { headline: "Braele", caption: "Breathe & relax" },
+          overrides: { screenshotOffsetX: -0.3 },
+        }),
+      ),
+    );
+    const devW = Math.round(1024 * 0.34);
+    const devH = Math.round(devW * (2868 / 1320));
+    const rad = (8 * Math.PI) / 180;
+    const grow = Math.round((devW * Math.cos(rad) + devH * Math.sin(rad) - devW) / 2);
+    const devLeft = Math.round(1024 * 0.62) + Math.round(1024 * -0.3);
+    const limit = devLeft - grow - Math.round(500 * 0.12) - Math.round(1024 * 0.02);
+    // The column shrinks with the card instead of being pinned by a comfort floor.
+    expect(html).toContain(`width:${limit}px`);
+  });
 });
 
 describe("panorama per-slice text", () => {
@@ -460,5 +508,352 @@ describe("layers", () => {
     expect(html).toContain("New!");
     expect(html).toContain("color:#ff2200");
     expect(html).not.toContain('data-layer="empty"'); // empty text layers are dropped
+  });
+});
+
+describe("statement", () => {
+  const mod = templateModules["statement"];
+
+  it("declares that it needs no capture and renders no image", () => {
+    expect(mod.descriptor.usesCapture).toBe(false);
+    const html = renderStatic(mod.render(input("iphone-6.9-1320x2868", { fields: { headline: "No phone here" } })));
+    expect(html).not.toContain("<img");
+    expect(html).toContain('data-check="headline"');
+  });
+
+  it("draws the index watermark and a decorative shape", () => {
+    const html = renderStatic(
+      mod.render(
+        input("iphone-6.9-1320x2868", {
+          fields: { headline: "Step two", index: "02" },
+          overrides: { decor: "rings", accentColor: "#ff0000", decorOpacity: 0.4 },
+        }),
+      ),
+    );
+    expect(html).toContain("data-index");
+    expect(html).toContain(">02<");
+    expect(html).toContain('data-decor="rings"');
+    expect(html).toContain("%23ff0000");
+    expect(html).toContain("opacity:0.4");
+  });
+
+  it("anchors the copy top, middle or bottom and can drop the rule", () => {
+    const mid = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { anchor: "middle" } })));
+    expect(mid).toContain("translateY(calc(-50% + 0px))");
+    const bottom = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { anchor: "bottom" } })));
+    expect(bottom).toMatch(/bottom:\d+px/);
+    const noRule = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { rule: false } })));
+    expect(noRule).not.toContain("border-radius:999px");
+  });
+});
+
+describe("zoom-detail", () => {
+  const mod = templateModules["zoom-detail"];
+
+  it("scales the capture by zoom and centres it on the focus point", () => {
+    const html = renderStatic(
+      mod.render(input("iphone-6.9-1320x2868", { overrides: { zoom: 2, focusX: 0.5, focusY: 0.5 } })),
+    );
+    // Card width 0.88 * 1320 = 1162; the capture is zoom x that wide.
+    expect(html).toContain("width:2324px");
+    expect(html).toContain("left:-581px");
+  });
+
+  it("only draws the locator with a backdrop, sized to the visible region", () => {
+    const withLocator = renderStatic(
+      mod.render(input("iphone-6.9-1320x2868", { overrides: { locator: true, zoom: 2 } })),
+    );
+    // Backdrop is inflated 1.12x when blurred; the ring is 1/zoom of it.
+    expect(withLocator).toContain("width:739px");
+    const noBackdrop = renderStatic(
+      mod.render(input("iphone-6.9-1320x2868", { overrides: { locator: true, backdrop: "none" } })),
+    );
+    const images = noBackdrop.match(/<img/g) ?? [];
+    expect(images).toHaveLength(1); // just the card, no backdrop copy
+  });
+
+  it("renders a circle when asked", () => {
+    const html = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { detailShape: "circle" } })));
+    expect(html).toContain("border-radius:1162px");
+  });
+});
+
+describe("stat-hero", () => {
+  const mod = templateModules["stat-hero"];
+
+  it("renders the figure and its label as checked text blocks", () => {
+    const html = renderStatic(
+      mod.render(input("iphone-6.9-1320x2868", { fields: { headline: "Loved", stat: "4.9", statLabel: "rating" } })),
+    );
+    expect(html).toContain('data-check="stat"');
+    expect(html).toContain('data-check="statLabel"');
+    expect(html).toContain(">4.9<");
+  });
+
+  it("supports outline and gradient figures", () => {
+    const outline = renderStatic(
+      mod.render(
+        input("iphone-6.9-1320x2868", { fields: { headline: "h", stat: "0" }, overrides: { statStyle: "outline" } }),
+      ),
+    );
+    expect(outline).toContain("-webkit-text-stroke-width");
+    const gradient = renderStatic(
+      mod.render(
+        input("iphone-6.9-1320x2868", { fields: { headline: "h", stat: "0" }, overrides: { statStyle: "gradient" } }),
+      ),
+    );
+    expect(gradient).toContain("background-clip:text");
+  });
+
+  it("lets text sit over the device on purpose", () => {
+    const html = renderStatic(mod.render(input("iphone-6.9-1320x2868")));
+    expect(html).toContain('data-device-overlap="allowed"');
+  });
+});
+
+describe("diagonal-band", () => {
+  const mod = templateModules["diagonal-band"];
+
+  it("mirrors the cut with the reading direction", () => {
+    const ltr = renderStatic(mod.render(input("iphone-6.9-1320x2868")));
+    expect(ltr).toContain('data-band="split"');
+    expect(ltr).toContain("rotate(-9deg)");
+    const rtl = renderStatic(mod.render(input("iphone-6.9-1320x2868", { direction: "rtl" })));
+    expect(rtl).toContain("rotate(9deg)");
+  });
+
+  it("draws a ribbon with both edges in stripe mode and honours bandWidth", () => {
+    const html = renderStatic(
+      mod.render(input("iphone-6.9-1320x2868", { overrides: { band: "stripe", bandWidth: 0.25 } })),
+    );
+    expect(html).toContain('data-band="stripe"');
+    expect(html).toContain(`height:${Math.round(2868 * 0.25)}px`);
+    expect(html).toContain("border-bottom:");
+  });
+
+  it('bandEdgeColor "none" removes the hairline', () => {
+    const html = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { bandEdgeColor: "none" } })));
+    expect(html).not.toContain("border-top:");
+  });
+});
+
+describe("spotlight", () => {
+  const mod = templateModules["spotlight"];
+
+  it("renders only the chips that have copy", () => {
+    const html = renderStatic(
+      mod.render(input("iphone-6.9-1320x2868", { fields: { headline: "h", chip1: "Offline", chip3: "Fast" } })),
+    );
+    expect(html).toContain('data-check="chip1"');
+    expect(html).toContain('data-check="chip3"');
+    expect(html).not.toContain('data-check="chip2"');
+  });
+
+  it("toggles the glow and the halo rings", () => {
+    const on = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { halo: true } })));
+    expect(on).toContain("data-halo");
+    expect(on).toContain("data-glow");
+    const off = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { glow: false } })));
+    expect(off).not.toContain("data-glow");
+    expect(off).not.toContain("data-halo");
+  });
+});
+
+describe("overlap-headline", () => {
+  const mod = templateModules["overlap-headline"];
+
+  it("puts the device after the headline by default and before it when placed behind", () => {
+    const front = renderStatic(mod.render(input("iphone-6.9-1320x2868")));
+    expect(front.indexOf("data-device")).toBeGreaterThan(front.indexOf('data-check="headline"'));
+    const behind = renderStatic(
+      mod.render(input("iphone-6.9-1320x2868", { overrides: { devicePlacement: "behind" } })),
+    );
+    expect(behind.indexOf("data-device")).toBeLessThan(behind.indexOf('data-check="headline"'));
+  });
+
+  it("dims the capture behind type and applies the blend mode", () => {
+    const behind = renderStatic(
+      mod.render(input("iphone-6.9-1320x2868", { overrides: { devicePlacement: "behind", blend: "difference" } })),
+    );
+    expect(behind).toContain("mix-blend-mode:difference");
+    expect(behind).toContain("rgba(0, 0, 0, 0.45)");
+    const front = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { deviceDim: 0 } })));
+    expect(front).not.toContain("rgba(0, 0, 0, 0.45)");
+    // In front the device paints over any scrim, so it is not drawn at all.
+    const frontDim = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { deviceDim: 0.5 } })));
+    expect(frontDim).not.toContain("rgba(0, 0, 0, 0.5)");
+  });
+
+  it("scrims the caption edge unless switched off", () => {
+    const withScrim = renderStatic(mod.render(input("iphone-6.9-1320x2868")));
+    expect(withScrim).toContain("linear-gradient(0deg");
+    const without = renderStatic(mod.render(input("iphone-6.9-1320x2868", { overrides: { captionScrim: false } })));
+    expect(without).not.toContain("linear-gradient(0deg");
+  });
+});
+
+describe("decor shapes", () => {
+  it("renders every kind as an inline SVG in the artwork colour", () => {
+    const mod = templateModules["statement"];
+    for (const kind of DECOR_KINDS) {
+      const html = renderStatic(
+        mod.render(input("iphone-6.9-1320x2868", { overrides: { decor: kind, accentColor: "#00ff00" } })),
+      );
+      if (kind === "none") {
+        expect(html).not.toContain("data-decor");
+        continue;
+      }
+      expect(html).toContain(`data-decor="${kind}"`);
+      expect(html).toContain("data:image/svg+xml");
+      expect(html).toContain("%2300ff00");
+    }
+  });
+
+  it("lightens hex colours towards white and leaves others alone", () => {
+    expect(lighten("#000000", 0.5)).toBe("#808080");
+    expect(lighten("#336699", 0)).toBe("#336699");
+    expect(lighten("tomato", 0.5)).toBe("tomato");
+  });
+});
+
+describe("strip templates", () => {
+  /** A 3-slice strip: one wide canvas, one capture per slice. */
+  const strip = (id: string, extra: Partial<TemplateRenderInput> = {}) =>
+    input("iphone-6.9-1320x2868", {
+      canvasWidth: 1320 * 3,
+      sliceImageUrls: ["cap://1", "cap://2", "cap://3"],
+      fields: {
+        eyebrow: "How it works",
+        headline: "Plan the day, run the week",
+        caption: "First",
+        label: "Today",
+        label2: "This week",
+        label3: "Progress",
+        headline2: "See the week",
+        caption2: "Second",
+        headline3: "Watch it add up",
+        caption3: "Third",
+      },
+      ...extra,
+    }) as TemplateRenderInput;
+
+  it("are marked as strip templates and kept out of the per-screen list", () => {
+    expect(stripTemplateIds.sort()).toEqual([
+      "strip-alternate",
+      "strip-arc",
+      "strip-banner",
+      "strip-hero",
+      "strip-marquee",
+      "strip-quote",
+      "strip-story",
+    ]);
+    for (const id of stripTemplateIds) expect(screenTemplateIds).not.toContain(id);
+    expect(screenTemplateIds).toContain("hero-top");
+  });
+
+  it("strip-banner spans one headline and gives every slice its own capture", () => {
+    const html = renderStatic(templateModules["strip-banner"].render(strip("strip-banner")));
+    expect(html).toContain(`width:${1320 * 3}px`);
+    // One headline for the whole strip, laid out across the full canvas.
+    expect((html.match(/data-check="headline"/g) ?? []).length).toBe(1);
+    for (const url of ["cap://1", "cap://2", "cap://3"]) expect(html).toContain(url);
+    expect(html).toContain('data-check="label2"');
+    expect((html.match(/data-device=""/g) ?? []).length).toBe(3);
+  });
+
+  it("strip-story numbers each slice and runs one path across the canvas", () => {
+    const html = renderStatic(templateModules["strip-story"].render(strip("strip-story")));
+    expect(html).toContain("data-path");
+    expect(html).toContain(`width:${1320 * 3}px`);
+    expect(html).toContain('data-marker="2"');
+    expect(html).toContain(">03<");
+    expect(html).toContain('data-check="headline3"');
+    expect(html).toContain("Watch it add up");
+  });
+
+  it("strip-story can drop the path and the markers", () => {
+    const html = renderStatic(
+      templateModules["strip-story"].render(
+        strip("strip-story", { overrides: { path: "none", markers: false } }) as TemplateRenderInput,
+      ),
+    );
+    expect(html).not.toContain("data-path");
+    expect(html).not.toContain("data-marker");
+  });
+
+  it("strip-arc lifts the middle device and draws one ring across the strip", () => {
+    const html = renderStatic(templateModules["strip-arc"].render(strip("strip-arc")));
+    expect(html).toContain("data-ring");
+    const tops = [...html.matchAll(/data-device=""[^>]*top:(-?\d+)px/g)].map((m) => Number(m[1]));
+    expect(tops).toHaveLength(3);
+    // Middle sits highest (smallest top), outer two level with each other.
+    expect(tops[1]).toBeLessThan(tops[0]);
+    expect(tops[0]).toBe(tops[2]);
+  });
+
+  it("strip-alternate hangs the device from the top when its copy is below", () => {
+    const html = renderStatic(templateModules["strip-alternate"].render(strip("strip-alternate")));
+    const tops = [...html.matchAll(/data-device=""[^>]*top:(-?\d+)px/g)].map((m) => Number(m[1]));
+    expect(tops[0]).toBeGreaterThan(0);
+    expect(tops[1]).toBeLessThan(0); // cropped by the top edge, leaving room for copy
+    expect(html).toContain('data-band="soft"');
+  });
+
+  it("strip-quote draws the stars and hides them at 0", () => {
+    const five = renderStatic(templateModules["strip-quote"].render(strip("strip-quote")));
+    expect(five).toContain('data-stars="5"');
+    expect(five).toContain("data-quote-mark");
+    const none = renderStatic(
+      templateModules["strip-quote"].render(
+        strip("strip-quote", { overrides: { stars: 0, quoteMark: false } }) as TemplateRenderInput,
+      ),
+    );
+    expect(none).not.toContain("data-stars");
+    expect(none).not.toContain("data-quote-mark");
+  });
+
+  it("strip-hero makes one slice the hero and knocks the others back", () => {
+    const html = renderStatic(templateModules["strip-hero"].render(strip("strip-hero")));
+    const widths = [...html.matchAll(/data-device=""[^>]*width:(\d+)px/g)].map((m) => Number(m[1]));
+    expect(widths[0]).toBeGreaterThan(widths[1]); // slice 1 is the hero by default
+    expect(widths[1]).toBe(widths[2]);
+    // Two dim scrims: one over each supporting slice.
+    expect((html.match(/rgba\(0, 0, 0, 0.25\)/g) ?? []).length).toBe(2);
+    const second = renderStatic(
+      templateModules["strip-hero"].render(
+        strip("strip-hero", { overrides: { heroSlice: 2, supportDim: 0 } }) as TemplateRenderInput,
+      ),
+    );
+    const w2 = [...second.matchAll(/data-device=""[^>]*width:(\d+)px/g)].map((m) => Number(m[1]));
+    expect(w2[1]).toBeGreaterThan(w2[0]);
+    expect(second).not.toContain("rgba(0, 0, 0, 0.25)");
+  });
+
+  it("strip-marquee repeats the phrase across the strip and skips it when empty", () => {
+    const html = renderStatic(
+      templateModules["strip-marquee"].render(
+        strip("strip-marquee", {
+          fields: { headline: "Add what matters", marquee: "plan . do . done" },
+        }) as TemplateRenderInput,
+      ),
+    );
+    expect(html).toContain("data-marquee");
+    expect((html.match(/plan \. do \. done/g) ?? []).length).toBeGreaterThan(2);
+    const bare = renderStatic(
+      templateModules["strip-marquee"].render(
+        strip("strip-marquee", { fields: { headline: "Add what matters" } }) as TemplateRenderInput,
+      ),
+    );
+    expect(bare).not.toContain("data-marquee");
+  });
+
+  it("fall back to the single capture when the screen has no per-slice sources", () => {
+    const html = renderStatic(
+      templateModules["strip-banner"].render(
+        strip("strip-banner", { sliceImageUrls: undefined, sourceImageUrl: "cap://only" }) as TemplateRenderInput,
+      ),
+    );
+    // React also emits a preload <link> for the repeated image; count the <img>s.
+    expect((html.match(/<img src="cap:\/\/only"/g) ?? []).length).toBe(3);
   });
 });

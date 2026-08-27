@@ -58,17 +58,30 @@ export const commonOverridesSchema = z.strictObject({
    * target, or a map keyed by target family ({ "iphone": ..., "ipad": ... })
    * when the same screen needs a different frame per device.
    */
-  shell: z
-    .union([
-      shellValueSchema,
-      z.record(z.string().min(1), shellValueSchema),
-    ])
-    .optional(),
+  shell: z.union([shellValueSchema, z.record(z.string().min(1), shellValueSchema)]).optional(),
 });
 
 export type CommonOverrides = z.infer<typeof commonOverridesSchema>;
 
 export const COMMON_OVERRIDE_KEYS = Object.keys(commonOverridesSchema.shape);
+
+/** Number of screen-wide slices in this artwork (1 unless the screen is a panorama). */
+export function sliceCount(input: TemplateRenderInput<CommonOverrides>): number {
+  return Math.max(1, Math.round(input.canvasWidth / input.target.width));
+}
+
+/**
+ * Capture for slice i: the per-slice URL when the screen sets
+ * `panorama.perSliceSources`, otherwise the single capture for the whole strip.
+ */
+export function sliceImage(input: TemplateRenderInput<CommonOverrides>, slice: number): string {
+  return input.sliceImageUrls?.[slice] ?? input.sourceImageUrl;
+}
+
+/** Field name for slice i (0-based): headline, headline2, headline3 ... */
+export function sliceField(base: string, slice: number): string {
+  return slice === 0 ? base : `${base}${slice + 1}`;
+}
 
 /** Darken a #rrggbb colour by a factor (0..1). */
 export function darken(hex: string, factor: number): string {
@@ -93,6 +106,24 @@ export function withAlpha(color: string, alpha: number): string {
       .join("");
   const n = parseInt(hex.slice(0, 6), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/**
+ * Rough perceived lightness of a #rgb/#rrggbb colour. Non-hex values (gradients,
+ * named colours) are treated as light, which is the safe default for scrims.
+ */
+export function isLightColor(color: string): boolean {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim());
+  if (!m) return true;
+  let hex = m[1];
+  if (hex.length === 3)
+    hex = hex
+      .split("")
+      .map((c) => c + c)
+      .join("");
+  const n = parseInt(hex, 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6;
 }
 
 export function defaultBackground(primary: string): string {
@@ -361,6 +392,13 @@ export interface DeviceShellProps {
   /** Absolute position inside the artwork (before tilt). */
   left: number;
   top: number;
+  /**
+   * Opt out of the text-over-device check for templates that compose text and
+   * device on purpose (stat-hero, overlap-headline).
+   */
+  overlapAllowed?: boolean;
+  /** Capture to show; defaults to `input.sourceImageUrl` (strips pass a slice's). */
+  imageUrl?: string;
 }
 
 /**
@@ -368,8 +406,18 @@ export interface DeviceShellProps {
  * capture inside with object-fit cover anchored to the top. Tilt rotates
  * around the shell centre.
  */
-export function DeviceShell({ input, width, height, left, top }: DeviceShellProps): ReactElement {
+export function DeviceShell({
+  input,
+  width,
+  height,
+  left,
+  top,
+  overlapAllowed,
+  imageUrl,
+}: DeviceShellProps): ReactElement {
   const frame = input.frame;
+  const overlapAttr = overlapAllowed ? { "data-device-overlap": "allowed" } : {};
+  const src = imageUrl ?? input.sourceImageUrl;
   if (frame) {
     // Official frameit artwork: scale so the frame's screen cut-out width equals
     // the requested device width; the capture sits exactly in the cut-out.
@@ -383,6 +431,7 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
     return (
       <div
         data-device=""
+        {...overlapAttr}
         style={{
           position: "absolute",
           left: left - frame.screenX * s,
@@ -406,7 +455,7 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={input.sourceImageUrl}
+            src={src}
             alt=""
             data-source=""
             style={{
@@ -437,6 +486,7 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
   return (
     <div
       data-device=""
+      {...overlapAttr}
       style={{
         position: "absolute",
         left,
@@ -464,7 +514,7 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={input.sourceImageUrl}
+          src={src}
           alt=""
           data-source=""
           style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center" }}

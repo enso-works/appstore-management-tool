@@ -19,6 +19,8 @@ type Overrides = z.infer<typeof overridesSchema>;
 export const descriptor = {
   id: "full-bleed-card",
   name: "Full Bleed Card",
+  summary:
+    "The capture fills the canvas and the headline sits on a high-contrast card. For screens where the UI is the hero.",
   requiredFields: ["headline"],
   optionalFields: ["caption"],
   families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],

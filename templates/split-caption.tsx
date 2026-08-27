@@ -14,6 +14,7 @@ export const overridesSchema = commonOverridesSchema;
 export const descriptor = {
   id: "split-caption",
   name: "Split Caption",
+  summary: "A text column on one side, the device beside it - large, tilted, running off the opposite edge.",
   requiredFields: ["headline"],
   optionalFields: ["eyebrow", "caption"],
   families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],

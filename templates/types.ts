@@ -7,12 +7,26 @@ import type { TextDirection } from "../lib/locales";
 export interface TemplateDescriptor {
   id: string;
   name: string;
+  /** One line describing what the layout is for; shown in the template catalogue. */
+  summary?: string;
   requiredFields: string[];
   optionalFields: string[];
   families: DeviceFamily[];
   orientations: Orientation[];
   /** Allowed keys in screen.overrides; values validated by `overridesSchema`. */
   overrideKeys: string[];
+  /**
+   * False for templates that never show the raw capture (pure typography
+   * slides): validate and generate then skip the missing-capture error, so a
+   * screen using one needs no PNG under store/raw/. Defaults to true.
+   */
+  usesCapture?: boolean;
+  /**
+   * True for templates that compose the whole screenshot strip in one artwork
+   * (a panorama of 2-3 slices). The editor offers these in the Strip tab
+   * instead of the per-screen template list.
+   */
+  strip?: boolean;
   /**
    * Rough character budget for a field at the given target/overrides: how many
    * characters fit before the in-page fitter starts shrinking. Optional.
@@ -51,6 +65,12 @@ export interface TemplateRenderInput<O = Record<string, unknown>> {
   fields: Record<string, string | null | undefined>;
   /** URL the page can load: file:// for export, /api/... for the UI. */
   sourceImageUrl: string;
+  /**
+   * One capture URL per panorama slice (length === slices, `sourceImageUrl` at
+   * index 0). Only strip templates need this; everything else uses
+   * `sourceImageUrl`. Without `panorama.perSliceSources` every entry is the same.
+   */
+  sliceImageUrls?: string[];
   brand: BrandTheme;
   overrides: O;
   mode: "preview" | "export";
