@@ -18,7 +18,7 @@ const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "ios", "android", "b
 export interface DiscoveredProject {
   root: string;
   configPath: string;
-  /** Directory name relative to the workspace, e.g. "breathe". */
+  /** Directory name relative to the workspace, e.g. "braele". */
   name: string;
   project?: Project;
   error?: string;

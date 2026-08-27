@@ -67,7 +67,7 @@ export function preflightLane(project: Project, key: LaneKey): LanePreflight {
     const text = fs.readFileSync(fastfile, "utf8");
     if (!new RegExp(`lane\\s+:${laneName}\\b`).test(text)) {
       reasons.push(
-        `lane "${laneName}" not found in fastlane/Fastfile (copy it from starter-template/fastlane/Fastfile)`,
+        `lane "${laneName}" not found in fastlane/Fastfile (copy it from app-template/fastlane/Fastfile)`,
       );
     }
   }

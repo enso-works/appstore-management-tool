@@ -27,7 +27,7 @@
 ## Fastlane runner
 
 - Upload lanes are disabled while readiness fails; enter an override reason to force them (logged).
-- `lane "<name>" not found in fastlane/Fastfile` → the app's Fastfile lacks the lane; copy it from `starter-template/fastlane/Fastfile`.
+- `lane "<name>" not found in fastlane/Fastfile` → the app's Fastfile lacks the lane; copy it from `app-template/fastlane/Fastfile`.
 - Output is the real `fastlane` output; credentials and ASC behaviour are fastlane's, not the tool's.
 - fastlane is found at `/opt/homebrew/bin/fastlane`, `/usr/local/bin/fastlane`, `$STORE_SHOTS_FASTLANE`, or on `PATH`.
 

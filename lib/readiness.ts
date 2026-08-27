@@ -148,7 +148,7 @@ function checkPlaceholders(project: Project): ReadinessCheck {
       if (hits.length) f.fail(`${displayRelative(project.root, file)}: ${hits.join(", ")}`);
     }
   }
-  return f.check("placeholders", "No template placeholders left", "see starter-template/NEW-APP.md section 2");
+  return f.check("placeholders", "No template placeholders left", "see app-template/NEW-APP.md section 2");
 }
 
 function listTextFiles(p: string): string[] {

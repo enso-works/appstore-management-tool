@@ -8,18 +8,18 @@ Supersedes: `~/Downloads/app-store-screenshot-generator-plan.md` (revision 1, wr
 
 ## 1. Executive summary
 
-One workspace-level tool, living next to `starter-template/` and the individual apps, that does two jobs for every app in this folder:
+One workspace-level tool, living next to `app-template/` and the individual apps, that does two jobs for every app in this folder:
 
 1. **Screenshot generation** — turns raw simulator captures into polished, templated, localized App Store (and later Google Play) screenshots, written straight into each app's `fastlane/screenshots/<locale>/`, which the existing `fastlane ios screenshots` lane already uploads.
 2. **Store management** — a local UI and CLI for the rest of the listing: localized metadata (`fastlane/metadata/<locale>/*.txt`), character-limit validation, per-app "store readiness" checks, and one-click invocation of the app's own fastlane lanes (validate, upload metadata, upload screenshots). Credentials stay in each app's `fastlane/` directory; the tool never talks to App Store Connect itself.
 
-The tool is one codebase serving N apps. Each app owns its content (copy, manifest, raw captures, metadata) under a `store/` directory; the tool owns templates, rendering, validation and the UI. New apps get the `store/` scaffold from `starter-template/`.
+The tool is one codebase serving N apps. Each app owns its content (copy, manifest, raw captures, metadata) under a `store/` directory; the tool owns templates, rendering, validation and the UI. New apps get the `store/` scaffold from `app-template/`.
 
 Revision 1 was written as a single-app, single-purpose generator with Codex as the executor. This revision changes: the executor (Claude Code), the home (its own repo next to the apps, not inside one), the scope (screenshots **and** store management), and replaces the plan's open questions with the answers discovered in this workspace.
 
 ## 2. Workspace discovery (Phase 0 findings)
 
-Verified 2026-08-19 in `/Users/enso/PrivateProjects/outloud-expo`.
+Verified 2026-08-19 in `/Users/enso/PrivateProjects/bavrk-apps`.
 
 ### 2.1 Apps
 
@@ -30,7 +30,7 @@ Verified 2026-08-19 in `/Users/enso/PrivateProjects/outloud-expo`.
 | `mycv/`             | MyCV             | `com.bavrk.mycv`             | 56.0.12 | yes, no remote                    | Appfile, Fastfile, no keys                            | en-US                                        | none                                                                                                                                    |
 | `bed-time-stories/` | bed-time-stories | `com.ensob.bed-time-stories` | 56.0.12 | yes, no remote                    | none                                                  | none                                         | none                                                                                                                                    |
 | `outloud/`          | Mindsaid         | `com.bavrk.mindsaid`         | 54.0.32 | yes, remote `enso-works/mindsaid` | none                                                  | none                                         | none                                                                                                                                    |
-| `starter-template/` | placeholder      | `com.bavrk.__APP_SLUG__`     | 56.0.12 | **no**                            | Appfile, Deliverfile, Fastfile, CREDENTIALS.md        | en-US                                        | none                                                                                                                                    |
+| `app-template/` | placeholder      | `com.bavrk.__APP_SLUG__`     | 56.0.12 | **no**                            | Appfile, Deliverfile, Fastfile, CREDENTIALS.md        | en-US                                        | none                                                                                                                                    |
 
 Every app is portrait-only and has `ios.supportsTablet: true`. Apple requires iPad screenshots when the binary supports iPad, so **the iPad 13" target is mandatory, not optional**.
 
@@ -42,7 +42,7 @@ Every app is portrait-only and has `ios.supportsTablet: true`. Apple requires iP
 - **No `snapshot` lane exists in any app.** Raw captures are taken by hand from a booted simulator (`xcrun simctl io booted screenshot`). Braele's README documents this and recommends an iPhone 16 Pro Max simulator (1320×2868) for exact-size captures.
 - Braele's `en-US` screenshots are 1320×2868, no alpha, and were accepted by App Store Connect. That settles the canonical 6.9" size.
 - Claude Code has the `app-store-optimization` skill and `aso-*` agents available in this workspace; Braele's `store/aso-*.md` files were produced with them. ASO research is **not** part of this tool; the tool consumes and validates the resulting copy.
-- The workspace root is not a git repository. Every app directory is its own git repository; `starter-template/` was a loose folder until Phase 1 made it a repo.
+- The workspace root is not a git repository. Every app directory is its own git repository; `app-template/` was a loose folder until Phase 1 made it a repo.
 
 ### 2.3 Consequences for the plan
 
@@ -58,7 +58,7 @@ Every app is portrait-only and has `ios.supportsTablet: true`. Apple requires iP
 
 | Question (rev. 1 §26)               | Answer                                                                                                         |
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Which repository contains the tool? | `tools/store-shots/` is its own git repo; `starter-template/` is its own; the workspace root is a plain folder |
+| Which repository contains the tool? | `tools/store-shots/` is its own git repo; `app-template/` is its own; the workspace root is a plain folder |
 | Package manager / Node              | npm, Node 22 (add `.nvmrc`)                                                                                    |
 | Existing `snapshot` output tree     | None. Raw captures come from `xcrun simctl`; tool provides `capture` helper                                    |
 | v1 locales                          | en-US, de-DE, es-ES, es-MX, fr-FR, nl-NL, da                                                                   |
@@ -99,7 +99,7 @@ Store management:
 
 Template integration:
 
-- `starter-template/` ships the `store/` scaffold and config so a new app is wired to the tool at creation.
+- `app-template/` ships the `store/` scaffold and config so a new app is wired to the tool at creation.
 
 ### 4.2 Non-goals for v1
 
@@ -135,7 +135,7 @@ app keeps its own repo.
 │       ├── docs/store-tool-plan.md    this document
 │       ├── app/  cli/  lib/  templates/  schema/  fixtures/  tests/  scripts/  bin/
 │       └── package.json
-├── starter-template/                  git repo: the app template; ships store/ + store-shots.config.json
+├── app-template/                  git repo: the app template; ships store/ + store-shots.config.json
 ├── breathe/                           own repo (enso-works/braele)
 ├── invoicer/  mycv/  bed-time-stories/  outloud/   own repos
 ```
@@ -531,13 +531,13 @@ Sections 2 and 3. Remaining open decisions default as stated in 3.2.
 
 ### Phase 1 — Workspace repo, tool skeleton, schemas, fixture
 
-- `git init` in `tools/store-shots/` and in `starter-template/`; `.gitignore`, `.nvmrc`, `README.md`, `CLAUDE.md` for the tool.
+- `git init` in `tools/store-shots/` and in `app-template/`; `.gitignore`, `.nvmrc`, `README.md`, `CLAUDE.md` for the tool.
 - `tools/store-shots/`: Next.js + TS, ESLint/Prettier, Vitest, lockfile, `store-shots` bin.
 - Zod schemas + generated JSON Schemas for config, manifest, content, target registry.
 - Project registry (workspace scan) and config discovery (walk up / `--project`).
 - Fixture project under `tools/store-shots/fixtures/demo-app/` with both targets, `en-US` + one RTL locale, two screens, bundled fonts.
 - `validate` and `readiness` (schema + file presence subset) commands.
-- `init` scaffolds `store/` + config into an app; run it on `starter-template/` and update `NEW-APP.md` section 10.
+- `init` scaffolds `store/` + config into an app; run it on `app-template/` and update `NEW-APP.md` section 10.
 
 Acceptance: fresh `npm ci` works on Node 22; `validate` passes for the fixture and fails actionably on a broken copy; `readiness` reports correctly on Braele (which will show missing screenshots for six locales); the tool repo has clean atomic commits.
 
@@ -596,7 +596,7 @@ Acceptance: full Braele matrix regenerates reproducibly; all tests pass; a new d
 - Local UI: copy editing, template selection, preview, save, generate, metadata editing, readiness, lane runner.
 - Headless CLI for `validate`, `generate`, `readiness`, `metadata`, `lane`, `capture`, `fonts`.
 - Exact-dimension, no-alpha PNGs; strict missing-translation and overflow failures; deterministic order; manifest-owned cleanup.
-- Braele fully generated and uploaded via its own `screenshots` lane; `starter-template/` scaffolded; the other apps `init`-ed.
+- Braele fully generated and uploaded via its own `screenshots` lane; `app-template/` scaffolded; the other apps `init`-ed.
 - Unit, template, golden, e2e tests green; Fastlane smoke test performed on Braele.
 - No credentials handled by the tool; no binaries built; nothing submitted.
 
@@ -622,13 +622,13 @@ Replaces revision 1 §27 (Codex kickoff prompt).
 
 Contents, in brief:
 
-- Layout: this repo is `tools/store-shots/` inside a plain workspace folder; `../../starter-template/` is the app template; sibling app directories are independent git repositories — never commit inside them as a side effect of tool work.
+- Layout: this repo is `tools/store-shots/` inside a plain workspace folder; `../../app-template/` is the app template; sibling app directories are independent git repositories — never commit inside them as a side effect of tool work.
 - The plan is `docs/store-tool-plan.md`; work proceeds one phase at a time; do not start the next phase without approval.
 - Never touch `fastlane/*.p8`, `asc_api_key.json`, `play_service_account.json`; existence checks only.
 - Never add or run lanes that build or submit; `submit_for_review` stays false.
 - Commits: atomic, one logical change each, no emojis; ask before committing (per the user's global rules).
 - After each phase: run the phase tests, run `/code-review`, report changed files, commands, results, remaining risks, and update the phase checklist in this plan.
-- npm, Node 22 (`.nvmrc`), fastlane via Homebrew, Ruby via rbenv/homebrew (not system Ruby, see `starter-template/NEW-APP.md` gotchas).
+- npm, Node 22 (`.nvmrc`), fastlane via Homebrew, Ruby via rbenv/homebrew (not system Ruby, see `app-template/NEW-APP.md` gotchas).
 
 ### 25.2 Phase kickoff prompt
 

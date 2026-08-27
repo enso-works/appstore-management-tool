@@ -11,8 +11,8 @@ time; do not start the next phase without approval.
 ```text
 <workspace>/                 plain folder that groups repos (not a repo itself)
 ├── tools/store-shots/       THIS repo
-├── starter-template/        Expo app template, its own repo; ships the store/ scaffold
-└── breathe/ invoicer/ ...   apps, each its own repo
+├── app-template/        Expo app template, its own repo; ships the store/ scaffold
+└── braele/ invoit/ mindsaid/ ...   apps, each its own repo
 ```
 
 The tool discovers apps by scanning the workspace root (three levels up from `lib/`, or
@@ -43,5 +43,5 @@ The tool discovers apps by scanning the workspace root (three levels up from `li
 - CLI: `npx store-shots <cmd>` here, or `node tools/store-shots/bin/store-shots.mjs <cmd>`
   from the workspace.
 - fastlane via Homebrew; Ruby via rbenv/Homebrew, not system Ruby
-  (see `../../starter-template/NEW-APP.md`, "iOS build gotchas").
+  (see `../../app-template/NEW-APP.md`, "iOS build gotchas").
 - Next.js 16: read `AGENTS.md` (above) before touching `app/`.

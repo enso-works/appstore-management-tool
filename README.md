@@ -8,7 +8,7 @@ This repo is `tools/store-shots/` inside a plain workspace folder:
 ```text
 <workspace>/
 ├── tools/store-shots/     this repo
-├── starter-template/      Expo SDK 56 app shell, its own repo -- see its NEW-APP.md; ships the store/ scaffold
+├── app-template/      Expo SDK 56 app shell, its own repo -- see its NEW-APP.md; ships the store/ scaffold
 └── breathe/ invoicer/ ... apps, each its own repo
 
 The workspace folder itself is not a repo; it only groups repos (and may hold unrelated docs).
@@ -40,17 +40,17 @@ Without `--project` the CLI walks up from the current directory.
 
 ```sh
 npx store-shots projects                          # apps in the workspace that have a config
-npx store-shots init      --project ../../breathe # scaffold store/ + config (never overwrites)
-npx store-shots validate  --project ../../breathe [--dry-run] [--json]
-npx store-shots readiness --project ../../breathe [--json]
-npx store-shots generate  --project ../../breathe [--locale en-US] [--screen home] [--target iphone-6.9-1320x2868] [--strict] [--force] [--dry-run] [--json]
+npx store-shots init      --project ../../braele # scaffold store/ + config (never overwrites)
+npx store-shots validate  --project ../../braele [--dry-run] [--json]
+npx store-shots readiness --project ../../braele [--json]
+npx store-shots generate  --project ../../braele [--locale en-US] [--screen home] [--target iphone-6.9-1320x2868] [--strict] [--force] [--dry-run] [--json]
                                                   # incremental: unchanged jobs are skipped; --force re-renders
-npx store-shots clean     --project ../../breathe # delete only files listed in .store-shots-manifest.json
-npx store-shots fonts add "Space Grotesk" --project ../../breathe   # download once from Google Fonts into store/assets/fonts/
-npx store-shots fonts list|check --project ../../breathe
-npx store-shots metadata validate|show --locale de-DE --project ../../breathe
-npx store-shots lane validate|metadata|screenshots --project ../../breathe [--yes] [--override "<reason>"] [--dry-run]
-npx store-shots capture --screen home --device iphone [--locale de-DE] [--clean-status-bar] [--force] --project ../../breathe
+npx store-shots clean     --project ../../braele # delete only files listed in .store-shots-manifest.json
+npx store-shots fonts add "Space Grotesk" --project ../../braele   # download once from Google Fonts into store/assets/fonts/
+npx store-shots fonts list|check --project ../../braele
+npx store-shots metadata validate|show --locale de-DE --project ../../braele
+npx store-shots lane validate|metadata|screenshots --project ../../braele [--yes] [--override "<reason>"] [--dry-run]
+npx store-shots capture --screen home --device iphone [--locale de-DE] [--clean-status-bar] [--force] --project ../../braele
 npx store-shots capture --list                    # booted simulators
 npm run dev                                       # UI at http://localhost:3000
 ```
