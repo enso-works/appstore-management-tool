@@ -1192,3 +1192,203 @@
   cursor: default;
   font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
 }
+
+/* Listing preview (App Store / Play product page) */
+.listingBar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.listingBar .row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.listingWrap {
+  display: flex;
+  gap: 28px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.phonePage {
+  flex: none;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: 26px;
+  padding: 18px 0 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.appIcon {
+  width: 62px;
+  height: 62px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  object-fit: cover;
+  flex: none;
+}
+
+.appText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.appName {
+  font-size: 17px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.appSubtitle {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.getBtn {
+  margin-left: auto;
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: #0a84ff;
+  border-radius: 999px;
+  padding: 4px 16px;
+}
+
+.shotRowClip {
+  overflow: hidden;
+}
+
+.shotRow {
+  display: flex;
+  align-items: flex-start;
+}
+
+.shotFrame {
+  flex: none;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shotFrame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.draftTag {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--warn);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.shotMissing {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px;
+}
+
+.appDescription {
+  margin: 14px 0 0;
+  padding: 0 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.foldPanel {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+
+.foldHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.foldRow {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  /* Room for the fold label above the line. */
+  padding: 18px 0 6px;
+}
+
+.foldItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.foldLabel {
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.belowFold {
+  opacity: 0.45;
+}
+
+.foldLine {
+  position: absolute;
+  top: 10px;
+  bottom: 18px;
+  width: 0;
+  border-left: 2px dashed var(--warn);
+}
+
+.foldLine::after {
+  content: "fold";
+  position: absolute;
+  top: -14px;
+  left: 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--warn);
+}

@@ -12,6 +12,7 @@ import type { ReadinessReport } from "@/lib/readiness";
 import type { GenerationSummary } from "@/lib/generate";
 import StorePanel from "./store-panel";
 import StripPanel from "./strip-panel";
+import ListingPanel from "./listing-panel";
 import ReleasePanel from "./release-panel";
 import BackgroundEditor from "./background-editor";
 import ColorField from "./color-field";
@@ -359,7 +360,7 @@ export default function Editor({ name, initialScreenId }: { name: string; initia
   });
   const [showLog, setShowLog] = useState(false);
   const [newScreenId, setNewScreenId] = useState("");
-  const [view, setView] = useState<"screens" | "strip" | "store" | "release">("screens");
+  const [view, setView] = useState<"screens" | "strip" | "listing" | "store" | "release">("screens");
   const [canvasMode, setCanvasMode] = useState<"single" | "strip" | "locales">("single");
   const [storeLook, setStoreLook] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -1317,6 +1318,13 @@ export default function Editor({ name, initialScreenId }: { name: string; initia
             Full strip
           </button>
           <button
+            className={`${styles.tab} ${view === "listing" ? styles.tabActive : ""}`}
+            onClick={() => setView("listing")}
+            title="the generated screenshots inside the store product page"
+          >
+            Listing
+          </button>
+          <button
             className={`${styles.tab} ${view === "store" ? styles.tabActive : ""}`}
             onClick={() => setView("store")}
           >
@@ -1444,6 +1452,14 @@ export default function Editor({ name, initialScreenId }: { name: string; initia
             setScreenId(id);
             setView("screens");
           }}
+        />
+      )}
+      {view === "listing" && (
+        <ListingPanel
+          name={name}
+          locales={snap.config.locales}
+          targets={snap.targets}
+          defaultLocale={snap.config.defaultLocale}
         />
       )}
       {view === "store" && (

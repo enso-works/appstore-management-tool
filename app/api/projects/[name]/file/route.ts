@@ -5,6 +5,7 @@ import { HttpError, requireProject } from "@/lib/server/projects";
 import { appFontsDir, bundledFontsDir } from "@/lib/fonts";
 import { framesDir } from "@/lib/frames";
 import { fileExists, resolveWithin } from "@/lib/paths";
+import { readAppJson } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ const MIME: Record<string, string> = {
  *   ?kind=shot&path=en-US/01_hero_IPHONE_69.png     (fastlane/screenshots)
  *   ?kind=sheet&path=en-US_IPHONE_69.png            (store/generated/sheets)
  *   ?kind=font&src=app|bundled&path=inter/inter-400.ttf
+ *   ?kind=icon                                      (app.json's icon, for the listing preview)
  */
 export async function GET(req: Request, ctx: Ctx) {
   return handle(async () => {
@@ -39,6 +41,23 @@ export async function GET(req: Request, ctx: Ctx) {
     const url = new URL(req.url);
     const kind = url.searchParams.get("kind");
     const rel = url.searchParams.get("path") ?? "";
+    // The app icon is addressed by app.json, not by a caller-supplied path.
+    if (kind === "icon") {
+      const app = readAppJson(project);
+      const iconRel = typeof app?.icon === "string" ? app.icon : "./assets/icon.png";
+      let iconAbs: string;
+      try {
+        iconAbs = resolveWithin(project.root, iconRel);
+      } catch {
+        throw new HttpError(404, "not found");
+      }
+      if (!fileExists(iconAbs)) throw new HttpError(404, "not found");
+      const iconType = MIME[path.extname(iconAbs).toLowerCase()];
+      if (!iconType) throw new HttpError(404, "not found");
+      return new Response(fs.readFileSync(iconAbs), {
+        headers: { "content-type": iconType, "cache-control": "no-store" },
+      });
+    }
     let root: string;
     if (kind === "raw") root = project.paths.raw;
     else if (kind === "asset") root = project.paths.assets;
@@ -47,7 +66,7 @@ export async function GET(req: Request, ctx: Ctx) {
     else if (kind === "devframe") root = framesDir();
     else if (kind === "font")
       root = url.searchParams.get("src") === "bundled" ? bundledFontsDir() : appFontsDir(project);
-    else throw new HttpError(400, "kind must be raw, asset, shot, sheet, font or devframe");
+    else throw new HttpError(400, "kind must be raw, asset, shot, sheet, font, devframe or icon");
     let abs: string;
     try {
       abs = resolveWithin(root, rel);
