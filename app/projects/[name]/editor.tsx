@@ -11,6 +11,7 @@ import type { FitResult } from "@/lib/render/fit";
 import type { ReadinessReport } from "@/lib/readiness";
 import type { GenerationSummary } from "@/lib/generate";
 import StorePanel from "./store-panel";
+import StripPanel from "./strip-panel";
 import ReleasePanel from "./release-panel";
 import BackgroundEditor from "./background-editor";
 import ColorField from "./color-field";
@@ -45,7 +46,7 @@ const OVERRIDE_CONTROLS: Record<
   string,
   {
     label: string;
-    kind: "text" | "number" | "select" | "color";
+    kind: "text" | "number" | "select" | "color" | "boolean";
     min?: number;
     max?: number;
     step?: number;
@@ -94,12 +95,227 @@ const OVERRIDE_CONTROLS: Record<
   shell: { label: "Device shell", kind: "select", options: ["dark", "light", "none"] },
   cardPosition: { label: "Card position", kind: "select", options: ["top", "bottom"] },
   cardColor: { label: "Card colour", kind: "color", hint: "CSS colour; default brand.primary at 93%" },
+
+  // zoom-detail
+  zoom: { label: "Zoom", kind: "number", min: 1, max: 6, step: 0.05, hint: "1 = full app width cropped to a slice" },
+  focusX: {
+    label: "Focus X",
+    kind: "number",
+    min: 0,
+    max: 1,
+    step: 0.01,
+    hint: "point of the capture the card centres on",
+  },
+  focusY: { label: "Focus Y", kind: "number", min: 0, max: 1, step: 0.01 },
+  detailShape: { label: "Detail shape", kind: "select", options: ["card", "circle"] },
+  detailAspect: { label: "Detail aspect", kind: "number", min: 0.4, max: 2.5, step: 0.05, hint: "width / height" },
+  backdrop: { label: "Backdrop", kind: "select", options: ["blur", "dim", "none"] },
+  locator: { label: "Locator ring", kind: "boolean", hint: "frames the magnified area on the backdrop" },
+  detailBorderColor: { label: "Detail border", kind: "color" },
+
+  // statement
+  decor: {
+    label: "Decor shape",
+    kind: "select",
+    options: ["none", "arc", "blob", "burst", "rings", "wave", "confetti", "grid"],
+  },
+  decorOpacity: { label: "Decor opacity", kind: "number", min: 0, max: 1, step: 0.01 },
+  decorPlacement: {
+    label: "Decor placement",
+    kind: "select",
+    options: ["cover", "top-start", "top-end", "bottom-start", "bottom-end"],
+  },
+  accentColor: { label: "Accent colour", kind: "color", hint: "rule, index numeral and decor" },
+  indexStyle: { label: "Index style", kind: "select", options: ["outline", "solid"] },
+  rule: { label: "Accent rule", kind: "boolean" },
+  anchor: { label: "Copy anchor", kind: "select", options: ["top", "middle", "bottom"] },
+
+  // stat-hero
+  statStyle: { label: "Figure style", kind: "select", options: ["solid", "outline", "gradient"] },
+  statColor: { label: "Figure colour", kind: "color" },
+  statScale: {
+    label: "Figure size",
+    kind: "number",
+    min: 0.15,
+    max: 0.8,
+    step: 0.01,
+    hint: "fraction of the canvas width",
+  },
+  statOpacity: { label: "Figure opacity", kind: "number", min: 0.05, max: 1, step: 0.01 },
+  statOffsetY: {
+    label: "Figure offset Y",
+    kind: "number",
+    min: 0,
+    max: 1,
+    step: 0.01,
+    hint: "fraction of the canvas height",
+  },
+
+  // diagonal-band
+  band: { label: "Band mode", kind: "select", options: ["split", "stripe"] },
+  bandColor: { label: "Band colour", kind: "color" },
+  bandAngle: { label: "Band angle", kind: "number", min: -25, max: 25, step: 0.5 },
+  bandPosition: { label: "Band position", kind: "number", min: 0.1, max: 0.95, step: 0.01 },
+  bandWidth: { label: "Band width", kind: "number", min: 0.05, max: 0.9, step: 0.01, hint: "stripe mode only" },
+  bandEdgeColor: { label: "Band edge", kind: "color", hint: 'hairline along the cut; "none" removes it' },
+
+  // spotlight
+  chipStyle: { label: "Chip style", kind: "select", options: ["glass", "solid", "outline"] },
+  chipColor: { label: "Chip colour", kind: "color" },
+  glow: { label: "Glow", kind: "boolean" },
+  glowColor: { label: "Glow colour", kind: "color" },
+  halo: { label: "Halo rings", kind: "boolean" },
+
+  // overlap-headline
+  headlineScale: {
+    label: "Headline size",
+    kind: "number",
+    min: 0.06,
+    max: 0.3,
+    step: 0.005,
+    hint: "fraction of the canvas width",
+  },
+  blend: {
+    label: "Headline blend",
+    kind: "select",
+    options: ["normal", "difference", "overlay", "exclusion", "soft-light"],
+  },
+  devicePlacement: { label: "Device placement", kind: "select", options: ["front", "behind"] },
+  deviceDim: {
+    label: "Dim capture",
+    kind: "number",
+    min: 0,
+    max: 0.8,
+    step: 0.01,
+    hint: 'only with device placement "behind"',
+  },
+  headlineTop: {
+    label: "Headline top",
+    kind: "number",
+    min: 0,
+    max: 0.7,
+    step: 0.01,
+    hint: "fraction of the canvas height",
+  },
+  captionPlacement: { label: "Caption placement", kind: "select", options: ["bottom", "top"] },
+  captionScrim: { label: "Caption scrim", kind: "boolean" },
+
+  // strip-banner / strip-story (chosen in the Full strip tab)
+  stagger: {
+    label: "Device stagger",
+    kind: "number",
+    min: 0,
+    max: 0.4,
+    step: 0.005,
+    hint: "vertical step between neighbouring devices",
+  },
+  alternateTilt: { label: "Alternate tilt", kind: "boolean" },
+  labelColor: { label: "Slice label pill", kind: "color", hint: '"none" drops the pill' },
+  path: { label: "Path", kind: "select", options: ["line", "dashed", "none"] },
+  pathColor: { label: "Path colour", kind: "color" },
+  pathY: {
+    label: "Path position",
+    kind: "number",
+    min: 0.1,
+    max: 0.9,
+    step: 0.01,
+    hint: "fraction of the canvas height",
+  },
+  markers: { label: "Numbered markers", kind: "boolean" },
+  cascade: {
+    label: "Device cascade",
+    kind: "number",
+    min: -0.2,
+    max: 0.2,
+    step: 0.005,
+    hint: "extra step down per slice",
+  },
 };
 
+/** Tri-state override toggle: unset (template default), on, off. */
+function BoolField({ value, onChange }: { value: unknown; onChange: (v: unknown) => void }) {
+  return (
+    <select
+      className={styles.select}
+      value={value === true ? "on" : value === false ? "off" : ""}
+      onChange={(e) => onChange(e.target.value === "" ? "" : e.target.value === "on")}
+    >
+      <option value="">default</option>
+      <option value="on">on</option>
+      <option value="off">off</option>
+    </select>
+  );
+}
+
 const EL_GROUPS: Record<string, string[]> = {
-  background: ["background", "backgroundImage", "patternColor"],
-  phone: ["screenshotScale", "screenshotOffsetX", "screenshotOffsetY", "deviceTilt", "shell"],
-  text: ["textWidth", "textSide", "textOffsetX", "textOffsetY", "textAlign", "textColor", "cardPosition", "cardColor"],
+  background: [
+    "background",
+    "backgroundImage",
+    "patternColor",
+    "decor",
+    "decorOpacity",
+    "decorPlacement",
+    "accentColor",
+    "band",
+    "bandColor",
+    "bandAngle",
+    "bandPosition",
+    "bandWidth",
+    "bandEdgeColor",
+    "glow",
+    "glowColor",
+    "halo",
+    "path",
+    "pathColor",
+    "pathY",
+    "markers",
+  ],
+  phone: [
+    "screenshotScale",
+    "screenshotOffsetX",
+    "screenshotOffsetY",
+    "deviceTilt",
+    "shell",
+    "zoom",
+    "focusX",
+    "focusY",
+    "detailShape",
+    "detailAspect",
+    "backdrop",
+    "locator",
+    "detailBorderColor",
+    "devicePlacement",
+    "deviceDim",
+    "stagger",
+    "alternateTilt",
+    "cascade",
+  ],
+  text: [
+    "textWidth",
+    "textSide",
+    "textOffsetX",
+    "textOffsetY",
+    "textAlign",
+    "textColor",
+    "cardPosition",
+    "cardColor",
+    "anchor",
+    "rule",
+    "indexStyle",
+    "headlineScale",
+    "headlineTop",
+    "blend",
+    "captionPlacement",
+    "captionScrim",
+    "statStyle",
+    "statColor",
+    "statScale",
+    "statOpacity",
+    "statOffsetY",
+    "chipStyle",
+    "chipColor",
+    "labelColor",
+  ],
 };
 
 function groupOf(sel: string): string {
@@ -143,7 +359,7 @@ export default function Editor({ name }: { name: string }) {
   });
   const [showLog, setShowLog] = useState(false);
   const [newScreenId, setNewScreenId] = useState("");
-  const [view, setView] = useState<"screens" | "store" | "release">("screens");
+  const [view, setView] = useState<"screens" | "strip" | "store" | "release">("screens");
   const [canvasMode, setCanvasMode] = useState<"single" | "strip" | "locales">("single");
   const [storeLook, setStoreLook] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
@@ -866,7 +1082,9 @@ export default function Editor({ name }: { name: string }) {
     setFontStatus("");
     try {
       const payload = (ifMatch: string) =>
-        kind === "font" ? { font: { family: family as string }, ifMatch } : { headlineFont: family ? { family } : null, ifMatch };
+        kind === "font"
+          ? { font: { family: family as string }, ifMatch }
+          : { headlineFont: family ? { family } : null, ifMatch };
       const send = (ifMatch: string) =>
         fetch(`/api/projects/${encodeURIComponent(name)}/fonts`, {
           method: "PUT",
@@ -1087,6 +1305,13 @@ export default function Editor({ name }: { name: string }) {
             Screens
           </button>
           <button
+            className={`${styles.tab} ${view === "strip" ? styles.tabActive : ""}`}
+            onClick={() => setView("strip")}
+            title="one artwork across 2-3 consecutive screenshots"
+          >
+            Full strip
+          </button>
+          <button
             className={`${styles.tab} ${view === "store" ? styles.tabActive : ""}`}
             onClick={() => setView("store")}
           >
@@ -1200,6 +1425,21 @@ export default function Editor({ name }: { name: string }) {
         <div className={styles.storeArea}>
           <ReleasePanel name={name} locales={snap.config.locales} readiness={snap.readiness} />
         </div>
+      )}
+      {view === "strip" && (
+        <StripPanel
+          screens={manifest.screens}
+          templates={snap.templates}
+          onChange={(screens) => {
+            pushHistory();
+            setManifest((m) => ({ ...m, screens }));
+            setDirty((d) => ({ ...d, manifest: true }));
+          }}
+          onOpenScreen={(id) => {
+            setScreenId(id);
+            setView("screens");
+          }}
+        />
       )}
       {view === "store" && (
         <div className={styles.storeArea}>
@@ -1465,11 +1705,16 @@ export default function Editor({ name }: { name: string }) {
                       onChange={(e) => updateScreen({ template: e.target.value })}
                       className={styles.select}
                     >
-                      {snap.templates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
+                      {/* Strip templates compose several screenshots at once; they
+                          are chosen in the Full strip tab, not per screen. */}
+                      {snap.templates
+                        .filter((t) => !t.strip || t.id === screen.template)
+                        .map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.name}
+                            {t.strip ? " (full strip)" : ""}
+                          </option>
+                        ))}
                     </select>
                   </label>
                   <label className={styles.row}>
@@ -1740,11 +1985,7 @@ export default function Editor({ name }: { name: string }) {
                           >
                             Device shell{families.length > 1 ? ` (${famKey})` : ""}
                           </span>
-                          <select
-                            className={styles.select}
-                            value={current}
-                            onChange={(e) => setShell(e.target.value)}
-                          >
+                          <select className={styles.select} value={current} onChange={(e) => setShell(e.target.value)}>
                             <option value="">default (dark shell)</option>
                             <optgroup label="Neutral">
                               <option value="light">light shell</option>
@@ -1824,6 +2065,8 @@ export default function Editor({ name }: { name: string }) {
                             fallback={key === "textColor" ? snap.config.brand.onPrimary : snap.config.brand.primary}
                             presets={[snap.config.brand.primary, snap.config.brand.onPrimary]}
                           />
+                        ) : c.kind === "boolean" ? (
+                          <BoolField value={v} onChange={(nv) => setOverride(key, nv)} />
                         ) : (
                           <input
                             className={styles.input}
@@ -1876,6 +2119,8 @@ export default function Editor({ name }: { name: string }) {
                               onChange={(nv) => setOverride(key, nv)}
                               presets={[snap.config.brand.primary, snap.config.brand.onPrimary]}
                             />
+                          ) : c.kind === "boolean" ? (
+                            <BoolField value={v} onChange={(nv) => setOverride(key, nv)} />
                           ) : (
                             <input
                               className={styles.input}

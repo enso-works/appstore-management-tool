@@ -1150,3 +1150,45 @@
   color: var(--muted);
   font-size: 11px;
 }
+
+/* Full strip panel */
+.stripList {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  margin: 12px 0;
+  padding: 0;
+}
+
+.stripCard {
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 10px;
+  padding: 12px 14px;
+  max-width: 620px;
+  display: grid;
+  gap: 6px;
+}
+
+.stripHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.stripFiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.stripFiles .chip {
+  cursor: default;
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
