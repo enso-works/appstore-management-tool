@@ -175,7 +175,7 @@ describe("CLI exit codes", () => {
 
   it("uses 2 for usage errors and 0 for help", () => {
     expect(run("bogus").status).toBe(2);
-    expect(run("init").status).toBe(2); // missing --project
+    expect(run("init").status).toBe(2); // refuses to scaffold store-shots itself
     expect(run("validate", "--nope").status).toBe(2);
     expect(run("--help").status).toBe(0);
   });

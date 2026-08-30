@@ -1,10 +1,13 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { ConfigError, loadProject, resolveProjectArg, type Project } from "../lib/config";
 import { formatIssue, type Issue } from "../lib/issues";
 import { initProject } from "../lib/init";
 import { readinessReport, type ReadinessReport } from "../lib/readiness";
-import { defaultWorkspaceRoot, discoverProjects } from "../lib/registry";
+import { defaultWorkspaceRoot, discoverProjects, isFallbackListing, listProjects } from "../lib/registry";
+import { listRegistered, listStale, pruneStale, register, registryPath, unregister } from "../lib/registered";
+import { openEditor } from "../lib/open";
 import { describeJob } from "../lib/render-plan";
 import { validateProject } from "../lib/validate";
 import { displayRelative } from "../lib/paths";
@@ -33,6 +36,11 @@ program
     process.exit(2);
   });
 
+/** The store-shots package itself, which is never a valid app to scaffold. */
+function toolRoot(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+}
+
 function workspaceRoot(): string {
   const opt = program.opts<{ workspace?: string }>().workspace;
   return opt ? path.resolve(opt) : defaultWorkspaceRoot();
@@ -56,10 +64,13 @@ function printIssues(issues: Issue[]) {
 
 program
   .command("projects")
-  .description("List every app in the workspace that has a store-shots.config.json")
+  .description("List the apps you have added (or, until you add one, whatever scanning finds)")
   .option("--json", "machine-readable output")
-  .action((opts: { json?: boolean }) => {
-    const found = discoverProjects(workspaceRoot());
+  .option("--scan [dir]", "ignore the list and scan a directory instead")
+  .action((opts: { json?: boolean; scan?: string | boolean }) => {
+    const found = opts.scan
+      ? discoverProjects(typeof opts.scan === "string" ? path.resolve(opts.scan) : workspaceRoot())
+      : listProjects();
     if (opts.json) {
       console.log(
         JSON.stringify(
@@ -76,7 +87,7 @@ program
       return;
     }
     if (found.length === 0) {
-      console.log(`No projects found under ${workspaceRoot()}. Run \`store-shots init --project <app-dir>\`.`);
+      console.log("No apps yet. Run `store-shots init` inside an app, or `store-shots add <dir>`.");
       return;
     }
     for (const f of found) {
@@ -85,12 +96,71 @@ program
         : `INVALID: ${f.error}`;
       console.log(`${f.name.padEnd(20)} ${label}`);
     }
+    if (!opts.scan && isFallbackListing()) {
+      console.log("\nThese were found by scanning, not added by you.");
+      console.log("Run `store-shots add <dir>` for the ones you want to keep.");
+    }
+    const stale = listStale();
+    if (stale.length > 0) {
+      console.log(`\n${stale.length} added app(s) no longer have a config: ${stale.map((s) => s.name).join(", ")}`);
+      console.log("Run `store-shots remove <name>` or `store-shots prune`.");
+    }
+  });
+
+program
+  .command("add [dir]")
+  .description("Add an app that already has a store-shots.config.json (default: current directory)")
+  .option("--name <name>", "name to list it under (default: directory name)")
+  .action((dir: string | undefined, opts: { name?: string }) => {
+    const root = path.resolve(dir ?? process.cwd());
+    const project = loadProject(resolveProjectArg(root));
+    const entry = register(root, opts.name);
+    console.log(`Added ${entry.name}  ->  ${entry.root}`);
+    console.log(`${project.config.projectName}: ${project.config.locales.length} locales, ${project.config.targets.length} targets`);
+    console.log("Open it with `store-shots open`.");
+  });
+
+program
+  .command("remove <nameOrDir>")
+  .description("Remove an app from the list (never touches the app's own files)")
+  .action((nameOrDir: string) => {
+    if (!unregister(nameOrDir)) {
+      console.error(`Not in the list: ${nameOrDir}`);
+      process.exitCode = 2;
+      return;
+    }
+    console.log(`Removed ${nameOrDir}. Its store/ and config are untouched.`);
+  });
+
+program
+  .command("prune")
+  .description("Drop list entries whose directory or config has gone away")
+  .action(() => {
+    const gone = pruneStale();
+    if (gone.length === 0) {
+      console.log("Nothing to prune.");
+      return;
+    }
+    for (const g of gone) console.log(`pruned  ${g.name}  (${g.root})`);
+  });
+
+program
+  .command("open [nameOrDir]")
+  .description("Start the editor and open it in your browser (default: the app in the current directory)")
+  .option("--port <port>", "preferred port (a free one is chosen if taken)")
+  .option("--no-browser", "start the server without opening a browser")
+  .action(async (nameOrDir: string | undefined, opts: { port?: string; browser?: boolean }) => {
+    await openEditor({
+      target: nameOrDir,
+      port: opts.port ? Number(opts.port) : undefined,
+      openBrowser: opts.browser !== false,
+    });
   });
 
 program
   .command("init")
-  .description("Scaffold store/ and store-shots.config.json into an app directory")
-  .requiredOption("--project <dir>", "app directory")
+  .description("Scaffold store/ and store-shots.config.json, and add the app to your list (run it inside the app)")
+  .option("--project <dir>", "app directory (default: current directory)")
   .option("--name <name>", "project name (default: app.json name)")
   .option(
     "--locales <list>",
@@ -98,9 +168,20 @@ program
   )
   .option("--default-locale <locale>", "default locale (default: en-US if present)")
   .option("--force", "overwrite existing files")
-  .action((opts: { project: string; name?: string; locales?: string; defaultLocale?: string; force?: boolean }) => {
+  .action((opts: { project?: string; name?: string; locales?: string; defaultLocale?: string; force?: boolean }) => {
+    const appRoot = path.resolve(opts.project ?? process.cwd());
+
+    // `init` defaults to the current directory, so running it inside the tool
+    // itself would scaffold store/ into store-shots rather than into an app.
+    // That is always a mistake, and silently doing it is worse than refusing.
+    if (appRoot === toolRoot()) {
+      console.error("`init` scaffolds an app, and this is store-shots itself.");
+      console.error("Run it from inside your app, or pass --project <app-dir>.");
+      process.exit(2);
+    }
+
     const result = initProject({
-      appRoot: path.resolve(opts.project),
+      appRoot,
       projectName: opts.name,
       locales: opts.locales
         ?.split(",")
@@ -111,8 +192,17 @@ program
     });
     for (const f of result.created) console.log(`created  ${f}`);
     for (const f of result.skipped) console.log(`skipped  ${f} (exists)`);
+
+    // Scaffolding an app and then making you register it separately is a step
+    // with no decision in it, so init does both.
+    const entry = register(appRoot, opts.name ?? result.config.projectName);
+
     console.log(`\nProject "${result.config.projectName}" with locales ${result.config.locales.join(", ")}.`);
-    console.log("Next: add raw captures under store/raw/<device>/<locale>/, then `store-shots validate`.");
+    console.log(`Added to your list as "${entry.name}" (${registryPath()}).`);
+    console.log("\nNext:");
+    console.log("  1. add raw captures under store/raw/<device>/<locale>/");
+    console.log("  2. store-shots validate");
+    console.log("  3. store-shots open");
   });
 
 program
