@@ -1,72 +1,185 @@
 # store-shots
 
-App Store screenshot generation and store management for the Expo apps that live next to
-this repo. Plan and phase status: `docs/store-tool-plan.md`.
+Generate exact-size App Store and Google Play screenshots from raw captures — and catch the
+localization problems that quietly break a listing before you upload.
 
-This repo is `tools/store-shots/` inside a plain workspace folder:
+![Strip mode: every screen of a listing side by side, with an overlap warning in the status bar](docs/images/strip.png)
 
-```text
-<workspace>/
-├── tools/store-shots/     this repo
-├── starter-template/      Expo SDK 56 app shell, its own repo -- see its NEW-APP.md; ships the store/ scaffold
-└── breathe/ invoicer/ ... apps, each its own repo
+Any screenshot tool will make one nice-looking image. This one tells you that your German
+headline overflows the 6.9-inch canvas at the minimum allowed font size, that Arabic needs a
+fallback family for three glyphs, and that the third screen in your Play set is stale relative
+to its capture. That check is the point of it.
 
-The workspace folder itself is not a repo; it only groups repos (and may hold unrelated docs).
+Runs on your machine. No account, no upload — your captures never leave it.
+
+## Quick start
+
+Run `init` inside your app. It scaffolds the files it needs, never overwriting anything that
+already exists, and adds the app to your list.
+
+```sh
+cd ~/code/my-app
+npx store-shots init
 ```
 
-Apps are discovered by scanning the workspace root (three levels up, or `STORE_SHOTS_WORKSPACE`).
+Add some raw captures, check them, then open the editor:
 
-Status: plan phases 1-8 and roadmap items 1-12 done — config, schemas, validation, readiness, `init`, `generate`
-(Playwright + Sharp, exact-size no-alpha PNGs), `clean`, fonts from Google Fonts, glyph
-coverage, in-page font fitting, one template (`hero-top`), the editor UI (live preview,
-copy + overrides editing with sliders, zoom/pan canvas, Strip mode showing every screen side by side with an App Store look, save, generate), the Store tab (readiness, metadata
-editor with limits, fastlane runner), three templates (hero-top, split-caption, full-bleed-card)
-with free phone positioning, headline font, background images/patterns. Phase 7 (hardening,
-capture helper, incremental rendering) is next.
+```sh
+npx store-shots capture --screen home --device iphone
+npx store-shots validate
+npx store-shots open
+```
+
+`open` starts the editor and opens your browser at the app you are standing in. If it is
+already running, it reuses it rather than starting a second one.
+
+Already have a configured app? `npx store-shots add` registers it without scaffolding.
+
+## The editor
+
+`open` drops you here. Drag the phone to move it, `⌥` to tilt, `⇧` to scale. Copy is edited per
+locale on the right, with live character counts against the real store limits.
+
+![The editor: live preview, phone positioning sliders, per-locale copy fields](docs/images/editor.png)
+
+The status bar is the part that matters. It renders the same checks that will fail a build —
+here it is warning that a caption overlaps the device, at the moment you cause it rather than
+after you have uploaded five locales.
+
+Three view modes:
+
+- **Single** — one screen at a time
+- **Strip** — every screen side by side, the way the store shows them (the image at the top)
+- **Locales** — the same screen in every language at once
+
+## Store metadata and readiness
+
+The Store tab edits `fastlane/metadata/<locale>/*.txt` directly, with character budgets from the
+same table the fastlane lane enforces. Readiness is on the left; the lanes it gates are on the
+right.
+
+![The Store tab: readiness checks, fastlane lanes, and the metadata editor with live counts](docs/images/store.png)
+
+It never reads your credential files (`*.p8`, `asc_api_key.json`) — readiness only checks that
+they exist — and it never runs a lane that builds or submits.
+
+## Your apps
+
+Apps are added, not discovered. `init` and `add` register one; `projects` lists them.
+
+![The project list, with readiness at a glance for every app](docs/images/projects.png)
+
+```sh
+npx store-shots projects              # the apps you have added
+npx store-shots add [dir]             # add one that already has a config
+npx store-shots remove <name>         # drop it from the list (leaves its files alone)
+npx store-shots prune                 # drop entries whose config has gone away
+npx store-shots projects --scan [dir] # ignore the list, scan a directory instead
+```
+
+The list lives in `~/.store-shots/projects.json`. Until you add your first app, `projects` falls
+back to scanning so a fresh clone is not an empty screen — it tells you when it is doing that.
+
+## What it does
+
+- **Exact sizes, every target.** iPhone 6.9" (1320×2868), iPad 13" (2064×2752), Play phone
+  (1080×1920). No-alpha PNGs that App Store Connect and Play accept without complaint.
+- **Localization checks that fail the build.** Text overflow at minimum font size, glyph
+  coverage per font, text/device overlap, RTL handling, per-field character budgets.
+- **Deterministic and incremental.** Unchanged jobs are skipped; the same inputs always produce
+  the same bytes, so a re-run is a no-op rather than a diff.
+- **Templates.** `hero-top`, `split-caption`, `full-bleed-card`, free phone positioning,
+  background images and patterns, official device frames, panorama screens spanning 2–3 slides.
+- **Store-side too.** Readiness checks, metadata editing, Play feature graphics, App Preview
+  posters, and a `check` gate for CI.
 
 ## Requirements
 
-Node 22 (`.nvmrc`), npm. No global installs.
+Node 22 (see `.nvmrc`) and npm. Capturing from an iOS simulator needs macOS with Xcode; every
+other command runs anywhere.
 
 ```sh
-cd tools/store-shots
+git clone https://github.com/enso-works/appstore-management-tool.git store-shots
+cd store-shots
 npm ci
 ```
 
 ## Commands
 
-Run from anywhere; `--project` is an app directory or its `store-shots.config.json`.
-Without `--project` the CLI walks up from the current directory.
+`--project` takes an app directory or its `store-shots.config.json`. Without it, the CLI walks
+up from the current directory — so inside your app you can leave it off entirely.
 
 ```sh
-npx store-shots projects                          # apps in the workspace that have a config
-npx store-shots init      --project ../../breathe # scaffold store/ + config (never overwrites)
-npx store-shots validate  --project ../../breathe [--dry-run] [--json]
-npx store-shots readiness --project ../../breathe [--json]
-npx store-shots generate  --project ../../breathe [--locale en-US] [--screen home] [--target iphone-6.9-1320x2868] [--strict] [--force] [--dry-run] [--json]
-                                                  # incremental: unchanged jobs are skipped; --force re-renders
-npx store-shots clean     --project ../../breathe # delete only files listed in .store-shots-manifest.json
-npx store-shots fonts add "Space Grotesk" --project ../../breathe   # download once from Google Fonts into store/assets/fonts/
-npx store-shots fonts list|check --project ../../breathe
-npx store-shots metadata validate|show --locale de-DE --project ../../breathe
-npx store-shots lane validate|metadata|screenshots --project ../../breathe [--yes] [--override "<reason>"] [--dry-run]
-npx store-shots capture --screen home --device iphone [--locale de-DE] [--clean-status-bar] [--force] --project ../../breathe
-npx store-shots capture --list                    # booted simulators
-npm run dev                                       # UI at http://localhost:3000
+npx store-shots init      [--project <app>]   # scaffold + add to your list
+npx store-shots open      [name|dir]          # start the editor and open a browser
+npx store-shots validate  [--project <app>] [--dry-run] [--json]
+npx store-shots readiness [--project <app>] [--json]
+npx store-shots generate  [--project <app>] [--locale en-US] [--screen home]
+                          [--target iphone-6.9-1320x2868] [--strict] [--force] [--dry-run] [--json]
+npx store-shots clean     [--project <app>]   # deletes only files in .store-shots-manifest.json
+npx store-shots check     [--project <app>]   # CI gate: validate + readiness + metadata limits
+npx store-shots capture --screen home --device iphone [--locale de-DE] [--clean-status-bar]
+npx store-shots capture --list                # booted simulators
+npx store-shots fonts add "Space Grotesk"     # download once from Google Fonts
+npx store-shots fonts list|check
+npx store-shots metadata validate|show --locale de-DE
+npx store-shots lane validate|metadata|screenshots [--yes] [--override "<reason>"]
+npx store-shots sheet                         # contact sheets
+npx store-shots frames setup|list             # official device frames
 ```
 
-Exit codes: 0 ok, 1 validation/readiness failed, 2 usage or config error.
+Exit codes: `0` ok, `1` validation or readiness failed, `2` usage or config error.
 
-From an app directory the same thing is:
+## Files in your app
 
-```sh
-npx --prefix ../tools/store-shots store-shots validate
+These belong to your app, not to this repo.
+
+```text
+<app>/store-shots.config.json
+<app>/store/manifest.json
+<app>/store/content/<locale>.json
+<app>/store/raw/<device>/<locale>/<order>-<id>.png    raw simulator captures
+<app>/store/assets/{fonts,logos,backgrounds}/
+<app>/fastlane/metadata/<locale>/*.txt                read by readiness
+<app>/fastlane/screenshots/<locale>/                  iOS output (deliver)
+<app>/fastlane/metadata/android/<locale>/images/phoneScreenshots/   Play output (supply)
+```
+
+## Layout
+
+```text
+app/              Next.js UI: project list, /projects/<name> editor and readiness, /api/projects/*
+cli/index.ts      commander CLI
+lib/
+  schema.ts       Zod schemas: project config, manifest, locale content, fonts lock
+  targets.ts      device profile registry + per-platform output dirs + Play locale map
+  locales.ts      App Store Connect locale codes, RTL table, app-language -> store-locale map
+  config.ts       config discovery, loading, root-bound path resolution
+  registered.ts   the per-machine list of added apps (~/.store-shots/projects.json)
+  registry.ts     what the UI lists; scanning as a fallback only
+  metadata.ts     fastlane/metadata limits, keyword hygiene
+  render-plan.ts  target x locale x screen job list, source/output naming
+  validate.ts     pre-render validation
+  readiness.ts    store readiness checks
+  open.ts         start the editor, pick a free port, reuse a running instance
+  fonts.ts        Google Fonts download, fonts.lock.json, @font-face CSS; Inter bundled
+  generate.ts     validate -> plan -> render -> flatten -> verify -> atomic write -> manifest
+  render/html.tsx render a template to a self-contained HTML document
+  render/checks.ts in-page checks (fonts loaded, images decoded, overflow, text/device overlap)
+  render/export.ts Playwright Chromium worker + Sharp flatten/inspect
+  fastlane.ts     lane allowlist, preflight, spawn with streamed output; never builds or submits
+  capture.ts      xcrun simctl screenshot into store/raw/<device>/<locale>/
+templates/        React templates: shared pieces, hero-top, split-caption, full-bleed-card
+assets/fonts/     bundled Inter (OFL)
+schema/           generated JSON Schemas referenced by $schema in app files
+fixtures/demo-app two screens, en-US + ar-SA, both targets; used by tests
+tests/            vitest
 ```
 
 ## Development
 
 ```sh
-npm test            # vitest unit tests
+npm test            # vitest
 npm run typecheck
 npm run lint
 npm run format
@@ -74,57 +187,16 @@ npm run schemas     # regenerate schema/*.schema.json from lib/schema.ts
 npm run fixtures    # regenerate fixtures/demo-app
 ```
 
-More: `docs/templates.md` (writing a template), `docs/troubleshooting.md`, `docs/store-tool-plan.md` (plan + phase status), `docs/roadmap.md` (post-v1 items).
+Further reading: [`docs/templates.md`](docs/templates.md) for writing a template,
+[`docs/troubleshooting.md`](docs/troubleshooting.md), [`docs/roadmap.md`](docs/roadmap.md).
 
-Also available: panorama screens (one artwork across 2-3 slides), drag-the-phone positioning in the preview, locale grid, live-listing comparison, contact sheets (`sheet`), duplicate screen + override presets, per-field character budgets, `capture --all` via deep links, official device frames (`frames setup|list`, `shell: "frame:<name>"`), `check` CI gate, Google Play feature graphic + text metadata, App Preview posters.
+## Background
 
-## Layout
+I wrote up why the hosted generators stopped fitting and what I built instead:
+[I built my own App Store screenshot generator](https://bavrk.com/articles/app-store-screenshot-generator).
 
-```text
-app/              Next.js UI: project list, /projects/<name> editor (live preview, edit, save, generate), /projects/<name>/readiness; /api/projects/* route handlers
-cli/index.ts      commander CLI
-lib/
-  schema.ts       Zod schemas: project config, manifest, locale content, generated manifest, fonts lock
-  targets.ts      device profile registry (iPhone 6.9" 1320x2868, iPad 13" 2064x2752, Play phone 1080x1920) + per-platform output dirs + Play locale map
-  locales.ts      App Store Connect locale codes, RTL table, app-language -> store-locale map
-  config.ts       config discovery (walk up / --project), loading, root-bound path resolution
-  registry.ts     workspace scan for apps with a config
-  content.ts      manifest + per-locale content loaders
-  metadata.ts     fastlane/metadata limits (same table as the Fastfile lane), keyword hygiene
-  render-plan.ts  target x locale x screen job list, source/output naming
-  validate.ts     pre-render validation (plan §13.1)
-  readiness.ts    store readiness checks (plan §13.2)
-  init.ts         store/ scaffold
-  png.ts          PNG header reader; png-write.ts solid-PNG writer for fixtures
-  fonts.ts        Google Fonts download (once, into the app), fonts.lock.json, @font-face CSS; Inter bundled in assets/fonts
-  generate.ts     generate orchestration: validate -> plan -> render -> flatten -> verify -> atomic write -> manifest
-  generated-manifest.ts  .store-shots-manifest.json read/write and manifest-only cleanup
-  render/html.tsx render a template to a self-contained HTML document (fonts + image via file:// or /api URLs)
-  render/checks.ts in-page checks (fonts loaded, images decoded, text overflow, text/device overlap)
-  render/export.ts Playwright Chromium worker + Sharp flatten/inspect
-  fastlane.ts     lane allowlist, preflight (readiness gate, lane exists), spawn with streamed output; never build/submit
-  capture.ts      xcrun simctl screenshot into store/raw/<device>/<locale>/ (never overwrites without --force)
-  server/         project lookup, atomic JSON saves with etags, HTTP error mapping
-  templates/registry.ts  thin adapter over ../templates
-templates/        React templates: types, shared pieces (artwork root, device shell, text block, stack layout, patterns), hero-top, split-caption, full-bleed-card
-assets/fonts/     bundled Inter (OFL)
-schema/           generated JSON Schemas referenced by $schema in app files
-fixtures/demo-app two screens, en-US + ar-SA, both targets; used by tests
-tests/            vitest
-```
+## License
 
-## Per-app files (owned by the app)
+[MIT](LICENSE). Use it, change it, ship it in whatever you are building.
 
-```text
-<app>/store-shots.config.json
-<app>/store/manifest.json
-<app>/store/content/<locale>.json
-<app>/store/raw/<device>/<locale>/<order>-<id>.png   raw simulator captures
-<app>/store/assets/{fonts,logos,backgrounds}/
-<app>/fastlane/metadata/<locale>/*.txt              read by readiness, edited in Phase 5
-<app>/fastlane/screenshots/<locale>/                 iOS output (deliver)
-<app>/fastlane/metadata/android/<locale>/images/phoneScreenshots/   Play output (supply), when play-phone-1080x1920 is in targets
-```
-
-The tool never reads credential files (`*.p8`, `asc_api_key.json`) — readiness only checks
-that they exist — and never runs lanes that build or submit.
+Built by [Ensar Bavrk](https://bavrk.com).
