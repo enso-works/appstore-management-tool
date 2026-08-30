@@ -1,7 +1,8 @@
 # store-shots
 
-Generate exact-size App Store and Google Play screenshots from raw captures — and catch the
-localization problems that quietly break a listing before you upload.
+**An open-source App Store screenshot builder for iOS and Google Play.** Generate exact-size,
+localized store screenshots from raw captures — and catch the problems that quietly break a
+listing before you upload.
 
 ![Strip mode: every screen of a listing side by side, with an overlap warning in the status bar](docs/images/strip.png)
 
@@ -82,8 +83,10 @@ back to scanning so a fresh clone is not an empty screen — it tells you when i
 
 ## What it does
 
-- **Exact sizes, every target.** iPhone 6.9" (1320×2868), iPad 13" (2064×2752), Play phone
-  (1080×1920). No-alpha PNGs that App Store Connect and Play accept without complaint.
+- **Exact sizes, every target.** No-alpha PNGs that App Store Connect and Google Play accept
+  without complaint — see the [size table](#app-store-and-google-play-screenshot-sizes).
+- **Localized screenshots in every language you ship.** One set of copy per locale, rendered
+  across every target, with the same layout and none of the copy-paste.
 - **Localization checks that fail the build.** Text overflow at minimum font size, glyph
   coverage per font, text/device overlap, RTL handling, per-field character budgets.
 - **Deterministic and incremental.** Unchanged jobs are skipped; the same inputs always produce
@@ -92,6 +95,22 @@ back to scanning so a fresh clone is not an empty screen — it tells you when i
   background images and patterns, official device frames, panorama screens spanning 2–3 slides.
 - **Store-side too.** Readiness checks, metadata editing, Play feature graphics, App Preview
   posters, and a `check` gate for CI.
+
+## App Store and Google Play screenshot sizes
+
+Every target renders at the exact pixel dimensions the stores accept, as opaque PNGs with no
+alpha channel — the two requirements that get uploads rejected most often.
+
+| Target | Store | Dimensions |
+| --- | --- | --- |
+| `iphone-6.9-1320x2868` | App Store — iPhone 6.9" | 1320 × 2868 |
+| `ipad-13-2064x2752` | App Store — iPad 13" | 2064 × 2752 |
+| `play-phone-1080x1920` | Google Play — phone | 1080 × 1920 |
+| `play-feature-1024x500` | Google Play — feature graphic | 1024 × 500 |
+| `appreview-6.9-886x1920` | App Preview poster | 886 × 1920 |
+
+Pick targets per app in `store-shots.config.json`; `generate` renders every target × locale ×
+screen combination and verifies the output dimensions before writing.
 
 ## Requirements
 
