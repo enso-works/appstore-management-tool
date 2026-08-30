@@ -1,5 +1,5 @@
 import { handle, json } from "@/lib/server/http";
-import { discoverProjects } from "@/lib/registry";
+import { listProjects } from "@/lib/registry";
 import { readinessReport } from "@/lib/readiness";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return handle(() =>
     json(
-      discoverProjects().map((p) => ({
+      listProjects().map((p) => ({
         name: p.name,
         root: p.root,
         projectName: p.project?.config.projectName,

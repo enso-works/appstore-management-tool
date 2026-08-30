@@ -4,7 +4,7 @@ import path from "node:path";
 import { type Project } from "../config";
 import { contentFileFor, loadContent, loadManifest } from "../content";
 import { fileExists, resolveWithin } from "../paths";
-import { discoverProjects } from "../registry";
+import { listProjects } from "../registry";
 import {
   backgroundValuesSchema,
   formatZodError,
@@ -18,7 +18,7 @@ import {
 
 /** Look a project up by its workspace-relative directory name (e.g. "breathe"). */
 export function findProject(name: string): Project | undefined {
-  return discoverProjects().find((p) => p.name === name)?.project;
+  return listProjects().find((p) => p.name === name)?.project;
 }
 
 export class HttpError extends Error {

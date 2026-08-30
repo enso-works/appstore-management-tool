@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONFIG_FILENAME, loadProject, type Project } from "./config";
+import { listRegistered } from "./registered";
 
 /**
  * The workspace root is the directory that contains `tools/store-shots`
@@ -22,6 +23,37 @@ export interface DiscoveredProject {
   name: string;
   project?: Project;
   error?: string;
+}
+
+/** Load one registered or discovered directory into the shape the UI renders. */
+function toEntry(root: string, name: string): DiscoveredProject {
+  const configPath = path.join(root, CONFIG_FILENAME);
+  const entry: DiscoveredProject = { root, configPath, name };
+  try {
+    entry.project = loadProject(configPath);
+  } catch (err) {
+    entry.error = (err as Error).message;
+  }
+  return entry;
+}
+
+/**
+ * What the UI and `projects` show: the apps you registered, or - only while you
+ * have registered none - whatever scanning turns up, so a fresh clone is not an
+ * empty screen. Scanning is a fallback, never a merge: once you have registered
+ * anything, the list is exactly what you asked for and nothing else.
+ */
+export function listProjects(): DiscoveredProject[] {
+  const registered = listRegistered();
+  if (registered.length > 0) {
+    return registered.map((p) => toEntry(p.root, p.name));
+  }
+  return discoverProjects();
+}
+
+/** True when the list above is coming from a scan rather than the registry. */
+export function isFallbackListing(): boolean {
+  return listRegistered().length === 0;
 }
 
 /** Find every directory (up to `maxDepth` below the workspace) that has a config. */

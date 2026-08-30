@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { discoverProjects } from "@/lib/registry";
+import { listProjects } from "@/lib/registry";
 import { readinessReport } from "@/lib/readiness";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
 export default function HomePage() {
-  const projects = discoverProjects();
+  const projects = listProjects();
   return (
     <main className={styles.main}>
       <h1>store-shots</h1>

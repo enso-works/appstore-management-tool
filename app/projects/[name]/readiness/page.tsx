@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { discoverProjects } from "@/lib/registry";
+import { listProjects } from "@/lib/registry";
 import { readinessReport } from "@/lib/readiness";
 import { validateProject } from "@/lib/validate";
 import { formatIssue } from "@/lib/issues";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ProjectPage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
-  const found = discoverProjects().find((p) => p.name === decodeURIComponent(name));
+  const found = listProjects().find((p) => p.name === decodeURIComponent(name));
   if (!found?.project) notFound();
   const project = found.project;
   const report = readinessReport(project);
