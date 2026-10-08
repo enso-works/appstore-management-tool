@@ -3,6 +3,7 @@ import path from "node:path";
 import { readAppJson, type Project } from "./config";
 import { listMetadataLocales, readMetadataLocale } from "./metadata";
 import { dirExists, displayRelative, fileExists, resolveWithin } from "./paths";
+import { isJpegFile, readImageInfo, type ImageInfo } from "./image";
 import { isPngFile, readPngInfo, type PngInfo } from "./png";
 import { METADATA_FIELDS } from "./schema";
 import { getTarget, outputDirFor } from "./targets";
@@ -126,6 +127,16 @@ function safePng(file: string): { info?: PngInfo; error?: string } {
   }
 }
 
+/** PNG or JPEG header (App Store Connect takes both for screenshots) or an error string; never throws. */
+function safeImage(file: string): { info?: ImageInfo; error?: string } {
+  try {
+    return { info: readImageInfo(file) };
+  } catch (err) {
+    const kind = isPngFile(file) ? "PNG" : isJpegFile(file) ? "JPEG" : undefined;
+    return { error: kind ? `unreadable ${kind} (${(err as Error).message})` : "not a PNG or JPEG" };
+  }
+}
+
 const PLACEHOLDER = /__[A-Z][A-Z0-9_]*__/g;
 
 function checkPlaceholders(project: Project): ReadinessCheck {
@@ -205,7 +216,7 @@ interface ScreenshotSet {
   byTarget: Map<string, string[]>;
   /** failOnAlpha violations */
   alpha: string[];
-  /** files that are not PNGs or match no configured target (informational) */
+  /** files that are not images or match no configured target (informational) */
   unmatched: string[];
   /** files that could not be read (corrupt) */
   broken: string[];
@@ -236,9 +247,9 @@ function scanScreenshots(project: Project): ScreenshotSet[] {
       if (!dirExists(dir)) continue;
       for (const name of fs.readdirSync(dir).sort()) {
         if (name.startsWith(".") || !/\.(png|jpe?g)$/i.test(name)) continue;
-        const { info, error } = safePng(path.join(dir, name));
+        const { info, error } = safeImage(path.join(dir, name));
         if (!info) {
-          (error === "not a PNG" ? set.unmatched : set.broken).push(`${name} (${error})`);
+          set.broken.push(`${name} (${error})`);
           continue;
         }
         const match = dirTargets.find((t) => t.width === info.width && t.height === info.height);

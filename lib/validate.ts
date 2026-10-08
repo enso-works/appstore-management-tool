@@ -3,7 +3,7 @@ import { loadContent, loadManifest } from "./content";
 import { IssueList } from "./issues";
 import { isAppStoreLocale } from "./locales";
 import { displayRelative, fileExists, resolveWithin } from "./paths";
-import { readPngInfo } from "./png";
+import { readImageInfo } from "./image";
 import { buildRenderPlan, ordersOf, type RenderJob } from "./render-plan";
 import type { LocaleContent, Manifest } from "./schema";
 import { getTarget } from "./targets";
@@ -312,7 +312,7 @@ function validateSources(project: Project, plan: RenderJob[], issues: IssueList)
       continue;
     }
     try {
-      const info = readPngInfo(job.sourcePath);
+      const info = readImageInfo(job.sourcePath);
       const expected = job.target.width / job.target.height;
       const actual = info.width / info.height;
       if (Math.abs(expected - actual) > 0.01) {
