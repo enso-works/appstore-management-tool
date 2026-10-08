@@ -7,7 +7,7 @@ import { ImportError, inspectApp, targetsFor, type AppProposal } from "../lib/im
 import { initProject } from "../lib/init";
 import { readinessReport, type ReadinessReport } from "../lib/readiness";
 import { defaultWorkspaceRoot, discoverProjects, isFallbackListing, listProjects } from "../lib/registry";
-import { listRegistered, listStale, pruneStale, register, registryPath, unregister } from "../lib/registered";
+import { listStale, pruneStale, register, registryPath, unregister } from "../lib/registered";
 import { openEditor } from "../lib/open";
 import { describeJob } from "../lib/render-plan";
 import { validateProject } from "../lib/validate";

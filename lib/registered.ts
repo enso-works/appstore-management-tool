@@ -89,9 +89,7 @@ export function register(root: string, name?: string): RegisteredProject {
 export function unregister(rootOrName: string): boolean {
   const resolved = path.resolve(rootOrName);
   const projects = read();
-  const kept = projects.filter(
-    (p) => path.resolve(p.root) !== resolved && p.name !== rootOrName,
-  );
+  const kept = projects.filter((p) => path.resolve(p.root) !== resolved && p.name !== rootOrName);
   if (kept.length === projects.length) return false;
   write(kept);
   return true;
