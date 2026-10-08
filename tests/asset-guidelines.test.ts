@@ -99,6 +99,41 @@ describe("keyword guidance", () => {
   });
 });
 
+describe("store claims in screenshot text", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+
+  const claims = (headline: string) => {
+    editJson(path.join(fx.root, "store/content/en-US.json"), (c) => (c.screens.home.headline = headline));
+    return validateProject(loadProject(path.join(fx.root, "store-shots.config.json")))
+      .issues.items.filter((i) => i.code === "content.store-claims")
+      .map((i) => i.message);
+  };
+
+  it.each([
+    ["Only $4.99 a month", "a price"],
+    ["Pro für 9,99 €", "a price"],
+    ["50% off this week", "a discount"],
+    ["Learn more at braele.app", "a website URL"],
+    ["© 2026 Bavrk", "a copyright symbol"],
+    ["Also on Android", "another platform or marketplace"],
+    ["Editor's Choice", "an Apple recognition"],
+    ["App of the Day", "an Apple recognition"],
+  ])("flags %s as %s", (headline, what) => {
+    expect(claims(headline)).toEqual([expect.stringContaining(`shows ${what}`)]);
+  });
+
+  it("only applies to screens that render for the App Store", () => {
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => (c.targets = ["play-phone-1080x1920"]));
+    expect(claims("Now on Android")).toEqual([]);
+  });
+
+  it("leaves ordinary copy alone", () => {
+    expect(claims("Run 5 km, sleep 8 hours, focus 100%")).toEqual([]);
+  });
+});
+
 describe("JPEG screenshots", () => {
   let fx: ReturnType<typeof tempFixture>;
   beforeEach(() => (fx = tempFixture()));

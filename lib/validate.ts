@@ -50,6 +50,7 @@ export function validateProject(project: Project): ValidationResult {
 
   validateManifest(project, manifest, issues);
   validateContent(project, manifest, content, issues);
+  validateStoreClaims(project, manifest, content, issues);
   validateGlyphs(project, manifest, content, issues);
 
   const plan = buildRenderPlan(project, manifest);
@@ -285,6 +286,68 @@ function validateContent(project: Project, manifest: Manifest, content: Map<stri
           key: `${locale}/${id}`,
           file,
         });
+      }
+    }
+  }
+}
+
+/**
+ * What Apple's asset guidelines (verified 2026-10-08) say screenshots must not
+ * show: "specific pricing, discounts, website URLs, copyright symbols", "logos or
+ * references to other platforms or marketplaces" and Apple-designated
+ * recognitions. Words are matched in English; symbols and URLs in any language.
+ */
+const STORE_CLAIMS: { pattern: RegExp; what: string }[] = [
+  {
+    pattern: /[$€£¥₹₩₺₽]\s?\d|\d\s?[$€£¥₹₩₺₽]|\b\d+(?:[.,]\d{1,2})?\s?(?:USD|EUR|GBP|CHF|BAM)\b/u,
+    what: "a price",
+  },
+  { pattern: /\b\d{1,3}\s?%\s?off\b|\bdiscount(?:s|ed)?\b/iu, what: "a discount" },
+  {
+    pattern: /\bhttps?:\/\/|\bwww\.|\b[\p{L}\p{N}-]+\.(?:com|app|io|net|org|co|dev)\b/iu,
+    what: "a website URL",
+  },
+  { pattern: /©|\(c\)\s?\d{4}/iu, what: "a copyright symbol" },
+  {
+    pattern: /\b(?:android|google play|play store|galaxy store|appgallery|amazon appstore)\b/iu,
+    what: "another platform or marketplace",
+  },
+  {
+    pattern: /\beditor['’]?s choice\b|\b(?:app|game) of the day\b|\bapple design award/iu,
+    what: "an Apple recognition",
+  },
+];
+
+function validateStoreClaims(
+  project: Project,
+  manifest: Manifest,
+  content: Map<string, LocaleContent>,
+  issues: IssueList,
+) {
+  // Apple's guidance: screens that only render for Google Play are not held to it.
+  const forAppStore = manifest.screens.filter(
+    (s) => s.enabled && (s.targets ?? project.config.targets).some((t) => getTarget(t)?.platform === "ios"),
+  );
+  for (const locale of project.config.locales) {
+    const lc = content.get(locale);
+    if (!lc) continue;
+    const file = displayRelative(project.root, `${project.paths.content}/${locale}.json`);
+    for (const screen of forAppStore) {
+      for (const [field, value] of Object.entries(lc.screens[screen.id] ?? {})) {
+        if (typeof value !== "string") continue;
+        for (const { pattern, what } of STORE_CLAIMS) {
+          const match = pattern.exec(value);
+          if (!match) continue;
+          issues.warn(
+            "content.store-claims",
+            `Screen "${screen.id}" ${field} shows ${what} ("${match[0].trim()}") in ${locale}`,
+            {
+              key: `${locale}/${screen.id}`,
+              file,
+              hint: "Apple's screenshot guidelines rule out prices, discounts, URLs, ©, other platforms and Apple recognitions",
+            },
+          );
+        }
       }
     }
   }
