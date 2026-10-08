@@ -175,6 +175,6 @@ describe("readiness on the fixture", () => {
     );
     const r = readinessReport(load());
     expect(byId(r, "version").status).toBe("warn");
-    expect(byId(r, "version").details[0]).toMatch(/generated for version 1.1.0; app.json is 1.2.0/);
+    expect(byId(r, "version").details[0]).toMatch(/generated for version 1.1.0; the app is 1.2.0 \(app.json version\)/);
   });
 });

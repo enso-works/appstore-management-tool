@@ -1,7 +1,19 @@
 import fs from "node:fs";
 import path from "node:path";
-import { CONFIG_FILENAME, readJsonFile } from "./config";
-import { initProject, metadataLocaleDirs, proposeLocales, readExpoConfig } from "./init";
+import {
+  appFacts,
+  capacitorConfigFile,
+  findInfoPlist,
+  readCapacitor,
+  readExpoSafely,
+  readInfoPlist,
+  readPackageJson,
+  readXcodeProject,
+  str,
+  type AppKind,
+} from "./app-facts";
+import { CONFIG_FILENAME } from "./config";
+import { initProject, metadataLocaleDirs, proposeLocales } from "./init";
 import { dirExists, fileExists } from "./paths";
 import { listRegistered, register, type RegisteredProject } from "./registered";
 import { discoverProjects, isFallbackListing, SKIP_DIRS } from "./registry";
@@ -17,7 +29,7 @@ export { targetsFor };
  * editor scaffold the same thing.
  */
 
-export type AppKind = "expo" | "capacitor" | "native-ios" | "unknown";
+export type { AppKind };
 
 /** Where a proposed value came from, shown next to it so a wrong guess is easy to spot. */
 export type Source = string;
@@ -142,11 +154,8 @@ export function inspectApp(dir: string, opts: { allowUnknown?: boolean } = {}): 
     [plist?.orientation, "Info.plist UISupportedInterfaceOrientations"],
     ["portrait", "default"],
   );
-  const [ipad, ipadSource] = first<boolean>(
-    [typeof expoIos?.supportsTablet === "boolean" ? expoIos.supportsTablet : undefined, "app.json ios.supportsTablet"],
-    [xcode?.ipad, "Xcode project TARGETED_DEVICE_FAMILY"],
-    [false, "default"],
-  );
+  // Same reading readiness uses, so the two never disagree about iPad.
+  const { value: ipad, source: ipadSource } = appFacts(root).ipad;
   // Play sets only when the app already ships to Google Play through supply.
   const playMetadata = dirExists(path.join(metadataDir, "android"));
   const play = playMetadata;
@@ -287,143 +296,6 @@ function hasConfig(root: string): boolean {
 
 function isToolCheckout(dir: string): boolean {
   return fileExists(path.join(dir, "bin", "store-shots.mjs")) && fileExists(path.join(dir, "lib", "import.ts"));
-}
-
-/** app.json as Expo writes it, wrapped or flat; unreadable JSON counts as no app.json. */
-function readExpoSafely(root: string): Record<string, unknown> | undefined {
-  try {
-    return readExpoConfig(root);
-  } catch {
-    return undefined;
-  }
-}
-
-function capacitorConfigFile(root: string): string | undefined {
-  return ["capacitor.config.json", "capacitor.config.ts", "capacitor.config.js"]
-    .map((f) => path.join(root, f))
-    .find(fileExists);
-}
-
-/** appId and appName from a Capacitor config; the .ts/.js form is read as text, never executed. */
-function readCapacitor(root: string): { appId?: string; appName?: string } | undefined {
-  const file = capacitorConfigFile(root);
-  if (!file) return undefined;
-  const text = fs.readFileSync(file, "utf8");
-  if (file.endsWith(".json")) {
-    try {
-      const json = JSON.parse(text) as { appId?: unknown; appName?: unknown };
-      return { appId: str(json.appId), appName: str(json.appName) };
-    } catch {
-      return {};
-    }
-  }
-  const field = (key: string) => new RegExp(`\\b${key}\\s*:\\s*(['"\`])([^'"\`]+)\\1`).exec(text)?.[2];
-  return { appId: field("appId"), appName: field("appName") };
-}
-
-/** The app target's Info.plist: Capacitor's ios/App/App, else ios/<name>/ (Expo prebuild, React Native, Xcode). */
-function findInfoPlist(root: string): string | undefined {
-  const ios = path.join(root, "ios");
-  if (!dirExists(ios)) return undefined;
-  const capacitor = path.join(ios, "App", "App", "Info.plist");
-  if (fileExists(capacitor)) return capacitor;
-  for (const e of fs.readdirSync(ios, { withFileTypes: true })) {
-    if (!e.isDirectory() || e.name === "Pods" || e.name.startsWith(".") || /Tests$|\.xc/.test(e.name)) continue;
-    const candidate = path.join(ios, e.name, "Info.plist");
-    // Widgets and other extensions have their own Info.plist; the app's has no NSExtension.
-    if (fileExists(candidate) && !fs.readFileSync(candidate, "utf8").includes("<key>NSExtension</key>")) {
-      return candidate;
-    }
-  }
-  return undefined;
-}
-
-interface PlistFacts {
-  displayName?: string;
-  orientation?: Orientation;
-  localizations?: string[];
-}
-
-/** The few Info.plist keys import needs, from the XML form source trees keep. */
-function readInfoPlist(root: string): PlistFacts | undefined {
-  const file = findInfoPlist(root);
-  if (!file) return undefined;
-  const xml = fs.readFileSync(file, "utf8");
-  const string = (key: string) => {
-    const v = new RegExp(`<key>${key}</key>\\s*<string>([^<]*)</string>`).exec(xml)?.[1];
-    // Build settings like $(PRODUCT_NAME) are not names.
-    return v && !v.includes("$(") ? unescapeXml(v) : undefined;
-  };
-  const array = (key: string) => {
-    const body = new RegExp(`<key>${key}</key>\\s*<array>([\\s\\S]*?)</array>`).exec(xml)?.[1];
-    return body ? [...body.matchAll(/<string>([^<]*)<\/string>/g)].map((m) => unescapeXml(m[1])) : undefined;
-  };
-  const orientations = array("UISupportedInterfaceOrientations");
-  const orientation = orientations?.length
-    ? orientations.every((o) => o.includes("Landscape"))
-      ? "landscape"
-      : "portrait"
-    : undefined;
-  return {
-    displayName: string("CFBundleDisplayName") ?? string("CFBundleName"),
-    orientation,
-    localizations: array("CFBundleLocalizations"),
-  };
-}
-
-/**
- * Bundle id and device family of the app target, from the first project.pbxproj
- * under ios/. Extensions and tests have their own build settings; the app's
- * bundle id is the shortest, since theirs extend it (com.x.app.widget).
- */
-function readXcodeProject(root: string): { bundleId?: string; ipad: boolean } | undefined {
-  const ios = path.join(root, "ios");
-  if (!dirExists(ios)) return undefined;
-  const capacitor = path.join(ios, "App");
-  const dirs = [ios, ...(dirExists(capacitor) ? [capacitor] : [])];
-  for (const d of dirs) {
-    const proj = fs.readdirSync(d).find((f) => f.endsWith(".xcodeproj"));
-    if (!proj) continue;
-    const file = path.join(d, proj, "project.pbxproj");
-    if (!fileExists(file)) continue;
-    const settings = [...fs.readFileSync(file, "utf8").matchAll(/buildSettings = \{([^{}]*)\}/g)].map((m) => {
-      const block = m[1];
-      return {
-        bundleId: /PRODUCT_BUNDLE_IDENTIFIER = "?([^";]+)"?;/.exec(block)?.[1],
-        families: /TARGETED_DEVICE_FAMILY = "?([\d,]+)"?;/.exec(block)?.[1],
-      };
-    });
-    const ids = settings
-      .map((s) => s.bundleId)
-      .filter((id): id is string => !!id && !id.includes("$(") && !/tests?$/i.test(id));
-    const bundleId = ids.sort((a, b) => a.length - b.length)[0];
-    const families = settings.filter((s) => !bundleId || s.bundleId === bundleId).map((s) => s.families ?? "");
-    return { bundleId, ipad: families.some((f) => f.split(",").includes("2")) };
-  }
-  return undefined;
-}
-
-function readPackageJson(root: string): Record<string, unknown> | undefined {
-  const file = path.join(root, "package.json");
-  if (!fileExists(file)) return undefined;
-  try {
-    return readJsonFile(file) as Record<string, unknown>;
-  } catch {
-    return undefined;
-  }
-}
-
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim() ? v.trim() : undefined;
-}
-
-function unescapeXml(s: string): string {
-  return s
-    .replaceAll("&lt;", "<")
-    .replaceAll("&gt;", ">")
-    .replaceAll("&quot;", '"')
-    .replaceAll("&apos;", "'")
-    .replaceAll("&amp;", "&");
 }
 
 /** The first candidate with a value, with its source. The last candidate is the fallback. */

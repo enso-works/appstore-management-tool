@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { readAppJson, type Project } from "./config";
+import { appFacts } from "./app-facts";
+import { type Project } from "./config";
 import { validateProject } from "./validate";
 import { resolveFontStack } from "./fonts";
 import { buildRenderPlan } from "./render-plan";
@@ -64,8 +65,7 @@ function signoffPath(project: Project): string {
 }
 
 export function appVersionOf(project: Project): string | undefined {
-  const v = readAppJson(project)?.version;
-  return typeof v === "string" ? v : undefined;
+  return appFacts(project.root).version?.value;
 }
 
 export function readSignoffs(project: Project): ReleaseSignoffs {

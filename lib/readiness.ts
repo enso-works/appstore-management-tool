@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { readAppJson, type Project } from "./config";
+import { appFacts } from "./app-facts";
+import { type Project } from "./config";
 import { analyzeKeywords, listMetadataLocales, readMetadataLocale } from "./metadata";
 import { dirExists, displayRelative, fileExists, resolveWithin } from "./paths";
 import { isJpegFile, readImageInfo, type ImageInfo } from "./image";
@@ -108,15 +109,6 @@ function worst(statuses: CheckStatus[]): CheckStatus {
   if (statuses.includes("warn")) return "warn";
   if (statuses.every((s) => s === "skip")) return "skip";
   return "pass";
-}
-
-/** app.json as {expo} or flat; a parse failure is reported via `error` instead of thrown. */
-function safeAppJson(project: Project): { app?: Record<string, unknown>; error?: string } {
-  try {
-    return { app: readAppJson(project) };
-  } catch (err) {
-    return { error: (err as Error).message };
-  }
 }
 
 /** PNG header or an error string; never throws. */
@@ -330,14 +322,15 @@ function checkRequiredSizes(project: Project): ReadinessCheck {
     );
   }
   const hasIpad13 = ios.some((t) => t.family === "ipad" && t.displayClass === "13-inch");
-  const { app } = safeAppJson(project);
-  const ipadApp = (app?.ios as { supportsTablet?: unknown } | undefined)?.supportsTablet === true;
-  if (ipadApp && !hasIpad13) {
+  const { ipad } = appFacts(project.root);
+  if (ipad.value && !hasIpad13) {
     f.fail(
-      `app.json ios.supportsTablet is true, so App Store Connect requires an iPad 13" set; add ${requiredTargetId("ipad", "13-inch", orientation)}`,
+      `the app runs on iPad (${ipad.source}), so App Store Connect requires an iPad 13" set; add ${requiredTargetId("ipad", "13-inch", orientation)}`,
     );
-  } else if (!ipadApp && hasIpad13) {
-    f.info('iPad 13" set configured, but app.json does not set ios.supportsTablet; it is only needed for iPad apps');
+  } else if (!ipad.value && hasIpad13) {
+    f.info(
+      `iPad 13" set configured, but the app does not run on iPad (${ipad.source}); it is only needed for iPad apps`,
+    );
   }
   return f.check(id, title, 'targets in store-shots.config.json; 6.1" renders from the same raw captures as 6.9"');
 }
@@ -370,17 +363,21 @@ function checkIcon(project: Project): ReadinessCheck {
   const id = "icon";
   const title = "App icon is 1024x1024 opaque PNG";
   const f = new Findings();
-  const { app, error } = safeAppJson(project);
-  if (error) {
-    f.fail(error);
+  const facts = appFacts(project.root);
+  if (facts.appJsonError) {
+    f.fail(facts.appJsonError);
     return f.check(id, title);
   }
-  const iconRel = typeof app?.icon === "string" ? app.icon : "./assets/icon.png";
+  if (!facts.icon) {
+    f.fail("no 1024x1024 image in the app icon set (ios/**/AppIcon.appiconset)");
+    return f.check(id, title);
+  }
+  const iconRel = facts.icon.value.rel;
   let abs: string;
   try {
     abs = resolveWithin(project.root, iconRel);
   } catch {
-    f.fail(`app.json icon "${iconRel}" points outside the app`);
+    f.fail(`${facts.icon.source} "${iconRel}" points outside the app`);
     return f.check(id, title);
   }
   if (!fileExists(abs)) {
@@ -392,10 +389,14 @@ function checkIcon(project: Project): ReadinessCheck {
     } else {
       if (info.width !== 1024 || info.height !== 1024)
         f.fail(`${iconRel} is ${info.width}x${info.height}, App Store wants 1024x1024`);
-      // Expo prebuild flattens the iOS icon (removeTransparency), so alpha in the
-      // source is a warning, not a blocker. It still matters when the 1024px
-      // marketing icon is uploaded to App Store Connect by hand.
-      if (info.hasAlpha) f.warn(`${iconRel} has an alpha channel (prebuild flattens it; keep it opaque anyway)`);
+      // Expo prebuild flattens the iOS icon (removeTransparency), so alpha in an
+      // Expo source is a warning; in an asset catalog it ships as is and App
+      // Store Connect rejects it.
+      if (info.hasAlpha) {
+        if (facts.kind === "expo")
+          f.warn(`${iconRel} has an alpha channel (prebuild flattens it; keep it opaque anyway)`);
+        else f.fail(`${iconRel} has an alpha channel; the App Store icon must be opaque`);
+      }
     }
   }
   return f.check(id, title);
@@ -422,19 +423,21 @@ function checkCredentials(project: Project): ReadinessCheck {
 
 function checkVersion(project: Project): ReadinessCheck {
   const f = new Findings();
-  const { app, error } = safeAppJson(project);
-  if (error) {
-    f.fail(error);
+  const facts = appFacts(project.root);
+  if (facts.appJsonError) {
+    f.fail(facts.appJsonError);
     return f.check("version", "App version consistent");
   }
-  const version = typeof app?.version === "string" ? app.version : undefined;
-  if (!version) f.warn("app.json has no expo.version");
+  const version = facts.version?.value;
+  if (!version) f.warn("no app version (app.json version, or MARKETING_VERSION in the Xcode project)");
   const genManifest = path.join(project.paths.outputScreenshots, ".store-shots-manifest.json");
   if (fileExists(genManifest) && version) {
     try {
       const gm = JSON.parse(fs.readFileSync(genManifest, "utf8")) as { appVersion?: string };
       if (gm.appVersion && gm.appVersion !== version) {
-        f.warn(`screenshots were generated for version ${gm.appVersion}; app.json is ${version}`);
+        f.warn(
+          `screenshots were generated for version ${gm.appVersion}; the app is ${version} (${facts.version!.source})`,
+        );
       }
     } catch {
       f.warn(".store-shots-manifest.json is unreadable");

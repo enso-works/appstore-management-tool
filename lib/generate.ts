@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { layersFor } from "./layers";
-import { readAppJson, type Project } from "./config";
+import { appFacts } from "./app-facts";
+import { type Project } from "./config";
 import { requiredFontFamilies, resolveFontStack, sha256File } from "./fonts";
 import { readGeneratedManifest, writeGeneratedManifest } from "./generated-manifest";
 import { IssueList, type Issue } from "./issues";
@@ -405,12 +406,7 @@ function relOutput(project: Project, job: RenderJob): string {
 }
 
 function safeAppVersion(project: Project): string | undefined {
-  try {
-    const v = readAppJson(project)?.version;
-    return typeof v === "string" ? v : undefined;
-  } catch {
-    return undefined;
-  }
+  return appFacts(project.root).version?.value;
 }
 
 export function readToolVersion(): string {
