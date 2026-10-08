@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { formatJson, jsonStyleFor } from "./json-style";
 import { appFacts } from "./app-facts";
 import { type Project } from "./config";
 import { validateProject } from "./validate";
@@ -95,7 +96,7 @@ export function setSignoff(project: Project, locale: string, reviewed: boolean):
   const file = signoffPath(project);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + "\n");
+  fs.writeFileSync(tmp, formatJson(state, jsonStyleFor(file)));
   fs.renameSync(tmp, file);
   return state;
 }

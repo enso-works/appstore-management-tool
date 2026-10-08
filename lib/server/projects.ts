@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { formatJson, jsonStyleFor } from "../json-style";
 import { type Project } from "../config";
 import { contentFileFor, loadContent, loadManifest } from "../content";
 import { fileExists, resolveWithin } from "../paths";
@@ -43,11 +44,11 @@ export function etagOf(file: string): string {
   return crypto.createHash("sha256").update(fs.readFileSync(file)).digest("hex");
 }
 
-/** Write JSON atomically (temp + rename), one canonical formatting. */
+/** Write JSON atomically (temp + rename), formatted the way the app formats it. */
 export function writeJsonAtomic(file: string, value: unknown): string {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = path.join(path.dirname(file), `.${path.basename(file)}.tmp`);
-  fs.writeFileSync(tmp, JSON.stringify(value, null, 2) + "\n", "utf8");
+  fs.writeFileSync(tmp, formatJson(value, jsonStyleFor(file)), "utf8");
   fs.renameSync(tmp, file);
   return etagOf(file);
 }

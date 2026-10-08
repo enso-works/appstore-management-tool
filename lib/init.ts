@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { appJsonStyle, formatJson } from "./json-style";
 import { CONFIG_FILENAME, loadProject, readJsonFile, validateConfigSemantics } from "./config";
 import { APP_LANGUAGE_TO_STORE_LOCALES, type AppStoreLocale } from "./locales";
 import { dirExists, displayRelative, fileExists } from "./paths";
@@ -39,6 +40,8 @@ export function initProject(opts: InitOptions): InitResult {
   const created: string[] = [];
   const skipped: string[] = [];
   const toolRel = opts.toolRelPath ?? defaultToolRelPath(root);
+  // The app's Prettier style, so its own format check passes on what init writes.
+  const style = appJsonStyle(root);
 
   const app = readExpoConfig(root);
   const projectName = opts.projectName ?? (app?.name as string | undefined) ?? path.basename(root);
@@ -74,12 +77,12 @@ export function initProject(opts: InitOptions): InitResult {
     throw new ScaffoldError(`Refusing to scaffold: ${semantic.errors.map((i) => i.message).join("; ")}`);
   }
 
-  write(path.join(root, CONFIG_FILENAME), JSON.stringify(config, null, 2) + "\n");
+  write(path.join(root, CONFIG_FILENAME), formatJson(config, style));
 
   const storeDir = path.join(root, "store");
   write(
     path.join(storeDir, "manifest.json"),
-    JSON.stringify(
+    formatJson(
       {
         $schema: `../${toolRel}/schema/manifest.schema.json`,
         screens: [
@@ -92,21 +95,19 @@ export function initProject(opts: InitOptions): InitResult {
           },
         ],
       },
-      null,
-      2,
-    ) + "\n",
+      style,
+    ),
   );
   write(
     path.join(storeDir, "content", `${defaultLocale}.json`),
-    JSON.stringify(
+    formatJson(
       {
         $schema: `../../${toolRel}/schema/content.schema.json`,
         locale: defaultLocale,
         screens: { home: { eyebrow: null, headline: `${projectName} headline`, caption: null } },
       },
-      null,
-      2,
-    ) + "\n",
+      style,
+    ),
   );
   // One raw-capture folder per device the targets render from (the target id's first token).
   const devices = new Set(

@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { formatJson, jsonStyleFor } from "./json-style";
 import type { Project } from "./config";
 import { dirExists, fileExists, resolveWithin } from "./paths";
 import { fontsLockSchema, formatZodError, type FontsLock } from "./schema";
@@ -58,7 +59,7 @@ function readLock(dir: string): FontsLock | undefined {
 
 function writeLock(dir: string, lock: FontsLock) {
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, FONTS_LOCK), JSON.stringify(lock, null, 2) + "\n");
+  fs.writeFileSync(path.join(dir, FONTS_LOCK), formatJson(lock, jsonStyleFor(path.join(dir, FONTS_LOCK))));
 }
 
 /** Find a family in the app's fonts dir, else in the bundled dir. */
