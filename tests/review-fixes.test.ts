@@ -169,7 +169,8 @@ describe("validation details", () => {
   });
 });
 
-describe("CLI exit codes", () => {
+// Each case starts the CLI in a new process (tsx compiles it on start), about a second apiece on CI.
+describe("CLI exit codes", { timeout: 30_000 }, () => {
   const bin = path.resolve(import.meta.dirname, "..", "bin", "store-shots.mjs");
   const run = (...args: string[]) => spawnSync(process.execPath, [bin, ...args], { encoding: "utf8" });
 
