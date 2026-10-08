@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ReadinessReport } from "@/lib/readiness";
 import type { ReleaseStatus, ShotState } from "@/lib/release";
+import { getTarget } from "@/lib/targets";
 import styles from "./editor.module.css";
+
+/** Placeholder thumbs take the set's shape (landscape sets are wide). */
+function thumbAspect(targetId: string): { aspectRatio: string } | undefined {
+  const target = getTarget(targetId);
+  return target ? { aspectRatio: `${target.width} / ${target.height}` } : undefined;
+}
 
 interface MetadataSnapshot {
   locales: Record<string, { dirExists: boolean; fields: { field: string; value: string }[] }>;
@@ -158,7 +165,9 @@ export default function ReleasePanel({
                   {set.shots.map((shot) => (
                     <figure key={shot.rel} className={styles.releaseThumb} title={shot.reason ?? shot.rel}>
                       {shot.state === "blocked" || shot.state === "missing" ? (
-                        <span className={styles.releaseThumbEmpty}>{shot.screen}</span>
+                        <span className={styles.releaseThumbEmpty} style={thumbAspect(set.target)}>
+                          {shot.screen}
+                        </span>
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element -- local API file, not an optimizable asset
                         <img

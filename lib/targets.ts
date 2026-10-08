@@ -43,6 +43,28 @@ export const targetProfiles = {
     height: 2752,
     fileToken: "IPAD_PRO_129",
   },
+  // Landscape sets for apps that run sideways (games). Same display classes;
+  // deliver tells them apart by pixel size, the token keeps filenames apart.
+  "iphone-6.9-2868x1320": {
+    id: "iphone-6.9-2868x1320",
+    platform: "ios",
+    family: "iphone",
+    displayClass: "6.9-inch",
+    orientation: "landscape",
+    width: 2868,
+    height: 1320,
+    fileToken: "IPHONE_69_LANDSCAPE",
+  },
+  "ipad-13-2752x2064": {
+    id: "ipad-13-2752x2064",
+    platform: "ios",
+    family: "ipad",
+    displayClass: "13-inch",
+    orientation: "landscape",
+    width: 2752,
+    height: 2064,
+    fileToken: "IPAD_PRO_129_LANDSCAPE",
+  },
   // Google Play phone screenshots: 9:16, >= 1080 px, max/min side ratio <= 2:1.
   // Output goes to fastlane/metadata/android/<locale>/images/phoneScreenshots/ (supply layout).
   "play-phone-1080x1920": {
@@ -91,6 +113,15 @@ export function getTarget(id: string): TargetProfile | undefined {
 
 export function isTargetId(id: string): id is TargetId {
   return id in targetProfiles;
+}
+
+/**
+ * Type unit: the canvas's short side. Templates size type, padding and shells
+ * from it, so a landscape canvas gets the same type as its portrait twin
+ * instead of type scaled to the long edge.
+ */
+export function typeUnit(target: { width: number; height: number }): number {
+  return Math.min(target.width, target.height);
 }
 
 /**

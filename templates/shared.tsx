@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactElement } from "react";
 import { z } from "zod";
 import { BACKGROUND_IMAGE_RE } from "../lib/schema";
+import { typeUnit } from "../lib/targets";
 import { ARTWORK_ATTR, type TemplateRenderInput } from "./types";
 
 const shellValueSchema = z.union([
@@ -425,8 +426,12 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
     );
   }
   const shell = input.overrides.shell === "light" || input.overrides.shell === "none" ? input.overrides.shell : "dark";
-  const radius = Math.round(width * 0.11);
-  const bezel = shell === "none" ? 0 : Math.round(width * 0.018);
+  // Corners and bezel follow the short side, so a landscape shell keeps a phone's proportions.
+  // A landscape iPad gets an iPad's tighter corners (portrait keeps its existing look).
+  const short = Math.min(width, height);
+  const ipadLandscape = input.target.family === "ipad" && input.target.orientation === "landscape";
+  const radius = Math.round(short * (ipadLandscape ? 0.055 : 0.11));
+  const bezel = shell === "none" ? 0 : Math.round(short * 0.018);
   const shellColor = shell === "light" ? "#f3f4f6" : "#0b0c0f";
   const tilt = input.overrides.deviceTilt ?? 0;
   return (
@@ -443,7 +448,7 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
         padding: bezel,
         boxSizing: "border-box",
         boxShadow:
-          shell === "none" ? "none" : `0 ${Math.round(width * 0.04)}px ${Math.round(width * 0.1)}px rgba(0,0,0,0.35)`,
+          shell === "none" ? "none" : `0 ${Math.round(short * 0.04)}px ${Math.round(short * 0.1)}px rgba(0,0,0,0.35)`,
         transform: tilt ? `rotate(${tilt}deg)` : undefined,
         transformOrigin: "50% 50%",
       }}
@@ -567,8 +572,9 @@ export function stackLayout(
 ): StackLayout {
   const { target, overrides, direction } = input;
   const W = target.width;
+  const U = typeUnit(target); // == W in portrait; the short side in landscape
   const CW = input.canvasWidth; // full artwork width (== W unless panorama)
-  const pad = Math.round(W * 0.07);
+  const pad = Math.round(U * 0.07);
   const usable = CW - 2 * pad;
   const textWidth = overrides.textWidth ?? defaults.textWidth;
   const narrow = textWidth < 0.999;
@@ -579,13 +585,23 @@ export function stackLayout(
     (hugsLeft ? pad : CW - pad - textW) + Math.round(W * (overrides.textOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));
   // The device anchors to the DEFAULT text position, not the offset one:
   // dragging the text must never move the phone (and vice versa).
-  const baseTextTop = Math.round(W * 0.09);
+  const baseTextTop = Math.round(U * (target.orientation === "landscape" ? 0.06 : 0.09));
   const textTop = baseTextTop + Math.round(W * (overrides.textOffsetY ?? 0));
 
-  const scale = overrides.screenshotScale ?? defaults.scale;
+  // Phone shells keep a phone aspect even on a 9:16 Play canvas; tablets and landscape sets use the canvas aspect.
+  const devAspect =
+    target.family === "ipad" || target.family === "tablet" || target.orientation === "landscape"
+      ? target.width / target.height
+      : 1320 / 2868;
+  const stackedTop = baseTextTop + textHeight + Math.round(U * defaults.gap);
+  // Landscape: by default the whole device fits under the text (a sideways
+  // screen cut off at the bottom loses the game), at most defaults.scale wide.
+  const fitScale =
+    target.orientation === "landscape" && !narrow
+      ? Math.max(0.3, Math.min(defaults.scale, ((target.height - stackedTop - pad) * devAspect) / W))
+      : defaults.scale;
+  const scale = overrides.screenshotScale ?? fitScale;
   const devW = Math.round(W * scale);
-  // Phone shells keep a phone aspect even on a 9:16 Play canvas; tablets use the canvas aspect.
-  const devAspect = target.family === "ipad" || target.family === "tablet" ? target.width / target.height : 1320 / 2868;
   const devH = Math.round(devW / devAspect);
   let devLeft: number;
   let devTop: number;
@@ -594,7 +610,7 @@ export function stackLayout(
     devTop = baseTextTop;
   } else {
     devLeft = Math.round((CW - devW) / 2);
-    devTop = baseTextTop + textHeight + Math.round(W * defaults.gap);
+    devTop = stackedTop;
   }
   devLeft += Math.round(W * (overrides.screenshotOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));
   devTop += Math.round(W * (overrides.screenshotOffsetY ?? 0));

@@ -180,6 +180,21 @@ describe("validateProject on the fixture", () => {
     // iPad sets now have only one screen -> below the fixture minimum of 2
     expect(r.issues.errors.map((i) => i.code)).toContain("plan.too-few");
   });
+
+  it("rejects device frames on landscape targets", () => {
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => (c.targets = ["iphone-6.9-2868x1320"]));
+    editJson(path.join(fx.root, "store/manifest.json"), (m) => {
+      for (const sc of m.screens) {
+        delete sc.targets;
+        sc.template = "hero-top";
+        sc.overrides = { ...sc.overrides, shell: { iphone: "frame:Apple iPhone 16 Pro Max" } };
+      }
+    });
+    const r = validateProject(load());
+    const errors = r.issues.errors.map((i) => i.code);
+    expect(errors).toContain("manifest.frame-landscape");
+    expect(errors).not.toContain("manifest.template-unsupported-target");
+  });
 });
 
 describe("naming", () => {

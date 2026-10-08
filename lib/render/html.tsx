@@ -112,7 +112,11 @@ export function renderArtworkHtml(
     );
   }
   const input = templateInputFor(project, job, content, urls.sourceImage, "export", stack, urls.assetUrl);
-  const frameName = frameNameFromShell(resolveShell(job.screen.overrides.shell, job.target.family));
+  // Frames are portrait artwork; landscape sets fall back to the neutral shell (validation reports it).
+  const frameName =
+    job.target.orientation === "portrait"
+      ? frameNameFromShell(resolveShell(job.screen.overrides.shell, job.target.family))
+      : undefined;
   if (frameName) {
     const frame = getFrame(frameName);
     if (!frame) {

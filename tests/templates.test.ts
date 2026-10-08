@@ -198,6 +198,49 @@ describe("stackLayout", () => {
     expect(textOnly.device.left).toBe(a.device.left);
     expect(textOnly.text.left - a.text.left).toBe(132);
   });
+
+  it("gives a landscape canvas portrait-sized type and a sideways device that fits under the text", () => {
+    const land = input("iphone-6.9-2868x1320");
+    const l = stackLayout(land, 300, defaults);
+    expect(l.pad).toBe(Math.round(1320 * 0.07));
+    expect(l.device.width / l.device.height).toBeCloseTo(2868 / 1320, 2);
+    expect(l.device.top).toBe(l.text.top + 300 + Math.round(1320 * 0.06));
+    expect(l.device.top + l.device.height).toBeLessThanOrEqual(1320 - l.pad + 1);
+    expect(l.device.left).toBe(Math.round((2868 - l.device.width) / 2));
+    // An explicit scale still wins over the fit.
+    expect(stackLayout({ ...land, overrides: { screenshotScale: 0.9 } }, 300, defaults).device.width).toBe(
+      Math.round(2868 * 0.9),
+    );
+  });
+});
+
+describe("landscape templates", () => {
+  const headlineSize = (html: string) => Number(/data-check="headline"[^>]*data-font-size="(\d+)"/.exec(html)?.[1]);
+
+  it("hero-top sizes type from the short side and keeps one line per field", () => {
+    const mod = templateModules["hero-top"];
+    const portrait = renderStatic(mod.render(input("iphone-6.9-1320x2868")));
+    const landscape = renderStatic(mod.render(input("iphone-6.9-2868x1320")));
+    expect(headlineSize(landscape)).toBe(headlineSize(portrait));
+    expect(landscape).toMatch(/data-check="headline"[^>]*data-max-lines="1"/);
+    expect(mod.descriptor.orientations).toContain("landscape");
+    expect(mod.descriptor.fieldBudget!("headline", targetProfiles["iphone-6.9-2868x1320"], {})).toBeGreaterThan(
+      mod.descriptor.fieldBudget!("headline", targetProfiles["iphone-6.9-1320x2868"], {})! / 3,
+    );
+  });
+
+  it("full-bleed-card draws a start-side panel instead of a full-width card", () => {
+    const mod = templateModules["full-bleed-card"];
+    const landscape = renderStatic(mod.render(input("ipad-13-2752x2064")));
+    const pad = Math.round(2064 * 0.07);
+    expect(landscape).toContain(`inset-inline-start:${pad}px;width:${Math.round((2752 - 2 * pad) * 0.55)}px`);
+    const portrait = renderStatic(mod.render(input("ipad-13-2064x2752")));
+    expect(portrait).toContain(`left:${pad}px;right:${pad}px`);
+  });
+
+  it("split-caption stays portrait only", () => {
+    expect(templateModules["split-caption"].descriptor.orientations).toEqual(["portrait"]);
+  });
 });
 
 describe("device frames", () => {

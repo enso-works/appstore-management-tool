@@ -169,43 +169,54 @@ program
     "comma-separated store locales (default: fastlane/metadata dirs or CFBundleLocalizations)",
   )
   .option("--default-locale <locale>", "default locale (default: en-US if present)")
+  .option("--landscape", "landscape store sets (apps that run sideways, like games)")
   .option("--force", "overwrite existing files")
-  .action((opts: { project?: string; name?: string; locales?: string; defaultLocale?: string; force?: boolean }) => {
-    const appRoot = path.resolve(opts.project ?? process.cwd());
+  .action(
+    (opts: {
+      project?: string;
+      name?: string;
+      locales?: string;
+      defaultLocale?: string;
+      landscape?: boolean;
+      force?: boolean;
+    }) => {
+      const appRoot = path.resolve(opts.project ?? process.cwd());
 
-    // `init` defaults to the current directory, so running it inside the tool
-    // itself would scaffold store/ into store-shots rather than into an app.
-    // That is always a mistake, and silently doing it is worse than refusing.
-    if (appRoot === toolRoot()) {
-      console.error("`init` scaffolds an app, and this is store-shots itself.");
-      console.error("Run it from inside your app, or pass --project <app-dir>.");
-      process.exit(2);
-    }
+      // `init` defaults to the current directory, so running it inside the tool
+      // itself would scaffold store/ into store-shots rather than into an app.
+      // That is always a mistake, and silently doing it is worse than refusing.
+      if (appRoot === toolRoot()) {
+        console.error("`init` scaffolds an app, and this is store-shots itself.");
+        console.error("Run it from inside your app, or pass --project <app-dir>.");
+        process.exit(2);
+      }
 
-    const result = initProject({
-      appRoot,
-      projectName: opts.name,
-      locales: opts.locales
-        ?.split(",")
-        .map((s) => s.trim())
-        .filter(Boolean),
-      defaultLocale: opts.defaultLocale,
-      force: opts.force,
-    });
-    for (const f of result.created) console.log(`created  ${f}`);
-    for (const f of result.skipped) console.log(`skipped  ${f} (exists)`);
+      const result = initProject({
+        appRoot,
+        projectName: opts.name,
+        locales: opts.locales
+          ?.split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        defaultLocale: opts.defaultLocale,
+        orientation: opts.landscape ? "landscape" : "portrait",
+        force: opts.force,
+      });
+      for (const f of result.created) console.log(`created  ${f}`);
+      for (const f of result.skipped) console.log(`skipped  ${f} (exists)`);
 
-    // Scaffolding an app and then making you register it separately is a step
-    // with no decision in it, so init does both.
-    const entry = register(appRoot, opts.name ?? result.config.projectName);
+      // Scaffolding an app and then making you register it separately is a step
+      // with no decision in it, so init does both.
+      const entry = register(appRoot, opts.name ?? result.config.projectName);
 
-    console.log(`\nProject "${result.config.projectName}" with locales ${result.config.locales.join(", ")}.`);
-    console.log(`Added to your list as "${entry.name}" (${registryPath()}).`);
-    console.log("\nNext:");
-    console.log("  1. add raw captures under store/raw/<device>/<locale>/");
-    console.log("  2. store-shots validate");
-    console.log("  3. store-shots open");
-  });
+      console.log(`\nProject "${result.config.projectName}" with locales ${result.config.locales.join(", ")}.`);
+      console.log(`Added to your list as "${entry.name}" (${registryPath()}).`);
+      console.log("\nNext:");
+      console.log("  1. add raw captures under store/raw/<device>/<locale>/");
+      console.log("  2. store-shots validate");
+      console.log("  3. store-shots open");
+    },
+  );
 
 program
   .command("validate")

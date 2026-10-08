@@ -10,13 +10,15 @@ import {
   type CommonOverrides,
   type StackLayoutDefaults,
 } from "./shared";
+import { typeUnit, type Orientation } from "../lib/targets";
 import type { TemplateModule, TemplateRenderInput } from "./types";
 
 /**
  * Hero Top (plan §10.2): eyebrow + headline (+ caption) at the top, device
  * centred below running off the bottom edge. With textWidth < 1 the text
  * becomes a side column and the device moves beside it; every positional
- * override (scale, X/Y offset, tilt) applies on top.
+ * override (scale, X/Y offset, tilt) applies on top. On a landscape canvas the
+ * headline and caption get one wide line each and the device fits below them.
  */
 export const overridesSchema = commonOverridesSchema;
 
@@ -27,28 +29,36 @@ export const overridesSchema = commonOverridesSchema;
  */
 export function stackFieldBudget(
   field: string,
-  target: { width: number; family: string },
+  target: { width: number; height: number; family: string; orientation: Orientation },
   overrides: Record<string, unknown>,
   defaults: { textWidth: number },
 ): number | undefined {
   const W = target.width;
+  const U = typeUnit(target);
   const k = target.family === "ipad" ? 0.78 : 1;
   const textWidth = typeof overrides.textWidth === "number" ? overrides.textWidth : defaults.textWidth;
   const narrow = textWidth < 0.999;
-  const usable = (W - 2 * Math.round(W * 0.07)) * textWidth;
+  const { headline: headlineLines, caption: captionLines } = maxLines(target.orientation, narrow);
+  const usable = (W - 2 * Math.round(U * 0.07)) * textWidth;
   if (field === "headline") {
-    const size = Math.round(W * 0.082 * k * (narrow ? 0.85 : 1));
-    return Math.floor((usable / (size * 0.52)) * (narrow ? 4 : 3));
+    const size = Math.round(U * 0.082 * k * (narrow ? 0.85 : 1));
+    return Math.floor((usable / (size * 0.52)) * headlineLines);
   }
   if (field === "caption") {
-    const size = Math.round(W * 0.04 * k);
-    return Math.floor((usable / (size * 0.5)) * 3);
+    const size = Math.round(U * 0.04 * k);
+    return Math.floor((usable / (size * 0.5)) * captionLines);
   }
   if (field === "eyebrow") {
-    const size = Math.round(W * 0.03 * k);
+    const size = Math.round(U * 0.03 * k);
     return Math.floor(usable / (size * 0.62)); // uppercase + letterspacing
   }
   return undefined;
+}
+
+/** Lines the text stack reserves: wide landscape canvases read best as one line each. */
+function maxLines(orientation: Orientation, narrow: boolean): { headline: number; caption: number } {
+  if (orientation === "landscape" && !narrow) return { headline: 1, caption: 1 };
+  return { headline: narrow ? 4 : 3, caption: 3 };
 }
 
 export const descriptor = {
@@ -57,10 +67,13 @@ export const descriptor = {
   requiredFields: ["headline"],
   optionalFields: ["eyebrow", "caption"],
   families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
-  orientations: ["portrait"] as "portrait"[],
+  orientations: ["portrait", "landscape"] as Orientation[],
   overrideKeys: COMMON_OVERRIDE_KEYS,
-  fieldBudget: (field: string, target: { width: number; family: string }, overrides: Record<string, unknown>) =>
-    stackFieldBudget(field, target, overrides, { textWidth: 1 }),
+  fieldBudget: (
+    field: string,
+    target: { width: number; height: number; family: string; orientation: Orientation },
+    overrides: Record<string, unknown>,
+  ) => stackFieldBudget(field, target, overrides, { textWidth: 1 }),
 };
 
 /** Shared by hero-top and split-caption: the text stack (eyebrow / headline / caption) + device. */
@@ -76,23 +89,25 @@ export function renderTextAndDevice(
 ): ReactElement {
   const { target, fields, brand } = input;
   const W = target.width;
+  const U = typeUnit(target);
   const slices = Math.max(1, Math.round(input.canvasWidth / W));
   const isTablet = target.family === "ipad";
   const align = textAlignOf(input, fallbackAlign);
 
-  // Type metrics scale with canvas width; iPad canvases are wider, so type is a bit smaller relative to W.
+  // Type metrics scale with the canvas's short side; iPad canvases are wider, so type is a bit smaller relative to it.
   const k = isTablet ? 0.78 : 1;
   const textWidth = input.overrides.textWidth ?? defaults.textWidth;
   const narrow = textWidth < 0.999;
   // Narrow columns get slightly smaller type so a few lines still carry a real sentence.
   const narrowK = narrow ? 0.85 : 1;
-  const eyebrowSize = Math.round(W * 0.03 * k);
-  const headlineSize = Math.round(W * 0.082 * k * narrowK);
-  const captionSize = Math.round(W * 0.04 * k);
-  const eyebrowH = fields.eyebrow ? Math.round(eyebrowSize * 1.3) + Math.round(W * 0.02) : 0;
-  const headlineMaxLines = narrow ? 4 : 3;
+  const eyebrowSize = Math.round(U * 0.03 * k);
+  const headlineSize = Math.round(U * 0.082 * k * narrowK);
+  const captionSize = Math.round(U * 0.04 * k);
+  const lines = maxLines(target.orientation, narrow);
+  const eyebrowH = fields.eyebrow ? Math.round(eyebrowSize * 1.3) + Math.round(U * 0.02) : 0;
+  const headlineMaxLines = lines.headline;
   const headlineH = Math.round(headlineSize * 1.08 * headlineMaxLines);
-  const captionH = fields.caption ? Math.round(W * 0.02) + Math.round(captionSize * 1.3 * 3) : 0;
+  const captionH = fields.caption ? Math.round(U * 0.02) + Math.round(captionSize * 1.3 * lines.caption) : 0;
   const textHeight = eyebrowH + headlineH + captionH;
 
   const layout = stackLayout(input, textHeight, defaults);
@@ -153,7 +168,7 @@ export function renderTextAndDevice(
               textTransform: "uppercase",
               letterSpacing: Math.round(eyebrowSize * 0.12),
               opacity: 0.85,
-              marginBottom: Math.round(W * 0.02),
+              marginBottom: Math.round(U * 0.02),
               width: "100%",
             }}
           />
@@ -174,11 +189,11 @@ export function renderTextAndDevice(
             text={st.caption}
             fontSize={captionSize}
             lineHeight={1.3}
-            maxLines={3}
+            maxLines={lines.caption}
             weight={400}
             align={align}
             fitMinScale={0.8}
-            style={{ opacity: 0.88, marginTop: Math.round(W * 0.02), width: "100%" }}
+            style={{ opacity: 0.88, marginTop: Math.round(U * 0.02), width: "100%" }}
           />
         </div>
       ))}

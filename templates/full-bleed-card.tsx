@@ -1,12 +1,14 @@
 import type { ReactElement } from "react";
 import { z } from "zod";
 import { Artwork, COMMON_OVERRIDE_KEYS, commonOverridesSchema, TextBlock, textAlignOf, withAlpha } from "./shared";
+import { typeUnit, type Orientation, type TargetProfile } from "../lib/targets";
 import type { TemplateModule, TemplateRenderInput } from "./types";
 
 /**
  * Full Bleed Card (plan §10.2): the capture fills the canvas (no shell); the
  * headline sits on a high-contrast card at the top or bottom. Good for visually
- * dense screens where the UI itself is the hero.
+ * dense screens where the UI itself is the hero. On a landscape canvas the card
+ * is a narrower panel hugging the start side, so it covers less of the scene.
  */
 export const overridesSchema = commonOverridesSchema.extend({
   cardPosition: z.enum(["top", "bottom"]).optional(),
@@ -22,27 +24,34 @@ export const descriptor = {
   requiredFields: ["headline"],
   optionalFields: ["caption"],
   families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
-  orientations: ["portrait"] as "portrait"[],
+  orientations: ["portrait", "landscape"] as Orientation[],
   overrideKeys: [...COMMON_OVERRIDE_KEYS, "cardPosition", "cardColor"],
-  fieldBudget: (field: string, target: { width: number; family: string }) => {
-    const W = target.width;
-    const k = target.family === "ipad" ? 0.78 : 1;
-    const usable = W - 2 * Math.round(W * 0.07) - 2 * Math.round(W * 0.05);
-    if (field === "headline") return Math.floor((usable / (Math.round(W * 0.07 * k) * 0.52)) * 3);
-    if (field === "caption") return Math.floor((usable / (Math.round(W * 0.036 * k) * 0.5)) * 3);
+  fieldBudget: (field: string, target: TargetProfile) => {
+    const { U, k, cardW, lines } = cardMetrics(target);
+    const usable = cardW - 2 * Math.round(U * 0.05);
+    if (field === "headline") return Math.floor((usable / (Math.round(U * 0.07 * k) * 0.52)) * lines);
+    if (field === "caption") return Math.floor((usable / (Math.round(U * 0.036 * k) * 0.5)) * lines);
     return undefined;
   },
 };
 
+/** Card geometry: full usable width in portrait, a 55% panel with two lines per field in landscape. */
+function cardMetrics(target: TargetProfile) {
+  const U = typeUnit(target);
+  const k = target.family === "ipad" ? 0.78 : 1;
+  const pad = Math.round(U * 0.07);
+  const landscape = target.orientation === "landscape";
+  const usable = target.width - 2 * pad;
+  return { U, k, pad, cardW: landscape ? Math.round(usable * 0.55) : usable, lines: landscape ? 2 : 3 };
+}
+
 export function render(input: TemplateRenderInput<Overrides>): ReactElement {
   const { target, fields, brand, overrides } = input;
   const W = target.width;
-  const isTablet = target.family === "ipad";
-  const k = isTablet ? 0.78 : 1;
+  const { U, k, pad, cardW, lines } = cardMetrics(target);
   const align = textAlignOf(input, "start");
-  const pad = Math.round(W * 0.07);
-  const headlineSize = Math.round(W * 0.07 * k);
-  const captionSize = Math.round(W * 0.036 * k);
+  const headlineSize = Math.round(U * 0.07 * k);
+  const captionSize = Math.round(U * 0.036 * k);
   const position = overrides.cardPosition ?? "bottom";
   const scale = overrides.screenshotScale ?? 1;
   const tilt = overrides.deviceTilt ?? 0;
@@ -63,7 +72,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
           transform: tilt ? `rotate(${tilt}deg)` : undefined,
           transformOrigin: "50% 50%",
           overflow: "hidden",
-          borderRadius: scale < 1 ? Math.round(W * 0.06) : 0,
+          borderRadius: scale < 1 ? Math.round(U * 0.06) : 0,
         }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -77,16 +86,18 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
       <div
         style={{
           position: "absolute",
-          left: pad,
-          right: pad,
+          // Portrait spans the artwork (panoramas included); landscape is a start-side panel.
+          ...(target.orientation === "landscape"
+            ? { insetInlineStart: pad, width: cardW, boxSizing: "border-box" as const }
+            : { left: pad, right: pad }),
           [position === "top" ? "top" : "bottom"]: pad,
-          padding: Math.round(W * 0.05),
-          borderRadius: Math.round(W * 0.04),
+          padding: Math.round(U * 0.05),
+          borderRadius: Math.round(U * 0.04),
           background: overrides.cardColor ?? withAlpha(brand.primary, 0.93),
-          boxShadow: `0 ${Math.round(W * 0.02)}px ${Math.round(W * 0.06)}px rgba(0,0,0,0.3)`,
+          boxShadow: `0 ${Math.round(U * 0.02)}px ${Math.round(U * 0.06)}px rgba(0,0,0,0.3)`,
           display: "flex",
           flexDirection: "column",
-          gap: Math.round(W * 0.015),
+          gap: Math.round(U * 0.015),
           alignItems: align === "center" ? "center" : align === "end" ? "flex-end" : "flex-start",
         }}
       >
@@ -95,7 +106,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
           text={fields.headline}
           fontSize={headlineSize}
           lineHeight={1.1}
-          maxLines={3}
+          maxLines={lines}
           weight={700}
           align={align}
           fitMinScale={0.7}
@@ -107,7 +118,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
           text={fields.caption}
           fontSize={captionSize}
           lineHeight={1.3}
-          maxLines={3}
+          maxLines={lines}
           weight={400}
           align={align}
           fitMinScale={0.8}

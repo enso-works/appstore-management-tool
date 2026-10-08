@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { renderTextAndDevice, stackFieldBudget } from "./hero-top";
 import { COMMON_OVERRIDE_KEYS, commonOverridesSchema, type CommonOverrides } from "./shared";
+import type { TargetProfile } from "../lib/targets";
 import type { TemplateModule, TemplateRenderInput } from "./types";
 
 /**
@@ -19,7 +20,7 @@ export const descriptor = {
   families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
   orientations: ["portrait"] as "portrait"[],
   overrideKeys: COMMON_OVERRIDE_KEYS,
-  fieldBudget: (field: string, target: { width: number; family: string }, overrides: Record<string, unknown>) =>
+  fieldBudget: (field: string, target: TargetProfile, overrides: Record<string, unknown>) =>
     stackFieldBudget(field, target, overrides, { textWidth: 0.5 }),
 };
 

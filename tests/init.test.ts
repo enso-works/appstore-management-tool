@@ -59,6 +59,12 @@ describe("init", () => {
     expect(fs.readFileSync(path.join(root, "store/manifest.json"), "utf8")).toBe('{ "screens": [] }\n');
   });
 
+  it("scaffolds landscape iOS sets for apps that run sideways", () => {
+    const root = makeApp("game", { expo: { name: "Game" } });
+    const { config } = initProject({ appRoot: root, toolRelPath: "../tools/store-shots", orientation: "landscape" });
+    expect(config.targets).toEqual(["iphone-6.9-2868x1320", "ipad-13-2752x2064"]);
+  });
+
   it("prefers existing metadata locale directories", () => {
     const root = makeApp(
       "app2",

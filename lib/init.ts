@@ -4,7 +4,7 @@ import { CONFIG_FILENAME, loadProject, readJsonFile, validateConfigSemantics } f
 import { APP_LANGUAGE_TO_STORE_LOCALES, type AppStoreLocale } from "./locales";
 import { dirExists, displayRelative, fileExists } from "./paths";
 import { formatZodError, projectConfigSchema, type ProjectConfigInput } from "./schema";
-import { getTarget, targetIds } from "./targets";
+import { getTarget, targetIds, type Orientation } from "./targets";
 
 export interface InitOptions {
   /** Absolute app root. */
@@ -14,6 +14,8 @@ export interface InitOptions {
   projectName?: string;
   locales?: string[];
   defaultLocale?: string;
+  /** Screen orientation of the app's store sets (default portrait; landscape for sideways games). */
+  orientation?: Orientation;
   force?: boolean;
 }
 
@@ -44,7 +46,14 @@ export function initProject(opts: InitOptions): InitResult {
     defaultLocale,
     locales,
     // iOS store targets by default; Google Play and App Preview posters are opt-in per app.
-    targets: targetIds.filter((t) => getTarget(t)?.platform === "ios" && !t.startsWith("appreview-")),
+    targets: targetIds.filter((t) => {
+      const target = getTarget(t);
+      return (
+        target?.platform === "ios" &&
+        target.orientation === (opts.orientation ?? "portrait") &&
+        !t.startsWith("appreview-")
+      );
+    }),
     brand: { font: { family: "Inter", source: "google", weights: [400, 600, 700] } },
   };
 

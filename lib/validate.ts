@@ -12,7 +12,7 @@ import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
 import { requiredFontFamilies, resolveFontStack } from "./fonts";
 import { GlyphChecker, suggestFamilyFor } from "./glyphs";
-import { frameNameFromShell, framesAvailable, getFrame, shellValues } from "./frames";
+import { frameNameFromShell, framesAvailable, getFrame, resolveShell, shellValues } from "./frames";
 
 export interface ValidationResult {
   issues: IssueList;
@@ -122,6 +122,16 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
             "manifest.template-unsupported-target",
             `Template "${template.id}" does not support target "${targetId}" (${target.family}/${target.orientation})`,
             { key, file },
+          );
+        }
+        if (
+          target.orientation === "landscape" &&
+          frameNameFromShell(resolveShell(screen.overrides.shell, target.family))
+        ) {
+          issues.error(
+            "manifest.frame-landscape",
+            `Screen "${screen.id}" uses a device frame on landscape target "${targetId}"; frames are portrait only`,
+            { key, file, hint: 'use shell "dark", "light" or "none" for landscape sets' },
           );
         }
       }
