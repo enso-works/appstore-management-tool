@@ -1,232 +1,196 @@
 # store-shots
 
-**An open-source App Store screenshot builder for iOS and Google Play.** Generate exact-size,
-localized store screenshots from raw captures — and catch the problems that quietly break a
-listing before you upload.
+**App Store and Google Play screenshots, built from your app's real captures and checked against
+the rules that get listings rejected.** Open source, runs on your Mac, no account, nothing
+uploaded.
 
-![Strip mode: every screen of a listing side by side, with an overlap warning in the status bar](docs/images/strip.png)
+![Rallo's App Store listing: eight landscape screenshots in one stadium, a 3D player in front of each phone](docs/images/hero.png)
 
-Any screenshot tool will make one nice-looking image. This one tells you that your German
-headline overflows the 6.9-inch canvas at the minimum allowed font size, that Arabic needs a
-fallback family for three glyphs, and that the third screen in your Play set is stale relative
-to its capture. That check is the point of it.
+That listing is one project in this tool: the game's own captures in a real iPhone body, a 3D
+player rendered from the game's models in front of each phone, and a stadium backdrop that runs
+on from one screen to the next. The players alternate sides, so on the store page they face each
+other across the gaps.
 
-Runs on your machine. No account, no upload — your captures never leave it.
+Making an image look good is the easy half. The other half is knowing, before you upload, that
+the German headline no longer fits at the smallest allowed size, that Arabic needs a fallback
+font for three glyphs, that the keywords are 104 bytes in Japanese, and that a caption still
+says "50% off". The tool checks all of that while you edit.
 
 ## Quick start
 
-Import your app from the editor (**Import an app** on the app list, or File > Import App... in
-the Mac app), or run `init` inside it. Both read what the app already says about itself (Expo
-`app.json`, Capacitor config, the iOS project's Info.plist and device family, fastlane metadata
-locales), so a landscape game gets landscape sets and an iPhone-only app gets no iPad set. They
-scaffold the files the tool needs, never overwrite anything that already exists, and add the app
-to your list.
-
 ```sh
-cd ~/code/my-app
-npx store-shots init
-```
-
-Add some raw captures, check them, then open the editor:
-
-```sh
-npx store-shots capture --screen home --device iphone
-npx store-shots validate
+git clone https://github.com/enso-works/appstore-management-tool.git store-shots
+cd store-shots && npm ci
 npx store-shots open
 ```
 
-`open` starts the editor and opens your browser at the app you are standing in. If it is
-already running, it reuses it rather than starting a second one.
+Then **Import an app** and point it at the app's folder. It reads what the app already says
+about itself and proposes a setup you can change before anything is written:
 
-Already have a configured app? `npx store-shots add` registers it without scaffolding.
+- name and bundle id from Expo's `app.json`, a Capacitor config, or the Xcode project
+- locales from `fastlane/metadata`, or the app's own languages
+- landscape sets for an app that only runs sideways, iPad sets only if it runs on iPad
+- Google Play sets when `fastlane/metadata/android` exists
+
+![Import: the proposed setup for a Capacitor game, each value with where it came from](docs/images/import.png)
+
+Importing writes `store-shots.config.json` and a `store/` folder into the app, never overwrites
+anything, and adds the app to your list. From a terminal, `npx store-shots init` inside the app
+does the same.
 
 ## The editor
 
-`open` drops you here. Drag the phone to move it, `⌥` to tilt, `⇧` to scale. Copy is edited per
-locale on the right, with live character counts against the real store limits.
+Each screen is a template filled with copy per locale, a raw capture, and whatever you put on it.
+Drag the phone or the text; `⌥` tilts, `⇧` scales. Copy is edited on the right, with a live
+character budget for the template and target.
 
-![The editor: live preview, phone positioning sliders, per-locale copy fields](docs/images/editor.png)
+![The editor: a landscape screen with a 3D player in front of the phone, its controls and copy on the right](docs/images/editor.png)
 
-The status bar is the part that matters. It renders the same checks that will fail a build —
-here it is warning that a caption overlaps the device, at the moment you cause it rather than
-after you have uploaded five locales.
+The status pill at the top runs the same checks a build does, as you edit: text that overflows at
+the minimum font scale, text over the device, missing glyphs, missing copy in a locale.
 
-Three view modes:
+- **Single**: one screen at a time.
+- **Strip**: every screen side by side, the way the store shows them.
+- **Locales**: one screen in every language at once.
 
-- **Single** — one screen at a time
-- **Strip** — every screen side by side, the way the store shows them (the image at the top)
-- **Locales** — the same screen in every language at once
+## A phone that looks like one
+
+The capture sits in a drawn iPhone 16 Pro body: titanium band, glass border, Dynamic Island,
+action and volume buttons, side button and Camera Control, all in the right place in portrait and
+landscape. iPads get their own band and buttons. The body is drawn around the display, so the
+capture keeps its full size. Official device frames from `fastlane frameit` work too
+(`frames setup`, then `shell: "frame:<device>"`).
+
+![The iPhone body in portrait, on a plain demo app](docs/images/device.png)
+
+## Art on top
+
+Any screen can carry image and text layers above the template: a badge, a logo, or a character
+standing in front of the phone. Layers can be limited to some targets, because a wide iPhone
+canvas and a squarer iPad canvas want different positions.
+
+Rallo's players are rendered in Blender from the game's own rigged model and animations, the
+backdrop is an equirectangular render of the game's stadium, and the scripts that make them live
+in the app (`store/scenes/`), so the art is rebuilt the same way after the game changes.
 
 ## Store metadata and readiness
 
-The Store tab edits `fastlane/metadata/<locale>/*.txt` directly, with character budgets from the
-same table the fastlane lane enforces. Readiness is on the left; the lanes it gates are on the
-right.
+The Store tab edits `fastlane/metadata/<locale>/*.txt` directly, with the limits the fastlane
+lane enforces. Readiness runs next to the lanes it gates.
 
-![The Store tab: readiness checks, fastlane lanes, and the metadata editor with live counts](docs/images/store.png)
+![The Store tab: readiness checks, fastlane lanes and the metadata editor](docs/images/store.png)
 
-Readiness also applies Apple's asset guidance: the required display sizes, keywords (100
-bytes, no plurals of included words, category names, "app" or repeated words), and screenshot
-copy without prices, discounts, URLs, ©, other platforms or Apple recognitions.
+Readiness follows Apple's own guidance, checked against Apple's pages:
 
-It never reads your credential files (`*.p8`, `asc_api_key.json`) — readiness only checks that
-they exist — and it never runs a lane that builds or submits.
+- **Sizes**: the 6.1" iPhone set Apple names as required, and iPad 13" for iPad apps
+- **Keywords**: 100 bytes (not characters), no plurals of words already there, no category names,
+  no "app", no repeated words, nothing under three characters
+- **Screenshot copy**: no prices, discounts, URLs, ©, other platforms or stores, or Apple awards
+- **Files**: PNG or JPEG, exact sizes, no alpha, the same count in every locale
 
-## Your apps
+It never reads credential files (`*.p8`, `asc_api_key.json`); it only checks that they exist. It
+never runs a lane that builds or submits.
 
-Apps are added, not discovered. Import, `init` and `add` register one; `projects` lists them. The
-Import page also lists apps next to the tool that are not in the list yet.
+## Mac app
 
-![The project list, with readiness at a glance for every app](docs/images/projects.png)
-
-```sh
-npx store-shots projects              # the apps you have added
-npx store-shots add [dir]             # add one that already has a config
-npx store-shots remove <name>         # drop it from the list (leaves its files alone)
-npx store-shots prune                 # drop entries whose config has gone away
-npx store-shots projects --scan [dir] # ignore the list, scan a directory instead
-```
-
-The list lives in `~/.store-shots/projects.json`. Until you add your first app, `projects` falls
-back to scanning so a fresh clone is not an empty screen — it tells you when it is doing that.
-
-## What it does
-
-- **Exact sizes, every target.** No-alpha PNGs that App Store Connect and Google Play accept
-  without complaint — see the [size table](#app-store-and-google-play-screenshot-sizes).
-- **Localized screenshots in every language you ship.** One set of copy per locale, rendered
-  across every target, with the same layout and none of the copy-paste.
-- **Localization checks that fail the build.** Text overflow at minimum font size, glyph
-  coverage per font, text/device overlap, RTL handling, per-field character budgets.
-- **Deterministic and incremental.** Unchanged jobs are skipped; the same inputs always produce
-  the same bytes, so a re-run is a no-op rather than a diff.
-- **Templates.** `hero-top`, `split-caption`, `full-bleed-card`, free phone positioning,
-  background images and patterns, official device frames, panorama screens spanning 2–3 slides.
-- **Store-side too.** Readiness checks, metadata editing, Play feature graphics, App Preview
-  posters, and a `check` gate for CI.
-
-## App Store and Google Play screenshot sizes
-
-Every target renders at the exact pixel dimensions the stores accept, as opaque PNGs with no
-alpha channel — the two requirements that get uploads rejected most often.
-
-| Target | Store | Dimensions |
-| --- | --- | --- |
-| `iphone-6.9-1320x2868` | App Store — iPhone 6.9" | 1320 × 2868 |
-| `iphone-6.1-1206x2622` | App Store — iPhone 6.1" (the size Apple names as required) | 1206 × 2622 |
-| `ipad-13-2064x2752` | App Store — iPad 13" (required for iPad apps) | 2064 × 2752 |
-| `iphone-6.9-2868x1320`, `iphone-6.1-2622x1206`, `ipad-13-2752x2064` | Landscape sets (apps that run sideways) | |
-| `play-phone-1080x1920` | Google Play — phone | 1080 × 1920 |
-| `play-feature-1024x500` | Google Play — feature graphic | 1024 × 500 |
-| `appreview-6.9-886x1920` | App Preview poster | 886 × 1920 |
-
-Pick targets per app in `store-shots.config.json`; `generate` renders every target × locale ×
-screen combination and verifies the output dimensions before writing.
-
-## Requirements
-
-Node 22 (see `.nvmrc`) and npm. Capturing from an iOS simulator needs macOS with Xcode; every
-other command runs anywhere.
+`mac/` is a native window around the editor: a project picker with readiness, File > Import
+App... (Command-O), reload, reveal in Finder, a server log, and settings for the tool folder and
+port. It uses an editor that is already running, or starts one and stops it on quit, and starts
+its own if the one it was using goes away.
 
 ```sh
-git clone https://github.com/enso-works/appstore-management-tool.git store-shots
-cd store-shots
-npm ci
+brew install xcodegen
+sh mac/build.sh --open
 ```
+
+See [`mac/README.md`](mac/README.md) for shortcuts and details.
+
+## Screenshot sizes
+
+Every target renders at the exact pixel size the store accepts, as an opaque PNG.
+
+| Target                                                              | Store                                                  | Size        |
+| ------------------------------------------------------------------- | ------------------------------------------------------ | ----------- |
+| `iphone-6.9-1320x2868`                                              | App Store, iPhone 6.9"                                 | 1320 × 2868 |
+| `iphone-6.1-1206x2622`                                              | App Store, iPhone 6.1" (the size Apple names required) | 1206 × 2622 |
+| `ipad-13-2064x2752`                                                 | App Store, iPad 13" (required for iPad apps)           | 2064 × 2752 |
+| `iphone-6.9-2868x1320`, `iphone-6.1-2622x1206`, `ipad-13-2752x2064` | The same, landscape                                    |             |
+| `play-phone-1080x1920`                                              | Google Play, phone                                     | 1080 × 1920 |
+| `play-feature-1024x500`                                             | Google Play, feature graphic                           | 1024 × 500  |
+| `appreview-6.9-886x1920`                                            | App Preview poster                                     | 886 × 1920  |
+
+`generate` renders every target × locale × screen, checks the size of each file before writing
+it, and skips anything whose inputs have not changed.
 
 ## Commands
 
-`--project` takes an app directory or its `store-shots.config.json`. Without it, the CLI walks
-up from the current directory — so inside your app you can leave it off entirely.
+`--project` takes an app folder or its config. Without it, the CLI looks upward from the current
+folder, so inside an app you can leave it off.
 
 ```sh
-npx store-shots init      [--project <app>]   # scaffold + add to your list
-npx store-shots open      [name|dir]          # start the editor and open a browser
+npx store-shots open      [name|dir]          # start the editor (or reuse a running one) and open it
+npx store-shots init      [--project <app>] [--landscape|--portrait]
+npx store-shots add       [dir]               # add an app that already has a config
+npx store-shots projects | remove <name> | prune
 npx store-shots validate  [--project <app>] [--dry-run] [--json]
 npx store-shots readiness [--project <app>] [--json]
-npx store-shots generate  [--project <app>] [--locale en-US] [--screen home]
-                          [--target iphone-6.9-1320x2868] [--strict] [--force] [--dry-run] [--json]
-npx store-shots clean     [--project <app>]   # deletes only files in .store-shots-manifest.json
+npx store-shots generate  [--project <app>] [--locale de-DE] [--screen home] [--target <id>]
+                          [--strict] [--force] [--dry-run] [--json]
 npx store-shots check     [--project <app>]   # CI gate: validate + readiness + metadata limits
-npx store-shots capture --screen home --device iphone [--locale de-DE] [--clean-status-bar]
-npx store-shots capture --list                # booted simulators
-npx store-shots fonts add "Space Grotesk"     # download once from Google Fonts
-npx store-shots fonts list|check
-npx store-shots metadata validate|show --locale de-DE
-npx store-shots lane validate|metadata|screenshots [--yes] [--override "<reason>"]
+npx store-shots capture   --screen home --device iphone [--locale de-DE] [--clean-status-bar]
+npx store-shots fonts     add "Space Grotesk" | list | check
+npx store-shots metadata  validate | show --locale de-DE
+npx store-shots lane      validate | metadata | screenshots [--yes] [--override "<reason>"]
 npx store-shots sheet                         # contact sheets
-npx store-shots frames setup|list             # official device frames
+npx store-shots frames    setup | list        # official device frames
+npx store-shots clean     [--project <app>]   # removes only files the tool wrote
 ```
 
 Exit codes: `0` ok, `1` validation or readiness failed, `2` usage or config error.
 
 ## Files in your app
 
-These belong to your app, not to this repo.
-
 ```text
-<app>/store-shots.config.json
-<app>/store/manifest.json
-<app>/store/content/<locale>.json
-<app>/store/raw/<device>/<locale>/<order>-<id>.png    raw simulator captures
-<app>/store/assets/{fonts,logos,backgrounds}/
-<app>/fastlane/metadata/<locale>/*.txt                read by readiness
-<app>/fastlane/screenshots/<locale>/                  iOS output (deliver)
-<app>/fastlane/metadata/android/<locale>/images/phoneScreenshots/   Play output (supply)
+store-shots.config.json
+store/manifest.json                            screens, order, template, layers
+store/content/<locale>.json                    copy per locale
+store/raw/<device>/<locale>/<order>-<id>.png   captures (never written by the tool)
+store/assets/                                  fonts, logos, backgrounds, layer art
+fastlane/metadata/<locale>/*.txt               store text, read and edited by the Store tab
+fastlane/screenshots/<locale>/                 iOS output, uploaded by deliver
+fastlane/metadata/android/<locale>/images/     Play output, uploaded by supply
 ```
+
+The list of apps you added lives in `~/.store-shots/projects.json`.
 
 ## Layout
 
 ```text
-app/              Next.js UI: project list, /projects/<name> editor and readiness, /api/projects/*
-cli/index.ts      commander CLI
-lib/
-  schema.ts       Zod schemas: project config, manifest, locale content, fonts lock
-  targets.ts      device profile registry + per-platform output dirs + Play locale map
-  locales.ts      App Store Connect locale codes, RTL table, app-language -> store-locale map
-  config.ts       config discovery, loading, root-bound path resolution
-  registered.ts   the per-machine list of added apps (~/.store-shots/projects.json)
-  registry.ts     what the UI lists; scanning as a fallback only
-  metadata.ts     fastlane/metadata limits, keyword hygiene
-  render-plan.ts  target x locale x screen job list, source/output naming
-  validate.ts     pre-render validation
-  readiness.ts    store readiness checks
-  open.ts         start the editor, pick a free port, reuse a running instance
-  fonts.ts        Google Fonts download, fonts.lock.json, @font-face CSS; Inter bundled
-  generate.ts     validate -> plan -> render -> flatten -> verify -> atomic write -> manifest
-  render/html.tsx render a template to a self-contained HTML document
-  render/checks.ts in-page checks (fonts loaded, images decoded, overflow, text/device overlap)
-  render/export.ts Playwright Chromium worker + Sharp flatten/inspect
-  fastlane.ts     lane allowlist, preflight, spawn with streamed output; never builds or submits
-  capture.ts      xcrun simctl screenshot into store/raw/<device>/<locale>/
-templates/        React templates: shared pieces, hero-top, split-caption, full-bleed-card
-assets/fonts/     bundled Inter (OFL)
-schema/           generated JSON Schemas referenced by $schema in app files
-fixtures/demo-app two screens, en-US + ar-SA, both targets; used by tests
-tests/            vitest
+app/          Next.js editor: app list, import, /projects/<name>, /api/*
+cli/          the CLI
+lib/          config, schemas, targets, import, validation, readiness, rendering, generation
+templates/    React templates and the device body
+mac/          the Mac app (SwiftUI, XcodeGen)
+schema/       JSON Schemas for the files in your app
+fixtures/     the demo app the tests use
+tests/        vitest
+docs/         templates, troubleshooting, roadmap
 ```
 
 ## Development
 
+Node 22 (`.nvmrc`). Capturing from a simulator needs Xcode; everything else runs on any OS.
+
 ```sh
-npm test            # vitest
-npm run typecheck
-npm run lint
-npm run format
-npm run schemas     # regenerate schema/*.schema.json from lib/schema.ts
+npm test && npm run typecheck && npm run lint && npm run format:check
+npm run schemas     # regenerate schema/ from lib/schema.ts
 npm run fixtures    # regenerate fixtures/demo-app
 ```
 
-Further reading: [`docs/templates.md`](docs/templates.md) for writing a template,
-[`docs/troubleshooting.md`](docs/troubleshooting.md), [`docs/roadmap.md`](docs/roadmap.md).
-
-## Background
-
-I wrote up why the hosted generators stopped fitting and what I built instead:
+More: [writing a template](docs/templates.md), [troubleshooting](docs/troubleshooting.md),
+[roadmap](docs/roadmap.md). Why this exists:
 [I built my own App Store screenshot generator](https://bavrk.com/articles/app-store-screenshot-generator).
 
 ## License
 
-[MIT](LICENSE). Use it, change it, ship it in whatever you are building.
-
-Built by [Ensar Bavrk](https://bavrk.com).
+[MIT](LICENSE). Built by [Ensar Bavrk](https://bavrk.com).
