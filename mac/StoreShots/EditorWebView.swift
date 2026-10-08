@@ -14,6 +14,8 @@ final class EditorBrowser: NSObject {
 
   private var observations: [NSKeyValueObservation] = []
   private var loadedBase: URL?
+  /// The editor page an error message replaced, so Reload retries it.
+  private var failedURL: URL?
 
   override init() {
     let configuration = WKWebViewConfiguration()
@@ -45,6 +47,7 @@ final class EditorBrowser: NSObject {
   func attach(to base: URL) {
     guard loadedBase != base else { return }
     loadedBase = base
+    failedURL = nil
     if let last = AppSettings.lastProject {
       webView.load(URLRequest(url: Self.projectURL(base: base, name: last)))
     } else {
@@ -59,15 +62,21 @@ final class EditorBrowser: NSObject {
   func open(project name: String?) {
     guard let base = loadedBase else { return }
     let url = name.map { Self.projectURL(base: base, name: $0) } ?? base
+    failedURL = nil
     webView.load(URLRequest(url: url))
   }
 
   func reload() {
-    webView.reload()
+    if let failedURL {
+      self.failedURL = nil
+      webView.load(URLRequest(url: failedURL))
+    } else {
+      webView.reload()
+    }
   }
 
   func openInBrowser() {
-    guard let url = webView.url ?? loadedBase else { return }
+    guard let url = failedURL ?? webView.url ?? loadedBase else { return }
     NSWorkspace.shared.open(url)
   }
 
@@ -130,6 +139,7 @@ extension EditorBrowser: WKNavigationDelegate {
     let nsError = error as NSError
     // Cancelled loads (a newer navigation replaced this one) are not failures.
     guard nsError.code != NSURLErrorCancelled, nsError.code != 102 else { return }
+    failedURL = nsError.userInfo[NSURLErrorFailingURLErrorKey] as? URL ?? webView.url ?? loadedBase
     let message = nsError.localizedDescription.replacingOccurrences(of: "<", with: "&lt;")
     webView.loadHTMLString(
       """

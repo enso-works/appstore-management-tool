@@ -32,9 +32,13 @@ final class EditorServer {
   private(set) var state: State = .idle
   private(set) var projects: [ProjectSummary] = []
   private(set) var log = ""
+  private var logBytes = 0
 
   private var process: ServerProcess?
   private var startTask: Task<Void, Never>?
+  /// Bumped on every start, so a superseded start task or the exit of a
+  /// server from before a restart cannot touch the current state.
+  private var generation = 0
 
   /// The same log on disk, ~/Library/Logs/Store Shots/editor.log, started fresh
   /// each launch.
@@ -67,9 +71,11 @@ final class EditorServer {
     guard startTask == nil, process == nil else { return }
     if case .ready = state { return }
     state = .starting
+    generation += 1
+    let current = generation
     startTask = Task {
-      await run()
-      startTask = nil
+      await run(generation: current)
+      if generation == current { startTask = nil }
     }
   }
 
@@ -91,8 +97,10 @@ final class EditorServer {
     state = .idle
   }
 
-  private func run() async {
-    if AppSettings.attachToRunning, let port = await Self.findRunning() {
+  private func run(generation current: Int) async {
+    let running = AppSettings.attachToRunning ? await Self.findRunning() : nil
+    guard !Task.isCancelled else { return }
+    if let port = running {
       append("[store-shots] attached to the editor already running on port \(port)\n")
       state = .ready(port: port, owned: false)
       await refreshProjects()
@@ -117,8 +125,10 @@ final class EditorServer {
     let built = fm.fileExists(atPath: (root as NSString).appendingPathComponent(".next/BUILD_ID"))
     let mode = !isCheckout && built ? "start" : "dev"
 
+    let path = await ShellEnvironment.path()
+    guard !Task.isCancelled else { return }
     var environment = ProcessInfo.processInfo.environment
-    environment["PATH"] = await ShellEnvironment.path()
+    environment["PATH"] = path
     environment["PORT"] = String(port)
     environment["NEXT_TELEMETRY_DISABLED"] = "1"
 
@@ -130,7 +140,7 @@ final class EditorServer {
         directory: root,
         environment: environment,
         onOutput: { [weak self] text in self?.append(text) },
-        onExit: { [weak self] code in self?.processExited(code) }
+        onExit: { [weak self] code in self?.processExited(code, generation: current) }
       )
     } catch {
       fail(error.localizedDescription)
@@ -140,7 +150,7 @@ final class EditorServer {
     // The first dev compile can take a while on a cold cache.
     let deadline = Date().addingTimeInterval(120)
     while Date() < deadline, !Task.isCancelled, process != nil {
-      if await Self.isEditor(port: port) {
+      if await Self.isEditor(port: port), !Task.isCancelled {
         state = .ready(port: port, owned: true)
         await refreshProjects()
         return
@@ -152,8 +162,10 @@ final class EditorServer {
     }
   }
 
-  private func processExited(_ code: Int32) {
+  private func processExited(_ code: Int32, generation exited: Int) {
     append("\n[store-shots] the editor exited with status \(code)\n")
+    // A server stopped by restart() reports its exit after the new one started.
+    guard exited == generation else { return }
     process = nil
     if case .idle = state { return }
     fail("The editor stopped (exit status \(code)). See the server log.")
@@ -166,10 +178,12 @@ final class EditorServer {
 
   private func append(_ text: String) {
     log += text
+    logBytes += text.utf8.count
     logFile?.write(Data(text.utf8))
     // Keep the last ~400 KB; a dev server logs every request.
-    if log.utf8.count > 500_000 {
+    if logBytes > 500_000 {
       log = String(log.suffix(400_000))
+      logBytes = log.utf8.count
     }
   }
 
@@ -214,6 +228,7 @@ final class EditorServer {
   }
 
   private static func isFree(_ port: Int) -> Bool {
+    guard (1...65_535).contains(port) else { return false }
     let fd = socket(AF_INET6, SOCK_STREAM, 0)
     guard fd >= 0 else { return false }
     defer { close(fd) }
@@ -248,22 +263,63 @@ enum ShellEnvironment {
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         process.standardInput = FileHandle.nullDevice
+        // Read as output arrives rather than to end of file: a background job
+        // started by an rc file can hold the pipe open long after the shell exits.
+        let output = OutputBuffer()
+        pipe.fileHandleForReading.readabilityHandler = { output.append($0.availableData) }
+        let exited = DispatchSemaphore(value: 0)
+        process.terminationHandler = { _ in exited.signal() }
         do {
           try process.run()
         } catch {
+          pipe.fileHandleForReading.readabilityHandler = nil
           continuation.resume(returning: fallback)
           return
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let output = String(decoding: data, as: UTF8.self)
-        guard let range = output.range(of: marker, options: .backwards) else {
+        // A slow or interactive rc file must not leave the app on "Starting".
+        if exited.wait(timeout: .now() + 10) == .timedOut {
+          process.terminate()
+        }
+        pipe.fileHandleForReading.readabilityHandler = nil
+        output.append(pipe.fileHandleForReading.availableDataIfAny())
+        let text = String(decoding: output.data, as: UTF8.self)
+        guard let range = text.range(of: marker, options: .backwards) else {
           continuation.resume(returning: fallback)
           return
         }
-        let path = output[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
+        let path = text[range.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines)
         continuation.resume(returning: path.isEmpty ? fallback : path)
       }
     }
+  }
+}
+
+/// Bytes collected from a readability handler on another queue.
+private final class OutputBuffer: @unchecked Sendable {
+  private let lock = NSLock()
+  private var buffer = Data()
+
+  func append(_ data: Data) {
+    lock.withLock { buffer.append(data) }
+  }
+
+  var data: Data { lock.withLock { buffer } }
+}
+
+private extension FileHandle {
+  /// What is buffered right now, without waiting for more or for end of file.
+  func availableDataIfAny() -> Data {
+    let fd = fileDescriptor
+    let flags = fcntl(fd, F_GETFL)
+    _ = fcntl(fd, F_SETFL, flags | O_NONBLOCK)
+    defer { _ = fcntl(fd, F_SETFL, flags) }
+    var out = Data()
+    var chunk = [UInt8](repeating: 0, count: 4096)
+    while true {
+      let n = Darwin.read(fd, &chunk, chunk.count)
+      if n <= 0 { break }
+      out.append(chunk, count: n)
+    }
+    return out
   }
 }

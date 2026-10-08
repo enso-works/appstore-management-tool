@@ -17,9 +17,10 @@ enum AppSettings {
     return (built as NSString).standardizingPath
   }
 
+  /// Unprivileged ports only, with room for the 50-port scan above it.
   static var preferredPort: Int {
     let value = UserDefaults.standard.integer(forKey: preferredPortKey)
-    return value > 0 ? value : 3000
+    return (1024...65_000).contains(value) ? value : 3000
   }
 
   /// Off only for testing the start-and-stop path next to a running editor:
