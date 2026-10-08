@@ -36,6 +36,7 @@ final class EditorServer {
 
   private var process: ServerProcess?
   private var startTask: Task<Void, Never>?
+  private var watchTask: Task<Void, Never>?
   /// Bumped on every start, so a superseded start task or the exit of a
   /// server from before a restart cannot touch the current state.
   private var generation = 0
@@ -89,6 +90,8 @@ final class EditorServer {
   func stop() {
     startTask?.cancel()
     startTask = nil
+    watchTask?.cancel()
+    watchTask = nil
     if let process {
       append("\n[store-shots] stopping the editor (pid \(process.pid))\n")
       process.stop()
@@ -104,6 +107,7 @@ final class EditorServer {
       append("[store-shots] attached to the editor already running on port \(port)\n")
       state = .ready(port: port, owned: false)
       await refreshProjects()
+      watch(port: port, generation: current)
       return
     }
 
@@ -159,6 +163,27 @@ final class EditorServer {
     }
     if process != nil, !Task.isCancelled {
       fail("The editor did not come up within two minutes. See the server log.")
+    }
+  }
+
+  /// An attached editor is not ours to keep alive, and nothing tells us when it
+  /// stops. Ask it every few seconds; when it has gone, start one of our own.
+  private func watch(port: Int, generation current: Int) {
+    watchTask?.cancel()
+    watchTask = Task { [weak self] in
+      var misses = 0
+      while !Task.isCancelled {
+        try? await Task.sleep(for: .seconds(4))
+        guard let self, !Task.isCancelled, self.generation == current else { return }
+        misses = await Self.isEditor(port: port) ? 0 : misses + 1
+        if misses >= 2 {
+          self.append("[store-shots] the editor on port \(port) stopped answering; starting one\n")
+          self.watchTask = nil
+          self.state = .idle
+          self.start()
+          return
+        }
+      }
     }
   }
 
