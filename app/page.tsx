@@ -11,8 +11,8 @@ export default function HomePage() {
     <main className={styles.main}>
       <h1>store-shots</h1>
       <p className={styles.muted}>
-        Apps in this workspace with a <code>store-shots.config.json</code>. Run{" "}
-        <code>npx store-shots init --project &lt;app&gt;</code> to add one.
+        Your apps. <Link href="/import">Import an app</Link> to add one, or run{" "}
+        <code>npx store-shots init --project &lt;app&gt;</code>.
       </p>
       {projects.length === 0 && <p>No projects found.</p>}
       <ul className={styles.list}>
