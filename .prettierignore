@@ -5,3 +5,4 @@ schema/
 *.ico
 *.png
 package-lock.json
+mac/build/
