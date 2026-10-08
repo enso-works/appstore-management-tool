@@ -16,7 +16,11 @@ struct StoreShotsApp: App {
     }
     .defaultSize(width: 1440, height: 900)
     .commands {
-      CommandGroup(replacing: .newItem) {}
+      CommandGroup(replacing: .newItem) {
+        Button("Import App...") { browser.chooseAppToImport() }
+          .keyboardShortcut("o")
+          .disabled(server.baseURL == nil)
+      }
       CommandMenu("App") {
         Button("All Apps") { browser.open(project: nil) }
           .keyboardShortcut("0")

@@ -21,6 +21,7 @@ sh mac/build.sh --open     # builds mac/build/Store Shots.app and launches it
 
 | Shortcut        | Action                               |
 | --------------- | ------------------------------------ |
+| Command-O       | Import an app folder                 |
 | Command-0       | All apps                             |
 | Command-1 to 9  | Open an app                          |
 | Command-R       | Reload the editor                    |

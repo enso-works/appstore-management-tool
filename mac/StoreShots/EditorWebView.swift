@@ -66,6 +66,40 @@ final class EditorBrowser: NSObject {
     webView.load(URLRequest(url: url))
   }
 
+  /// Asks for an app folder and opens the editor's Import page for it.
+  func chooseAppToImport() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = false
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = false
+    panel.prompt = "Import"
+    panel.message = "Choose the app's folder (Expo, Capacitor or an iOS project)"
+    let open: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+      guard response == .OK, let folder = panel.url else { return }
+      self?.openImport(folder: folder)
+    }
+    if let window = webView.window {
+      panel.beginSheetModal(for: window, completionHandler: open)
+    } else {
+      open(panel.runModal())
+    }
+  }
+
+  func openImport(folder: URL?) {
+    guard let base = loadedBase,
+      var components = URLComponents(url: base.appending(path: "import"), resolvingAgainstBaseURL: false)
+    else { return }
+    if let folder {
+      // queryItems leaves "+" as is, which the server reads as a space ("C++ Game").
+      let allowed = CharacterSet.urlQueryAllowed.subtracting(CharacterSet(charactersIn: "+&="))
+      guard let value = folder.path.addingPercentEncoding(withAllowedCharacters: allowed) else { return }
+      components.percentEncodedQuery = "path=\(value)"
+    }
+    guard let url = components.url else { return }
+    failedURL = nil
+    webView.load(URLRequest(url: url))
+  }
+
   func reload() {
     if let failedURL {
       self.failedURL = nil
@@ -89,6 +123,9 @@ final class EditorBrowser: NSObject {
     } else if url.path.isEmpty || url.path == "/" {
       currentProject = nil
       AppSettings.lastProject = nil
+    } else {
+      // Other editor pages (Import) belong to no app; the next launch still reopens the last one.
+      currentProject = nil
     }
   }
 

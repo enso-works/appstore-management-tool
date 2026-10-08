@@ -18,6 +18,12 @@ struct ContentView: View {
     .navigationTitle(windowTitle)
     .toolbar { toolbar }
     .task { server.start() }
+    .onChange(of: browser.currentProject) { _, name in
+      // An app imported in the editor is not in the list yet.
+      if let name, !server.projects.contains(where: { $0.name == name }) {
+        Task { await server.refreshProjects() }
+      }
+    }
     .onChange(of: server.baseURL, initial: true) { _, base in
       if let base {
         browser.attach(to: base)
@@ -40,6 +46,14 @@ struct ContentView: View {
       projectMenu
     }
     ToolbarItemGroup(placement: .primaryAction) {
+      Button {
+        browser.chooseAppToImport()
+      } label: {
+        Label("Import App", systemImage: "plus")
+      }
+      .help("Import an app folder (Command-O)")
+      .disabled(server.baseURL == nil)
+
       Button {
         browser.reload()
       } label: {
@@ -91,6 +105,7 @@ struct ContentView: View {
         }
       }
       Divider()
+      Button("Import App...") { browser.chooseAppToImport() }
       Button("Refresh List") {
         Task { await server.refreshProjects() }
       }
