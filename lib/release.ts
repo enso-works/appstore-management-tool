@@ -132,7 +132,9 @@ export function releaseStatus(project: Project): ReleaseStatus {
           : undefined;
       job.outputPaths.forEach((abs, slice) => {
         const rel = path.relative(outRoot, abs).split(path.sep).join("/");
-        const entry = manifest?.files.find((f) => f.path === path.relative(project.root, abs).split(path.sep).join("/"));
+        const entry = manifest?.files.find(
+          (f) => f.path === path.relative(project.root, abs).split(path.sep).join("/"),
+        );
         const exists = fs.existsSync(abs);
         let state: ShotState;
         let reason: string | undefined;

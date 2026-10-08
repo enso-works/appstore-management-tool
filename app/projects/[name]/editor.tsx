@@ -866,7 +866,9 @@ export default function Editor({ name }: { name: string }) {
     setFontStatus("");
     try {
       const payload = (ifMatch: string) =>
-        kind === "font" ? { font: { family: family as string }, ifMatch } : { headlineFont: family ? { family } : null, ifMatch };
+        kind === "font"
+          ? { font: { family: family as string }, ifMatch }
+          : { headlineFont: family ? { family } : null, ifMatch };
       const send = (ifMatch: string) =>
         fetch(`/api/projects/${encodeURIComponent(name)}/fonts`, {
           method: "PUT",
@@ -1740,11 +1742,7 @@ export default function Editor({ name }: { name: string }) {
                           >
                             Device shell{families.length > 1 ? ` (${famKey})` : ""}
                           </span>
-                          <select
-                            className={styles.select}
-                            value={current}
-                            onChange={(e) => setShell(e.target.value)}
-                          >
+                          <select className={styles.select} value={current} onChange={(e) => setShell(e.target.value)}>
                             <option value="">default (dark shell)</option>
                             <optgroup label="Neutral">
                               <option value="light">light shell</option>

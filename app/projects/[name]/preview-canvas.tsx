@@ -246,9 +246,7 @@ export default function PreviewCanvas({
       // A click (not a drag): select the frame under the cursor; a double click opens it.
       // Pointer capture retargets this event at the viewport, so e.target never
       // reaches a frame — hit-test the cursor position instead.
-      const el = document
-        .elementFromPoint(e.clientX, e.clientY)
-        ?.closest("[data-frame-id]") as HTMLElement | null;
+      const el = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-frame-id]") as HTMLElement | null;
       if (el?.dataset.frameId) {
         const id = el.dataset.frameId;
         const now = Date.now();

@@ -36,7 +36,9 @@ async function writeFrame(
       buf[o + 3] = (inCut && !inIsland) || inMargin ? 0 : 255;
     }
   }
-  await sharp(buf, { raw: { width: w, height: h, channels: 4 } }).png().toFile(file);
+  await sharp(buf, { raw: { width: w, height: h, channels: 4 } })
+    .png()
+    .toFile(file);
 }
 
 describe("frame screen cut-out measurement", () => {
@@ -61,7 +63,13 @@ describe("frame screen cut-out measurement", () => {
   it("measures past an opaque Dynamic Island at the top centre of the cut-out", async () => {
     const file = path.join(dir, "Test Phone.png");
     // Island spans the centre column: a naive centre scan would report y=30+8+24.
-    await writeFrame(file, { w: 200, h: 300, cut: { x: 20, y: 30, w: 160, h: 220 }, margin: 5, island: { w: 60, h: 24 } });
+    await writeFrame(file, {
+      w: 200,
+      h: 300,
+      cut: { x: 20, y: 30, w: 160, h: 220 },
+      margin: 5,
+      island: { w: 60, h: 24 },
+    });
     const { measureScreenCutout } = await import("../lib/frames");
     expect(measureScreenCutout(file)).toEqual({ x: 20, y: 30, width: 160, height: 220 });
   });

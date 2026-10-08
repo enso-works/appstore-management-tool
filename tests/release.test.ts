@@ -68,7 +68,9 @@ describe("release", () => {
     const project = load();
     const validation = validateProject(project);
     const plan = buildRenderPlan(project, validation.manifest!);
-    const job = plan.find((j) => j.target.id === "iphone-6.9-1320x2868" && j.locale === "en-US" && j.screen.id === "home")!;
+    const job = plan.find(
+      (j) => j.target.id === "iphone-6.9-1320x2868" && j.locale === "en-US" && j.screen.id === "home",
+    )!;
     const { stack } = resolveFontStack(project);
     const hash = inputsHash(
       project,
@@ -88,7 +90,15 @@ describe("release", () => {
         generatedAt: "2026-08-21T00:00:00.000Z",
         appVersion: "1.2.0",
         files: [
-          { path: rel, target: job.target.id, locale: "en-US", screen: "home", slice: 0, sha256: "x", inputsSha256: hash },
+          {
+            path: rel,
+            target: job.target.id,
+            locale: "en-US",
+            screen: "home",
+            slice: 0,
+            sha256: "x",
+            inputsSha256: hash,
+          },
         ],
       }),
     );

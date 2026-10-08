@@ -58,12 +58,7 @@ export const commonOverridesSchema = z.strictObject({
    * target, or a map keyed by target family ({ "iphone": ..., "ipad": ... })
    * when the same screen needs a different frame per device.
    */
-  shell: z
-    .union([
-      shellValueSchema,
-      z.record(z.string().min(1), shellValueSchema),
-    ])
-    .optional(),
+  shell: z.union([shellValueSchema, z.record(z.string().min(1), shellValueSchema)]).optional(),
 });
 
 export type CommonOverrides = z.infer<typeof commonOverridesSchema>;

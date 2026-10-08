@@ -100,7 +100,9 @@ export default function ReleasePanel({
         </span>
         <span className={styles.muted}>
           {release.appVersion ? `v${release.appVersion}` : "no app version"}
-          {release.generatedAt ? ` · generated ${new Date(release.generatedAt).toLocaleString()}` : " · never generated"}
+          {release.generatedAt
+            ? ` · generated ${new Date(release.generatedAt).toLocaleString()}`
+            : " · never generated"}
           {release.generatedFor && release.generatedFor !== release.appVersion
             ? ` (for v${release.generatedFor}!)`
             : ""}
@@ -113,7 +115,11 @@ export default function ReleasePanel({
         )}
         {readiness.status !== "pass" && (
           <span className={styles.muted}>
-            readiness: {readiness.checks.filter((c) => c.status === "fail").map((c) => c.title).join("; ") || readiness.status}
+            readiness:{" "}
+            {readiness.checks
+              .filter((c) => c.status === "fail")
+              .map((c) => c.title)
+              .join("; ") || readiness.status}
           </span>
         )}
         {error && <span className={styles.error}>{error}</span>}

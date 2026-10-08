@@ -116,7 +116,9 @@ program
     const project = loadProject(resolveProjectArg(root));
     const entry = register(root, opts.name);
     console.log(`Added ${entry.name}  ->  ${entry.root}`);
-    console.log(`${project.config.projectName}: ${project.config.locales.length} locales, ${project.config.targets.length} targets`);
+    console.log(
+      `${project.config.projectName}: ${project.config.locales.length} locales, ${project.config.targets.length} targets`,
+    );
     console.log("Open it with `store-shots open`.");
   });
 
