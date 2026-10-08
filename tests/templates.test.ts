@@ -214,6 +214,24 @@ describe("stackLayout", () => {
   });
 });
 
+describe("landscape side column", () => {
+  const defaults = { textWidth: 1, textSide: "start" as const, scale: 0.8, gap: 0.06, sideDeviceLeft: 0.4 };
+
+  it("fits the device beside the text column instead of running off the canvas", () => {
+    const land = input("iphone-6.9-2868x1320");
+    for (const textSide of ["start", "end"] as const) {
+      const l = stackLayout({ ...land, overrides: { textWidth: 0.5, textSide } }, 300, defaults);
+      expect(l.narrow).toBe(true);
+      expect(l.device.left).toBeGreaterThanOrEqual(l.pad);
+      expect(l.device.left + l.device.width).toBeLessThanOrEqual(2868 - l.pad + 1);
+      expect(l.device.top + l.device.height).toBeLessThanOrEqual(1320 - l.pad + 1);
+      const overlap =
+        Math.min(l.text.left + l.text.width, l.device.left + l.device.width) - Math.max(l.text.left, l.device.left);
+      expect(overlap).toBeLessThanOrEqual(0);
+    }
+  });
+});
+
 describe("landscape templates", () => {
   const headlineSize = (html: string) => Number(/data-check="headline"[^>]*data-font-size="(\d+)"/.exec(html)?.[1]);
 

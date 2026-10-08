@@ -600,19 +600,27 @@ export function stackLayout(
     target.family === "ipad" || target.family === "tablet" || target.orientation === "landscape"
       ? target.width / target.height
       : 1320 / 2868;
+  const landscape = target.orientation === "landscape";
   const stackedTop = baseTextTop + textHeight + Math.round(U * defaults.gap);
-  // Landscape: by default the whole device fits under the text (a sideways
-  // screen cut off at the bottom loses the game), at most defaults.scale wide.
-  const fitScale =
-    target.orientation === "landscape" && !narrow
-      ? Math.max(0.3, Math.min(defaults.scale, ((target.height - stackedTop - pad) * devAspect) / W))
-      : defaults.scale;
+  // Landscape: by default the whole device fits on the canvas (a sideways
+  // screen cut off loses the game), at most defaults.scale wide: under the
+  // text, or beside a side column in the space the column leaves.
+  const sideGap = Math.round(U * 0.04);
+  const sideW = W - 2 * pad - textW - sideGap;
+  const sideH = target.height - baseTextTop - pad;
+  const fitW = narrow ? Math.min(sideW, sideH * devAspect) : (target.height - stackedTop - pad) * devAspect;
+  const fitScale = landscape ? Math.max(0.3, Math.min(defaults.scale, fitW / W)) : defaults.scale;
   const scale = overrides.screenshotScale ?? fitScale;
   const devW = Math.round(W * scale);
   const devH = Math.round(devW / devAspect);
   let devLeft: number;
   let devTop: number;
-  if (narrow) {
+  if (narrow && landscape) {
+    // Centred in the space beside the text column.
+    const sideLeft = hugsLeft ? pad + textW + sideGap : CW - W + pad;
+    devLeft = Math.round(sideLeft + (sideW - devW) / 2);
+    devTop = Math.round(baseTextTop + (sideH - devH) / 2);
+  } else if (narrow) {
     devLeft = hugsLeft ? Math.round(W * defaults.sideDeviceLeft) : Math.round(CW - W * defaults.sideDeviceLeft - devW);
     devTop = baseTextTop;
   } else {
