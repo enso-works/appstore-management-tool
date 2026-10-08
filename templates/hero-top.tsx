@@ -6,6 +6,7 @@ import {
   DeviceShell,
   stackLayout,
   TextBlock,
+  accentOf,
   textAlignOf,
   type CommonOverrides,
   type StackLayoutDefaults,
@@ -93,6 +94,7 @@ export function renderTextAndDevice(
   const slices = Math.max(1, Math.round(input.canvasWidth / W));
   const isTablet = target.family === "ipad";
   const align = textAlignOf(input, fallbackAlign);
+  const accent = accentOf(input);
 
   // Type metrics scale with the canvas's short side; iPad canvases are wider, so type is a bit smaller relative to it.
   const k = isTablet ? 0.78 : 1;
@@ -167,7 +169,8 @@ export function renderTextAndDevice(
             style={{
               textTransform: "uppercase",
               letterSpacing: Math.round(eyebrowSize * 0.12),
-              opacity: 0.85,
+              opacity: accent ? 1 : 0.85,
+              color: accent,
               marginBottom: Math.round(U * 0.02),
               width: "100%",
             }}
@@ -193,7 +196,7 @@ export function renderTextAndDevice(
             weight={400}
             align={align}
             fitMinScale={0.8}
-            style={{ opacity: 0.88, marginTop: Math.round(U * 0.02), width: "100%" }}
+            style={{ opacity: accent ? 1 : 0.88, color: accent, marginTop: Math.round(U * 0.02), width: "100%" }}
           />
         </div>
       ))}

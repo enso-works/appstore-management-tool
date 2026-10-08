@@ -95,6 +95,8 @@ export const projectConfigSchema = z.strictObject({
       background: backgroundValuesSchema.optional(),
       primary: hexColor.default("#111111"),
       onPrimary: hexColor.default("#FFFFFF"),
+      /** Colour for the eyebrow and caption (a sub-line in a second colour); default: the text colour. */
+      accent: hexColor.optional(),
     })
     .prefault({}),
   output: z

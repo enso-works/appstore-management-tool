@@ -29,6 +29,8 @@ export interface BrandTheme {
   headlineFontStack?: string;
   primary: string;
   onPrimary: string;
+  /** brand.accent: eyebrow and caption colour when set. */
+  accent?: string;
   /** Project-wide default background (config brand.background); screens inherit unless overridden. */
   backgroundDefaults?: {
     background?: string;

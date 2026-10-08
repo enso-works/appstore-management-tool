@@ -53,6 +53,8 @@ export const commonOverridesSchema = z.strictObject({
   textAlign: z.enum(["start", "center", "end"]).optional(),
   /** Text colour override (any CSS colour); default brand.onPrimary. */
   textColor: z.string().min(1).optional(),
+  /** Eyebrow and caption colour (any CSS colour); default brand.accent, else the text colour. */
+  accentColor: z.string().min(1).optional(),
   /**
    * Neutral shell ("dark" | "light" | "none") or an official device frame:
    * "frame:<name>" (see `store-shots frames list`). Either one value for every
@@ -533,6 +535,11 @@ export function TextBlock({
       {text}
     </div>
   );
+}
+
+/** Colour for secondary text (eyebrow, caption); undefined inherits the text colour. */
+export function accentOf(input: TemplateRenderInput<CommonOverrides>): string | undefined {
+  return input.overrides.accentColor ?? input.brand.accent;
 }
 
 export function textAlignOf(

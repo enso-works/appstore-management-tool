@@ -238,6 +238,21 @@ describe("landscape templates", () => {
     expect(portrait).toContain(`left:${pad}px;right:${pad}px`);
   });
 
+  it("colours eyebrow and caption with the accent, overrides first, headline untouched", () => {
+    const mod = templateModules["hero-top"];
+    const brand = { ...input("iphone-6.9-2868x1320").brand, accent: "#d9f23a" };
+    const fromBrand = renderStatic(mod.render(input("iphone-6.9-2868x1320", { brand })));
+    expect(fromBrand).toMatch(/data-check="caption"[^>]*style="[^"]*color:#d9f23a/);
+    expect(fromBrand).toMatch(/data-check="eyebrow"[^>]*style="[^"]*color:#d9f23a/);
+    expect(fromBrand).not.toMatch(/data-check="headline"[^>]*style="[^"]*color:#d9f23a/);
+    const fromOverride = renderStatic(
+      mod.render(input("iphone-6.9-2868x1320", { brand, overrides: { accentColor: "#ff0000" } })),
+    );
+    expect(fromOverride).toMatch(/data-check="caption"[^>]*style="[^"]*color:#ff0000/);
+    const none = renderStatic(mod.render(input("iphone-6.9-2868x1320")));
+    expect(none).not.toMatch(/data-check="caption"[^>]*style="[^"]*color:/);
+  });
+
   it("split-caption stays portrait only", () => {
     expect(templateModules["split-caption"].descriptor.orientations).toEqual(["portrait"]);
   });

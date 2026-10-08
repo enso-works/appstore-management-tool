@@ -1,6 +1,14 @@
 import type { ReactElement } from "react";
 import { z } from "zod";
-import { Artwork, COMMON_OVERRIDE_KEYS, commonOverridesSchema, TextBlock, textAlignOf, withAlpha } from "./shared";
+import {
+  accentOf,
+  Artwork,
+  COMMON_OVERRIDE_KEYS,
+  commonOverridesSchema,
+  TextBlock,
+  textAlignOf,
+  withAlpha,
+} from "./shared";
 import { typeUnit, type Orientation, type TargetProfile } from "../lib/targets";
 import type { TemplateModule, TemplateRenderInput } from "./types";
 
@@ -122,7 +130,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
           weight={400}
           align={align}
           fitMinScale={0.8}
-          style={{ opacity: 0.9, width: "100%" }}
+          style={{ opacity: accentOf(input) ? 1 : 0.9, color: accentOf(input), width: "100%" }}
         />
       </div>
     </Artwork>

@@ -91,6 +91,7 @@ const OVERRIDE_CONTROLS: Record<
   textOffsetY: { label: "Text offset Y", kind: "number", min: -0.3, max: 1, step: 0.01 },
   textAlign: { label: "Text align", kind: "select", options: ["start", "center", "end"] },
   textColor: { label: "Text colour", kind: "color", hint: "CSS colour; default brand.onPrimary" },
+  accentColor: { label: "Accent colour", kind: "color", hint: "eyebrow and caption; default brand.accent" },
   shell: { label: "Device shell", kind: "select", options: ["dark", "light", "none"] },
   cardPosition: { label: "Card position", kind: "select", options: ["top", "bottom"] },
   cardColor: { label: "Card colour", kind: "color", hint: "CSS colour; default brand.primary at 93%" },
@@ -99,7 +100,17 @@ const OVERRIDE_CONTROLS: Record<
 const EL_GROUPS: Record<string, string[]> = {
   background: ["background", "backgroundImage", "patternColor"],
   phone: ["screenshotScale", "screenshotOffsetX", "screenshotOffsetY", "deviceTilt", "shell"],
-  text: ["textWidth", "textSide", "textOffsetX", "textOffsetY", "textAlign", "textColor", "cardPosition", "cardColor"],
+  text: [
+    "textWidth",
+    "textSide",
+    "textOffsetX",
+    "textOffsetY",
+    "textAlign",
+    "textColor",
+    "accentColor",
+    "cardPosition",
+    "cardColor",
+  ],
 };
 
 function groupOf(sel: string): string {
@@ -1819,7 +1830,13 @@ export default function Editor({ name }: { name: string }) {
                           <ColorField
                             value={(v as string) ?? ""}
                             onChange={(nv) => setOverride(key, nv)}
-                            fallback={key === "textColor" ? snap.config.brand.onPrimary : snap.config.brand.primary}
+                            fallback={
+                              key === "textColor"
+                                ? snap.config.brand.onPrimary
+                                : key === "accentColor"
+                                  ? (snap.config.brand.accent ?? snap.config.brand.onPrimary)
+                                  : snap.config.brand.primary
+                            }
                             presets={[snap.config.brand.primary, snap.config.brand.onPrimary]}
                           />
                         ) : (

@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import {
+  accentOf,
   COMMON_OVERRIDE_KEYS,
   commonOverridesSchema,
   TextBlock,
@@ -96,7 +97,7 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
           weight={400}
           align={align}
           fitMinScale={0.8}
-          style={{ opacity: 0.9, width: "100%" }}
+          style={{ opacity: accentOf(input) ? 1 : 0.9, color: accentOf(input), width: "100%" }}
         />
       </div>
       <div

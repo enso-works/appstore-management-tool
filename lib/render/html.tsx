@@ -36,6 +36,7 @@ export function brandThemeOf(project: Project, stack?: ResolvedFont[]): BrandThe
     headlineFontStack: headlineFirst ? fontFamilyCss(headlineFirst) : undefined,
     primary: b.primary,
     onPrimary: b.onPrimary,
+    accent: b.accent,
     backgroundDefaults: b.background,
   };
 }
