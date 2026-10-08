@@ -59,3 +59,16 @@ Known further UX debt, in priority order: rotate/scale handles on layers and tex
 them); marquee-select and multi-nudge; per-slice text offsets on panoramas; bulk "create
 missing locale files" action; generation progress inline on the canvas; empty-state guidance
 for new apps (no captures yet).
+
+## Mac app (agreed 2026-10-08)
+
+A native macOS app around the existing editor, not a rewrite: the editor, templates and
+renderer stay in Next.js and Playwright, which need the Mac's disk, Chromium, simctl and
+fastlane anyway (so it can never be a hosted web app or an iOS app). Lives in `mac/`
+(SwiftUI, XcodeGen), built with `mac/build.sh`.
+
+| #   | Item          | What lands                                                                                                                                                                                          | Status          |
+| --- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| 1   | Shell         | Window with the editor in a web view; attaches to a running editor (ports 3000-3009) or starts `next` itself in its own process group and stops it on quit; JS dialogs, file inputs, external links | done 2026-10-08 |
+| 2   | Native chrome | Toolbar project picker with readiness, reload, open in browser, reveal app in Finder; Project and Server menus with shortcuts; server log window; settings for the tool folder and port             | done 2026-10-08 |
+| 3   | Next          | App Store management features (to be agreed): App Store Connect status, metadata and screenshot upload from the app, notifications when renders finish, app icon                                    | open            |

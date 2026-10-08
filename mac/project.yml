@@ -1,0 +1,42 @@
+name: StoreShots
+options:
+  bundleIdPrefix: com.bavrk
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    # The checkout this app was built from; the app runs the editor from there
+    # unless Settings points it elsewhere.
+    STORE_SHOTS_ROOT: "$(SRCROOT)/.."
+targets:
+  StoreShots:
+    type: application
+    platform: macOS
+    sources:
+      - StoreShots
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bavrk.storeshots
+        PRODUCT_NAME: Store Shots
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_STYLE: Manual
+        ENABLE_HARDENED_RUNTIME: NO
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: StoreShots/Info.plist
+      properties:
+        CFBundleDisplayName: Store Shots
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
+        NSHumanReadableCopyright: MIT
+        StoreShotsRoot: "$(STORE_SHOTS_ROOT)"
+        # The editor is served over plain http on localhost.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
