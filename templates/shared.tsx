@@ -362,9 +362,12 @@ export interface DeviceShellProps {
 }
 
 /**
- * Neutral device shell (plan §10.3): rounded rectangle with a thin bezel, the
- * capture inside with object-fit cover anchored to the top. Tilt rotates
- * around the shell centre.
+ * Device shell (plan §10.3). `width` x `height` is the display, so the capture
+ * keeps its own aspect: the body is drawn around it. iPhones get the titanium
+ * band, glass border, Dynamic Island and side buttons of an iPhone 16 Pro;
+ * iPads and other phones the band and their buttons. "none" is the display
+ * alone. The capture is cover-fitted, anchored to the top. Tilt rotates around
+ * the device centre.
  */
 export function DeviceShell({ input, width, height, left, top }: DeviceShellProps): ReactElement {
   const frame = input.frame;
@@ -402,21 +405,7 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
             borderRadius: frame.screenRadius ? frame.screenRadius * s : undefined,
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={input.sourceImageUrl}
-            alt=""
-            data-source=""
-            style={{
-              position: "absolute",
-              left: 0,
-              top: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              objectPosition: "top center",
-            }}
-          />
+          <ShellScreen input={input} />
         </div>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -428,53 +417,223 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
     );
   }
   const shell = input.overrides.shell === "light" || input.overrides.shell === "none" ? input.overrides.shell : "dark";
-  // Corners and bezel follow the short side, so a landscape shell keeps a phone's proportions.
-  // A landscape iPad gets an iPad's tighter corners (portrait keeps its existing look).
-  const short = Math.min(width, height);
-  const ipadLandscape = input.target.family === "ipad" && input.target.orientation === "landscape";
-  const radius = Math.round(short * (ipadLandscape ? 0.055 : 0.11));
-  const bezel = shell === "none" ? 0 : Math.round(short * 0.018);
-  const shellColor = shell === "light" ? "#f3f4f6" : "#0b0c0f";
   const tilt = input.overrides.deviceTilt ?? 0;
+  const landscape = width > height;
+  // Proportions follow the display's short side, so a landscape device keeps a real one's look.
+  const short = Math.min(width, height);
+  const family = input.target.family;
+  const iphone = family === "iphone";
+  const tablet = family === "ipad" || family === "tablet";
+  // Titanium band, then the black glass border around the display.
+  const rim = Math.max(2, Math.round(short * (tablet ? 0.006 : 0.011)));
+  const glass = Math.round(short * (tablet ? 0.022 : 0.021));
+  const edge = shell === "none" ? 0 : rim + glass;
+  // Outer corner radius: iPhone 16 Pro's corners are about 15% of its width, an iPad Pro's about 5.5%.
+  const radius = Math.round((short + 2 * edge) * (tablet ? 0.055 : iphone ? 0.15 : 0.12));
+  if (shell === "none") {
+    return (
+      <div
+        data-device=""
+        style={{
+          position: "absolute",
+          left,
+          top,
+          width,
+          height,
+          borderRadius: radius,
+          overflow: "hidden",
+          background: "#000",
+          transform: tilt ? `rotate(${tilt}deg)` : undefined,
+          transformOrigin: "50% 50%",
+        }}
+      >
+        <ShellScreen input={input} />
+      </div>
+    );
+  }
+  const metal = shell === "light" ? LIGHT_TITANIUM : DARK_TITANIUM;
+  const screenRadius = Math.max(0, radius - edge);
+  const buttons = iphone ? IPHONE_BUTTONS : tablet ? IPAD_BUTTONS : PHONE_BUTTONS;
+  // Buttons stand proud of the band by about its own thickness.
+  const proud = Math.max(2, Math.round(rim * 0.9));
+  const long = Math.max(width, height) + 2 * edge;
+  // App Preview posters are video frames, not a device.
+  const island = iphone && !input.target.id.startsWith("appreview-");
+  const buttonEls = buttons.map((b) => {
+    // Positions are given for the portrait device (side, centre along the long edge, length);
+    // a landscape device is the portrait one turned a quarter anticlockwise.
+    const along = Math.round(long * b.at);
+    const length = Math.round(long * b.length);
+    const portraitLeft = b.side === "left";
+    const style: CSSProperties = landscape
+      ? {
+          left: along - length / 2,
+          width: length,
+          height: proud + rim,
+          ...(portraitLeft ? { bottom: -proud } : { top: -proud }),
+        }
+      : {
+          top: along - length / 2,
+          height: length,
+          width: proud + rim,
+          ...(portraitLeft ? { left: -proud } : { right: -proud }),
+        };
+    return (
+      <div
+        key={b.name}
+        data-button={b.name}
+        style={{
+          position: "absolute",
+          borderRadius: proud,
+          background: landscape ? metal.buttonH : metal.buttonV,
+          boxShadow: "0 1px 2px rgba(0,0,0,0.35)",
+          ...style,
+        }}
+      />
+    );
+  });
   return (
     <div
       data-device=""
       style={{
         position: "absolute",
-        left,
-        top,
-        width,
-        height,
-        borderRadius: radius,
-        background: shellColor,
-        padding: bezel,
-        boxSizing: "border-box",
-        boxShadow:
-          shell === "none" ? "none" : `0 ${Math.round(short * 0.04)}px ${Math.round(short * 0.1)}px rgba(0,0,0,0.35)`,
+        left: left - edge,
+        top: top - edge,
+        width: width + 2 * edge,
+        height: height + 2 * edge,
         transform: tilt ? `rotate(${tilt}deg)` : undefined,
         transformOrigin: "50% 50%",
       }}
     >
       <div
         style={{
-          width: "100%",
-          height: "100%",
-          borderRadius: Math.max(0, radius - bezel),
-          overflow: "hidden",
-          background: "#000",
+          position: "absolute",
+          inset: 0,
+          borderRadius: radius,
+          padding: rim,
+          boxSizing: "border-box",
+          background: metal.band,
+          boxShadow: [
+            `0 ${Math.round(short * 0.05)}px ${Math.round(short * 0.12)}px rgba(0,0,0,0.38)`,
+            `0 ${Math.round(short * 0.012)}px ${Math.round(short * 0.025)}px rgba(0,0,0,0.3)`,
+          ].join(", "),
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={input.sourceImageUrl}
-          alt=""
-          data-source=""
-          style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center" }}
-        />
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            borderRadius: radius - rim,
+            padding: glass,
+            boxSizing: "border-box",
+            background: "#050506",
+            // The glass edge catches a little light.
+            boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.08)",
+          }}
+        >
+          <div
+            style={{
+              position: "relative",
+              width: "100%",
+              height: "100%",
+              borderRadius: screenRadius,
+              overflow: "hidden",
+              background: "#000",
+            }}
+          >
+            <ShellScreen input={input} />
+            {island && <DynamicIsland short={short} landscape={landscape} />}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                pointerEvents: "none",
+                background:
+                  "linear-gradient(125deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 32%, rgba(255,255,255,0) 33%)",
+              }}
+            />
+          </div>
+        </div>
       </div>
+      {/* After the band, so its drop shadow does not darken them. */}
+      {buttonEls}
     </div>
   );
 }
+
+function ShellScreen({ input }: { input: TemplateRenderInput<CommonOverrides> }): ReactElement {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={input.sourceImageUrl}
+      alt=""
+      data-source=""
+      style={{ display: "block", width: "100%", height: "100%", objectFit: "cover", objectPosition: "top center" }}
+    />
+  );
+}
+
+/** The Dynamic Island: 126 x 37 pt, 11 pt from the top of a 402 pt wide display; on the left in landscape. */
+function DynamicIsland({ short, landscape }: { short: number; landscape: boolean }): ReactElement {
+  const length = Math.round(short * 0.313);
+  const thickness = Math.round(short * 0.092);
+  const inset = Math.round(short * 0.027);
+  return (
+    <div
+      data-island=""
+      style={{
+        position: "absolute",
+        borderRadius: thickness,
+        background: "#000",
+        ...(landscape
+          ? { left: inset, top: "50%", width: thickness, height: length, marginTop: -length / 2 }
+          : { top: inset, left: "50%", width: length, height: thickness, marginLeft: -length / 2 }),
+      }}
+    />
+  );
+}
+
+interface ShellButton {
+  name: string;
+  /** Edge of the portrait device. */
+  side: "left" | "right";
+  /** Centre along the long edge, as a fraction of it, from the top. */
+  at: number;
+  length: number;
+}
+
+/** iPhone 16 Pro: Action button and volume on the left, side button and Camera Control on the right. */
+const IPHONE_BUTTONS: ShellButton[] = [
+  { name: "action", side: "left", at: 0.185, length: 0.045 },
+  { name: "volume-up", side: "left", at: 0.265, length: 0.075 },
+  { name: "volume-down", side: "left", at: 0.355, length: 0.075 },
+  { name: "side", side: "right", at: 0.29, length: 0.11 },
+  { name: "camera-control", side: "right", at: 0.55, length: 0.07 },
+];
+
+/** A generic Android phone: volume and power on the right. */
+const PHONE_BUTTONS: ShellButton[] = [
+  { name: "volume", side: "right", at: 0.3, length: 0.12 },
+  { name: "power", side: "right", at: 0.46, length: 0.06 },
+];
+
+/** iPad Pro: top button (on the short edge, drawn here on the right near the top) and volume. */
+const IPAD_BUTTONS: ShellButton[] = [
+  { name: "volume-up", side: "right", at: 0.1, length: 0.04 },
+  { name: "volume-down", side: "right", at: 0.16, length: 0.04 },
+];
+
+const DARK_TITANIUM = {
+  band: "linear-gradient(135deg, #5b5d62 0%, #2a2b2f 18%, #45474c 42%, #1d1e21 64%, #4c4e53 86%, #2b2c30 100%)",
+  buttonV: "linear-gradient(90deg, #2a2b2f 0%, #6a6c71 45%, #2a2b2f 100%)",
+  buttonH: "linear-gradient(180deg, #2a2b2f 0%, #6a6c71 45%, #2a2b2f 100%)",
+};
+
+const LIGHT_TITANIUM = {
+  band: "linear-gradient(135deg, #f4f2ee 0%, #c9c6c0 20%, #ebe8e2 44%, #b7b3ac 66%, #e6e3dd 88%, #c4c0b9 100%)",
+  buttonV: "linear-gradient(90deg, #b9b5ae 0%, #f3f1ed 45%, #b9b5ae 100%)",
+  buttonH: "linear-gradient(180deg, #b9b5ae 0%, #f3f1ed 45%, #b9b5ae 100%)",
+};
 
 /**
  * Text container that the in-page checker validates: fixed max height, no
