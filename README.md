@@ -61,6 +61,10 @@ right.
 
 ![The Store tab: readiness checks, fastlane lanes, and the metadata editor with live counts](docs/images/store.png)
 
+Readiness also applies Apple's asset guidance: the required display sizes, keywords (100
+bytes, no plurals of included words, category names, "app" or repeated words), and screenshot
+copy without prices, discounts, URLs, ©, other platforms or Apple recognitions.
+
 It never reads your credential files (`*.p8`, `asc_api_key.json`) — readiness only checks that
 they exist — and it never runs a lane that builds or submits.
 
@@ -104,7 +108,9 @@ alpha channel — the two requirements that get uploads rejected most often.
 | Target | Store | Dimensions |
 | --- | --- | --- |
 | `iphone-6.9-1320x2868` | App Store — iPhone 6.9" | 1320 × 2868 |
-| `ipad-13-2064x2752` | App Store — iPad 13" | 2064 × 2752 |
+| `iphone-6.1-1206x2622` | App Store — iPhone 6.1" (the size Apple names as required) | 1206 × 2622 |
+| `ipad-13-2064x2752` | App Store — iPad 13" (required for iPad apps) | 2064 × 2752 |
+| `iphone-6.9-2868x1320`, `iphone-6.1-2622x1206`, `ipad-13-2752x2064` | Landscape sets (`init --landscape`) | |
 | `play-phone-1080x1920` | Google Play — phone | 1080 × 1920 |
 | `play-feature-1024x500` | Google Play — feature graphic | 1024 × 500 |
 | `appreview-6.9-886x1920` | App Preview poster | 886 × 1920 |

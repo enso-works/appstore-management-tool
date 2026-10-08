@@ -72,3 +72,22 @@ fastlane anyway (so it can never be a hosted web app or an iOS app). Lives in `m
 | 1   | Shell         | Window with the editor in a web view; attaches to a running editor (ports 3000-3009) or starts `next` itself in its own process group and stops it on quit; JS dialogs, file inputs, external links | done 2026-10-08 |
 | 2   | Native chrome | Toolbar project picker with readiness, reload, open in browser, reveal app in Finder; Project and Server menus with shortcuts; server log window; settings for the tool folder and port             | done 2026-10-08 |
 | 3   | Next          | App Store management features (to be agreed): App Store Connect status, metadata and screenshot upload from the app, notifications when renders finish, app icon                                    | open            |
+
+## App Store asset guidelines (agreed 2026-10-08)
+
+From Apple's [asset best practices](https://developer.apple.com/app-store/asset-best-practices/),
+[screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
+and [product page](https://developer.apple.com/app-store/product-page/) guidance, read 2026-10-08.
+
+| #   | Item                    | What lands                                                                                                                                                  | Status          |
+| --- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| 1   | Required sizes          | `iphone-6.1-1206x2622` and `iphone-6.1-2622x1206` targets (same raw captures as 6.9"); `init` scaffolds 6.9" + 6.1" + iPad 13"; readiness `required-sizes`  | done 2026-10-08 |
+| 2   | Store claims            | Validation warning `content.store-claims`: prices, discounts, URLs, ©, other platforms or marketplaces, Apple recognitions in screenshot copy               | done 2026-10-08 |
+| 3   | Keyword guidance        | Readiness `metadata-keywords` and the Store view: 100-byte limit, plurals, repeated words, "app", category names, `#`/`@`, terms of two characters or fewer | done 2026-10-08 |
+| 4   | JPEG screenshots        | Readiness and raw-capture validation read JPEG as well as PNG                                                                                               | done 2026-10-08 |
+| 5   | Dark Mode screenshot    | Warn when the app supports dark mode but no screen shows it                                                                                                 | open            |
+| 6   | First three screens     | The editor marks screens 1-3 as the ones shown in search results                                                                                            | open            |
+| 7   | Icon variants           | Warn when there are no dark or tinted icon variants                                                                                                         | open            |
+| 8   | App preview checks      | 15-30 s, 886x1920, at most 30 fps, 500 MB, 3 per set                                                                                                        | open            |
+| 9   | Event and header images | In-app event card and detail sizes, product page header images                                                                                              | open            |
+| 10  | Named screenshot sets   | Separate sets for custom product pages (up to 70) and product page optimization tests (up to 3 treatments)                                                  | open            |

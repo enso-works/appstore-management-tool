@@ -13,6 +13,7 @@
 | `source.aspect` (warning)                              | Capture aspect ratio differs from the target; the shell uses `object-fit: cover`, so it still renders, but use the right simulator (6.9" iPhone Pro Max, 13" iPad Pro) for fidelity |
 | `render.overflow ... even at the minimum allowed size` | Copy is too long for the box at the template's minimum font scale; shorten it or widen `textWidth`                                                                                  |
 | `render.text-overlaps-device` (warning)                | Text box intersects the device. Intentional designs can ignore it; set `validation.failOnTextOverlap` to make it an error                                                           |
+| `content.store-claims` (warning)                       | Screenshot copy shows a price, discount, URL, ©, another platform or an Apple recognition, which Apple's asset guidelines rule out. Reword it                                       |
 | `plan.too-few` / `plan.too-many`                       | Screens per target/locale outside `validation.screensPerTarget` (Apple: 1–10)                                                                                                       |
 | `manifest.override-invalid`                            | An override key/value is outside the template's schema; see the allowed list in the hint                                                                                            |
 | `React is not defined`                                 | The CLI was run with a tsconfig other than the tool's. Use `bin/store-shots.mjs` / `npx store-shots`, which pin it                                                                  |
@@ -23,6 +24,8 @@
 - `Metadata present for every locale` fails → the Store tab edits `fastlane/metadata/<locale>/*.txt`; create missing locale dirs there (explicit button).
 - `Screenshots complete` fails → generate; the check wants exact target dimensions and no alpha. Hand-made files that match a target count too; files of other sizes are listed as "matches no configured target" (warning).
 - `App icon ... has an alpha channel` is a warning: Expo prebuild flattens the iOS icon.
+- `Screenshot sets cover the sizes Apple requires` warns without a 6.1" iPhone set: Apple names it required, but scales a 6.9" set down when it is missing. Add `iphone-6.1-1206x2622` to the targets; it renders from the same captures. It fails when `ios.supportsTablet` is true and there is no iPad 13" set.
+- `Keywords follow Apple's guidance` fails over 100 bytes (Japanese, Chinese, Arabic and Cyrillic take 2-3 bytes per character) and warns on plurals of included words, category names, "app", repeated words, `#`/`@` and terms of two characters or fewer.
 
 ## Fastlane runner
 
