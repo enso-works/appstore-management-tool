@@ -166,6 +166,21 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
           });
         }
         layerIds.add(layer.id);
+        for (const t of layer.targets ?? []) {
+          if (!project.config.targets.includes(t)) {
+            issues.error(
+              "manifest.layer-target",
+              `Layer "${layer.id}" on screen "${screen.id}" names target "${t}", which is not configured`,
+              { key, file, hint: `configured targets: ${project.config.targets.join(", ")}` },
+            );
+          } else if (screen.targets && !screen.targets.includes(t)) {
+            issues.warn(
+              "manifest.layer-target-unused",
+              `Layer "${layer.id}" names target "${t}", but screen "${screen.id}" does not render for it`,
+              { key, file, hint: `the screen's targets: ${screen.targets.join(", ")}` },
+            );
+          }
+        }
         if (layer.type === "image") {
           let ok = false;
           try {

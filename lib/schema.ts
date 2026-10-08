@@ -170,6 +170,15 @@ export type ProjectConfigInput = z.input<typeof projectConfigSchema>;
 
 const screenId = z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "screen id: lowercase letters, digits, dashes");
 
+/**
+ * Only on these targets (default: all). Positions are fractions of the width,
+ * so wide and square canvases often need their own copy of a layer.
+ */
+const layerTargets = z
+  .array(z.enum(targetIds as [string, ...string[]]))
+  .min(1)
+  .optional();
+
 /** Extra freely-positioned elements on a screen (asset library images, badges, extra text). */
 export const layerSchema = z.discriminatedUnion("type", [
   z.strictObject({
@@ -185,6 +194,7 @@ export const layerSchema = z.discriminatedUnion("type", [
     width: z.number().min(0.02).max(2).default(0.3),
     rotate: z.number().min(-180).max(180).optional(),
     opacity: z.number().min(0.05).max(1).optional(),
+    targets: layerTargets,
   }),
   z.strictObject({
     type: z.literal("text"),
@@ -201,6 +211,7 @@ export const layerSchema = z.discriminatedUnion("type", [
     font: z.enum(["body", "headline"]).default("body"),
     rotate: z.number().min(-180).max(180).optional(),
     opacity: z.number().min(0.05).max(1).optional(),
+    targets: layerTargets,
   }),
 ]);
 

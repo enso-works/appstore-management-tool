@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { layersFor } from "./layers";
 import { readAppJson, type Project } from "./config";
 import { requiredFontFamilies, resolveFontStack, sha256File } from "./fonts";
 import { readGeneratedManifest, writeGeneratedManifest } from "./generated-manifest";
@@ -468,7 +469,12 @@ export function inputsHash(
       target: job.target.id,
       locale: job.locale,
       direction: content.direction ?? null,
-      screen: { id: job.screen.id, template: job.screen.template, overrides: job.screen.overrides },
+      screen: {
+        id: job.screen.id,
+        template: job.screen.template,
+        overrides: job.screen.overrides,
+        layers: layersFor(job.screen.layers ?? [], job.target.id),
+      },
       fields,
       brand: project.config.brand,
       output: project.config.output,

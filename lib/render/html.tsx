@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { layersFor } from "../layers";
 import { renderStatic } from "./ssr";
 import { getTemplateModule } from "../../templates";
 import type { BrandTheme, ResolvedLayer, TemplateRenderInput } from "../../templates/types";
@@ -58,7 +59,7 @@ export function templateInputFor(
   overrides.shell = resolveShell(overrides.shell, job.target.family) ?? "";
   if (overrides.shell === "") delete overrides.shell;
   const fields = content.screens[job.screen.id] ?? {};
-  const layers: ResolvedLayer[] = (job.screen.layers ?? []).map((layer) =>
+  const layers: ResolvedLayer[] = layersFor(job.screen.layers ?? [], job.target.id).map((layer) =>
     layer.type === "image"
       ? { ...layer, url: assetUrl(layer.asset) }
       : { ...layer, text: (fields[layer.id] ?? "") as string },

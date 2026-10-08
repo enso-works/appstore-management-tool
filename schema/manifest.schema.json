@@ -120,6 +120,12 @@
                       "type": "number",
                       "minimum": 0.05,
                       "maximum": 1
+                    },
+                    "targets": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
@@ -200,6 +206,12 @@
                       "type": "number",
                       "minimum": 0.05,
                       "maximum": 1
+                    },
+                    "targets": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
                     }
                   },
                   "required": [
