@@ -15,8 +15,12 @@ Runs on your machine. No account, no upload — your captures never leave it.
 
 ## Quick start
 
-Run `init` inside your app. It scaffolds the files it needs, never overwriting anything that
-already exists, and adds the app to your list.
+Import your app from the editor (**Import an app** on the app list, or File > Import App... in
+the Mac app), or run `init` inside it. Both read what the app already says about itself (Expo
+`app.json`, Capacitor config, the iOS project's Info.plist and device family, fastlane metadata
+locales), so a landscape game gets landscape sets and an iPhone-only app gets no iPad set. They
+scaffold the files the tool needs, never overwrite anything that already exists, and add the app
+to your list.
 
 ```sh
 cd ~/code/my-app
@@ -70,7 +74,8 @@ they exist — and it never runs a lane that builds or submits.
 
 ## Your apps
 
-Apps are added, not discovered. `init` and `add` register one; `projects` lists them.
+Apps are added, not discovered. Import, `init` and `add` register one; `projects` lists them. The
+Import page also lists apps next to the tool that are not in the list yet.
 
 ![The project list, with readiness at a glance for every app](docs/images/projects.png)
 
@@ -110,7 +115,7 @@ alpha channel — the two requirements that get uploads rejected most often.
 | `iphone-6.9-1320x2868` | App Store — iPhone 6.9" | 1320 × 2868 |
 | `iphone-6.1-1206x2622` | App Store — iPhone 6.1" (the size Apple names as required) | 1206 × 2622 |
 | `ipad-13-2064x2752` | App Store — iPad 13" (required for iPad apps) | 2064 × 2752 |
-| `iphone-6.9-2868x1320`, `iphone-6.1-2622x1206`, `ipad-13-2752x2064` | Landscape sets (`init --landscape`) | |
+| `iphone-6.9-2868x1320`, `iphone-6.1-2622x1206`, `ipad-13-2752x2064` | Landscape sets (apps that run sideways) | |
 | `play-phone-1080x1920` | Google Play — phone | 1080 × 1920 |
 | `play-feature-1024x500` | Google Play — feature graphic | 1024 × 500 |
 | `appreview-6.9-886x1920` | App Preview poster | 886 × 1920 |

@@ -67,11 +67,12 @@ renderer stay in Next.js and Playwright, which need the Mac's disk, Chromium, si
 fastlane anyway (so it can never be a hosted web app or an iOS app). Lives in `mac/`
 (SwiftUI, XcodeGen), built with `mac/build.sh`.
 
-| #   | Item          | What lands                                                                                                                                                                                          | Status          |
-| --- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| 1   | Shell         | Window with the editor in a web view; attaches to a running editor (ports 3000-3009) or starts `next` itself in its own process group and stops it on quit; JS dialogs, file inputs, external links | done 2026-10-08 |
-| 2   | Native chrome | Toolbar project picker with readiness, reload, open in browser, reveal app in Finder; Project and Server menus with shortcuts; server log window; settings for the tool folder and port             | done 2026-10-08 |
-| 3   | Next          | App Store management features (to be agreed): App Store Connect status, metadata and screenshot upload from the app, notifications when renders finish, app icon                                    | open            |
+| #   | Item          | What lands                                                                                                                                                                                                                                | Status          |
+| --- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| 1   | Shell         | Window with the editor in a web view; attaches to a running editor (ports 3000-3009) or starts `next` itself in its own process group and stops it on quit; JS dialogs, file inputs, external links                                       | done 2026-10-08 |
+| 2   | Native chrome | Toolbar project picker with readiness, reload, open in browser, reveal app in Finder; Project and Server menus with shortcuts; server log window; settings for the tool folder and port                                                   | done 2026-10-08 |
+| 3   | Import        | File > Import App... (Command-O) picks a folder; the editor's Import page reads the app (Expo, Capacitor, native iOS), proposes name, locales, orientation, iPad and Play, and writes the config on Import. `init` uses the same proposal | done 2026-10-08 |
+| 4   | Next          | App Store management features (to be agreed): App Store Connect status, metadata and screenshot upload from the app, notifications when renders finish, app icon                                                                          | open            |
 
 ## App Store asset guidelines (agreed 2026-10-08)
 
