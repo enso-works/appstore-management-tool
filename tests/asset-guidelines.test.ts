@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadProject } from "../lib/config";
 import { readImageInfo } from "../lib/image";
+import { analyzeKeywords } from "../lib/metadata";
 import { writeSolidPng } from "../lib/png-write";
 import { readinessReport } from "../lib/readiness";
 import { buildRenderPlan } from "../lib/render-plan";
@@ -54,6 +55,47 @@ describe("required display sizes", () => {
     expect(path.basename(plan.find((j) => j.target.id === "iphone-6.1-1206x2622")!.outputPath)).toMatch(
       /_IPHONE_61\.png$/,
     );
+  });
+});
+
+describe("keyword guidance", () => {
+  it("flags plurals, repeated words, app, categories, special characters and short terms", () => {
+    const a = analyzeKeywords("timer,timers,stories,story,sleep sounds,sleep app,Weather,#calm,ai", "Calmly", "");
+    expect(a.plurals).toEqual(["timers", "stories"]);
+    expect(a.repeatedWords).toEqual(["sleep"]);
+    expect(a.appWord).toBe(true);
+    expect(a.categoryNames).toEqual(["weather"]);
+    expect(a.specialChars).toEqual(["#calm"]);
+    expect(a.tooShort).toEqual(["ai"]);
+    expect(analyzeKeywords("瞑想,睡眠,呼吸,명상").tooShort).toEqual([]);
+    expect(a.findings.every((f) => f.level === "warn")).toBe(true);
+  });
+
+  it("counts the limit in bytes, so non-Latin keywords fit fewer characters", () => {
+    const japanese = Array.from({ length: 10 }, () => "瞑想").join(","); // 29 characters, 69 bytes
+    expect(analyzeKeywords(japanese).bytes).toBe(69);
+    const long = Array.from({ length: 15 }, (_, i) => `睡眠${i}`).join(",");
+    const a = analyzeKeywords(long);
+    expect(Array.from(long).length).toBeLessThan(100);
+    expect(a.bytes).toBeGreaterThan(100);
+    expect(a.findings[0]).toEqual({ level: "fail", text: `${a.bytes}/100 bytes` });
+  });
+
+  it("is clean for well-formed keywords", () => {
+    expect(analyzeKeywords("planner,tasks,reminders,notes,focus", "Demo App", "Plan your day").findings).toEqual([]);
+  });
+
+  it("reports findings per locale in readiness", () => {
+    const fx = tempFixture();
+    try {
+      fs.writeFileSync(path.join(fx.root, "fastlane/metadata/en-US/keywords.txt"), "tasks,task,apps\n");
+      const r = readinessReport(loadProject(path.join(fx.root, "store-shots.config.json")));
+      const check = r.checks.find((c) => c.id === "metadata-keywords")!;
+      expect(check.status).toBe("warn");
+      expect(check.details).toEqual(["en-US: plurals of included words: tasks", 'en-US: "app" is indexed already']);
+    } finally {
+      fx.cleanup();
+    }
   });
 });
 

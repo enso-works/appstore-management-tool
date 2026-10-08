@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { readAppJson, type Project } from "./config";
-import { listMetadataLocales, readMetadataLocale } from "./metadata";
+import { analyzeKeywords, listMetadataLocales, readMetadataLocale } from "./metadata";
 import { dirExists, displayRelative, fileExists, resolveWithin } from "./paths";
 import { isJpegFile, readImageInfo, type ImageInfo } from "./image";
 import { isPngFile, readPngInfo, type PngInfo } from "./png";
@@ -67,6 +67,7 @@ const CHECKS: { id: string; title: string; run: CheckFn }[] = [
   { id: "placeholders", title: "No template placeholders left", run: checkPlaceholders },
   { id: "metadata-locales", title: "Metadata present for every locale", run: checkMetadataLocales },
   { id: "metadata-limits", title: "Metadata within App Store limits", run: checkMetadataLimits },
+  { id: "metadata-keywords", title: "Keywords follow Apple's guidance", run: checkKeywords },
   { id: "required-sizes", title: "Screenshot sets cover the sizes Apple requires", run: checkRequiredSizes },
   { id: "screenshots", title: "Screenshots complete per locale and target", run: checkScreenshots },
   { id: "screenshot-consistency", title: "Same screenshot count in every locale", run: checkScreenshotConsistency },
@@ -209,6 +210,22 @@ function checkMetadataLimits(project: Project): ReadinessCheck {
     }
   }
   return f.check(id, title, "same limits as `fastlane ios validate_metadata`");
+}
+
+function checkKeywords(project: Project): ReadinessCheck {
+  const id = "metadata-keywords";
+  const title = "Keywords follow Apple's guidance";
+  if (!project.config.metadata.manage) return skipped(id, title, "metadata.manage is false");
+  const f = new Findings();
+  for (const locale of listMetadataLocales(project)) {
+    const state = readMetadataLocale(project, locale, ["keywords", "name", "subtitle"]);
+    const [keywords, name, subtitle] = state.fields.map((x) => x.value);
+    if (!state.fields[0].present) continue; // metadata-locales reports missing fields
+    for (const { level, text } of analyzeKeywords(keywords, name, subtitle).findings) {
+      f[level](`${locale}: ${text}`);
+    }
+  }
+  return f.check(id, title, "fastlane/metadata/<locale>/keywords.txt; the Store view shows the same findings");
 }
 
 interface ScreenshotSet {

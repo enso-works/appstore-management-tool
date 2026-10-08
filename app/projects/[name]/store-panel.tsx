@@ -382,19 +382,13 @@ export default function StorePanel({
                 />
                 {kw && (
                   <div className={styles.small}>
-                    {kw.keywords.length} keywords
-                    {kw.spacesAfterCommas && (
-                      <span className={styles.warn}> · spaces after commas waste characters</span>
-                    )}
-                    {kw.duplicates.length > 0 && (
-                      <span className={styles.warn}> · duplicates: {kw.duplicates.join(", ")}</span>
-                    )}
-                    {kw.redundantWithTitle.length > 0 && (
-                      <span className={styles.warn}>
+                    {kw.keywords.length} keywords · {kw.bytes}/100 bytes
+                    {kw.findings.map((x) => (
+                      <span key={x.text} className={x.level === "fail" ? styles.error : styles.warn}>
                         {" "}
-                        · already in name/subtitle (Apple ignores): {kw.redundantWithTitle.join(", ")}
+                        · {x.text}
                       </span>
-                    )}
+                    ))}
                   </div>
                 )}
                 {locale !== meta.defaultLocale && ref && !multiline && (
