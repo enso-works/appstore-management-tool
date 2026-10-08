@@ -79,8 +79,10 @@
         "type": "string",
         "enum": [
           "iphone-6.9-1320x2868",
+          "iphone-6.1-1206x2622",
           "ipad-13-2064x2752",
           "iphone-6.9-2868x1320",
+          "iphone-6.1-2622x1206",
           "ipad-13-2752x2064",
           "play-phone-1080x1920",
           "play-feature-1024x500",

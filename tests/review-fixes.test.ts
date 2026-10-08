@@ -99,14 +99,14 @@ describe("readiness robustness", () => {
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]),
     );
     const r = readinessReport(load());
-    expect(r.checks).toHaveLength(8);
+    expect(r.checks).toHaveLength(9);
     expect(byId(r, "screenshots").details.join("\n")).toMatch(/01.png \(unreadable PNG/);
   });
 
   it("reports a malformed app.json inside the icon/version checks", () => {
     fs.writeFileSync(path.join(fx.root, "app.json"), "{bad");
     const r = readinessReport(load());
-    expect(r.checks).toHaveLength(8);
+    expect(r.checks).toHaveLength(9);
     expect(byId(r, "icon").status).toBe("fail");
     expect(byId(r, "icon").details[0]).toMatch(/Invalid JSON/);
     expect(byId(r, "version").status).toBe("fail");

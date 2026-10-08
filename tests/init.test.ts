@@ -40,7 +40,7 @@ describe("init", () => {
     expect(config.projectName).toBe("My App");
     expect(config.bundleId).toBe("com.bavrk.myapp");
     expect(config.locales).toEqual(["en-US", "de-DE", "es-ES", "es-MX"]);
-    expect(config.targets).toEqual(["iphone-6.9-1320x2868", "ipad-13-2064x2752"]);
+    expect(config.targets).toEqual(["iphone-6.9-1320x2868", "iphone-6.1-1206x2622", "ipad-13-2064x2752"]);
     expect(config.$schema).toBe("../tools/store-shots/schema/project.schema.json");
 
     const project = loadProject(path.join(root, "store-shots.config.json"));
@@ -62,7 +62,7 @@ describe("init", () => {
   it("scaffolds landscape iOS sets for apps that run sideways", () => {
     const root = makeApp("game", { expo: { name: "Game" } });
     const { config } = initProject({ appRoot: root, toolRelPath: "../tools/store-shots", orientation: "landscape" });
-    expect(config.targets).toEqual(["iphone-6.9-2868x1320", "ipad-13-2752x2064"]);
+    expect(config.targets).toEqual(["iphone-6.9-2868x1320", "iphone-6.1-2622x1206", "ipad-13-2752x2064"]);
   });
 
   it("prefers existing metadata locale directories", () => {

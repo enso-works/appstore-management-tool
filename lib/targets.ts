@@ -33,6 +33,19 @@ export const targetProfiles = {
     height: 2868,
     fileToken: "IPHONE_69",
   },
+  // iPhone with Dynamic Island (medium display), the size Apple names as
+  // required (verified 2026-10-08). deliver files 1206x2622 as APP_IPHONE_61.
+  // Its aspect matches 6.9", so it renders from the same raw captures.
+  "iphone-6.1-1206x2622": {
+    id: "iphone-6.1-1206x2622",
+    platform: "ios",
+    family: "iphone",
+    displayClass: "6.1-inch",
+    orientation: "portrait",
+    width: 1206,
+    height: 2622,
+    fileToken: "IPHONE_61",
+  },
   "ipad-13-2064x2752": {
     id: "ipad-13-2064x2752",
     platform: "ios",
@@ -54,6 +67,16 @@ export const targetProfiles = {
     width: 2868,
     height: 1320,
     fileToken: "IPHONE_69_LANDSCAPE",
+  },
+  "iphone-6.1-2622x1206": {
+    id: "iphone-6.1-2622x1206",
+    platform: "ios",
+    family: "iphone",
+    displayClass: "6.1-inch",
+    orientation: "landscape",
+    width: 2622,
+    height: 1206,
+    fileToken: "IPHONE_61_LANDSCAPE",
   },
   "ipad-13-2752x2064": {
     id: "ipad-13-2752x2064",

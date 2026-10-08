@@ -6,7 +6,7 @@ import { dirExists, displayRelative, fileExists, resolveWithin } from "./paths";
 import { isJpegFile, readImageInfo, type ImageInfo } from "./image";
 import { isPngFile, readPngInfo, type PngInfo } from "./png";
 import { METADATA_FIELDS } from "./schema";
-import { getTarget, outputDirFor } from "./targets";
+import { getTarget, outputDirFor, targetIds, type DeviceFamily, type Orientation } from "./targets";
 
 export type CheckStatus = "pass" | "warn" | "fail" | "skip";
 
@@ -67,6 +67,7 @@ const CHECKS: { id: string; title: string; run: CheckFn }[] = [
   { id: "placeholders", title: "No template placeholders left", run: checkPlaceholders },
   { id: "metadata-locales", title: "Metadata present for every locale", run: checkMetadataLocales },
   { id: "metadata-limits", title: "Metadata within App Store limits", run: checkMetadataLimits },
+  { id: "required-sizes", title: "Screenshot sets cover the sizes Apple requires", run: checkRequiredSizes },
   { id: "screenshots", title: "Screenshots complete per locale and target", run: checkScreenshots },
   { id: "screenshot-consistency", title: "Same screenshot count in every locale", run: checkScreenshotConsistency },
   { id: "icon", title: "App icon is 1024x1024 opaque PNG", run: checkIcon },
@@ -284,6 +285,53 @@ function checkScreenshots(project: Project): ReadinessCheck {
     "Screenshots complete per locale and target",
     "run `store-shots generate` after validate passes",
   );
+}
+
+/**
+ * Apple's screenshot specification (verified 2026-10-08) says "you must provide"
+ * iPhone with Dynamic Island (medium display), 6.1", and iPad 13" when the app
+ * runs on iPad. Its size table still lets a 6.9" set stand in for 6.1" (scaled),
+ * and apps have shipped that way, so a missing 6.1" set is a warning.
+ */
+function checkRequiredSizes(project: Project): ReadinessCheck {
+  const id = "required-sizes";
+  const title = "Screenshot sets cover the sizes Apple requires";
+  const ios = project.config.targets
+    .map((t) => getTarget(t))
+    .filter((t) => t !== undefined)
+    .filter((t) => t.platform === "ios" && !t.id.startsWith("appreview-"));
+  if (ios.length === 0) return skipped(id, title, "no App Store screenshot targets configured");
+  const f = new Findings();
+  const iphone = ios.filter((t) => t.family === "iphone");
+  const orientation = iphone[0]?.orientation ?? ios[0].orientation;
+  const sixOne = requiredTargetId("iphone", "6.1-inch", orientation);
+  if (iphone.length === 0) {
+    f.fail(`no iPhone set; add ${sixOne}`);
+  } else if (!iphone.some((t) => t.displayClass === "6.1-inch")) {
+    f.warn(
+      `no 6.1" iPhone set: Apple names it the required iPhone size, and without it App Store Connect shows a scaled larger set; add ${sixOne}`,
+    );
+  }
+  const hasIpad13 = ios.some((t) => t.family === "ipad" && t.displayClass === "13-inch");
+  const { app } = safeAppJson(project);
+  const ipadApp = (app?.ios as { supportsTablet?: unknown } | undefined)?.supportsTablet === true;
+  if (ipadApp && !hasIpad13) {
+    f.fail(
+      `app.json ios.supportsTablet is true, so App Store Connect requires an iPad 13" set; add ${requiredTargetId("ipad", "13-inch", orientation)}`,
+    );
+  } else if (!ipadApp && hasIpad13) {
+    f.info('iPad 13" set configured, but app.json does not set ios.supportsTablet; it is only needed for iPad apps');
+  }
+  return f.check(id, title, 'targets in store-shots.config.json; 6.1" renders from the same raw captures as 6.9"');
+}
+
+/** The registry's target for a required size, in the app's orientation. */
+function requiredTargetId(family: DeviceFamily, displayClass: string, orientation: Orientation): string {
+  const matches = targetIds.filter((t) => {
+    const target = getTarget(t)!;
+    return target.family === family && target.displayClass === displayClass;
+  });
+  return matches.find((t) => getTarget(t)!.orientation === orientation) ?? matches[0];
 }
 
 function checkScreenshotConsistency(project: Project): ReadinessCheck {

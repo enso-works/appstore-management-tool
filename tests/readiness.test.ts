@@ -102,7 +102,11 @@ describe("readiness on the fixture", () => {
     const r = readinessReport(load());
     expect(byId(r, "screenshots").status).toBe("pass");
     expect(byId(r, "screenshot-consistency").status).toBe("pass");
-    expect(r.status).toBe("pass");
+    // The fixture has no 6.1" set, which Apple names as required but scales from 6.9".
+    expect(r.checks.filter((c) => c.status !== "pass" && c.status !== "skip").map((c) => c.id)).toEqual([
+      "required-sizes",
+    ]);
+    expect(r.status).toBe("warn");
   });
 
   it("flags alpha, odd sizes and inconsistent counts", () => {
