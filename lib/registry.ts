@@ -14,7 +14,17 @@ export function defaultWorkspaceRoot(): string {
   return path.resolve(here, "..", "..", "..");
 }
 
-const SKIP_DIRS = new Set(["node_modules", ".git", ".next", "ios", "android", "build", "dist", ".expo", "fixtures"]);
+export const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  ".next",
+  "ios",
+  "android",
+  "build",
+  "dist",
+  ".expo",
+  "fixtures",
+]);
 
 export interface DiscoveredProject {
   root: string;

@@ -26,7 +26,11 @@ describe("init", () => {
       expo: {
         name: "My App",
         version: "1.0.0",
-        ios: { bundleIdentifier: "com.bavrk.myapp", infoPlist: { CFBundleLocalizations: ["en", "de", "es"] } },
+        ios: {
+          bundleIdentifier: "com.bavrk.myapp",
+          supportsTablet: true,
+          infoPlist: { CFBundleLocalizations: ["en", "de", "es"] },
+        },
       },
     });
     const first = initProject({ appRoot: root, toolRelPath: "../tools/store-shots" });
@@ -62,7 +66,8 @@ describe("init", () => {
   it("scaffolds landscape iOS sets for apps that run sideways", () => {
     const root = makeApp("game", { expo: { name: "Game" } });
     const { config } = initProject({ appRoot: root, toolRelPath: "../tools/store-shots", orientation: "landscape" });
-    expect(config.targets).toEqual(["iphone-6.9-2868x1320", "iphone-6.1-2622x1206", "ipad-13-2752x2064"]);
+    // No supportsTablet in app.json: iPhone sets only.
+    expect(config.targets).toEqual(["iphone-6.9-2868x1320", "iphone-6.1-2622x1206"]);
   });
 
   it("prefers existing metadata locale directories", () => {

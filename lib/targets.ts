@@ -139,6 +139,21 @@ export function isTargetId(id: string): id is TargetId {
 }
 
 /**
+ * Store targets for an app: the iPhone sets Apple asks for (6.9" and 6.1"),
+ * iPad 13" for iPad apps and the Play phone set for Play apps, all in one
+ * orientation. App Preview posters and the Play feature graphic stay opt-in.
+ */
+export function targetsFor(choice: { orientation: Orientation; ipad: boolean; play: boolean }): string[] {
+  return targetIds.filter((id) => {
+    const t = getTarget(id)!;
+    if (id.startsWith("appreview-") || t.family === "feature-graphic") return false;
+    if (t.platform === "android") return choice.play && t.family === "phone";
+    if (t.orientation !== choice.orientation) return false;
+    return t.family === "iphone" || (choice.ipad && t.family === "ipad");
+  });
+}
+
+/**
  * Type unit: the canvas's short side. Templates size type, padding and shells
  * from it, so a landscape canvas gets the same type as its portrait twin
  * instead of type scaled to the long edge.

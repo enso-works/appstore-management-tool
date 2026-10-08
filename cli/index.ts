@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { ConfigError, loadProject, resolveProjectArg, type Project } from "../lib/config";
 import { formatIssue, type Issue } from "../lib/issues";
+import { ImportError, inspectApp, targetsFor, type AppProposal } from "../lib/import";
 import { initProject } from "../lib/init";
 import { readinessReport, type ReadinessReport } from "../lib/readiness";
 import { defaultWorkspaceRoot, discoverProjects, isFallbackListing, listProjects } from "../lib/registry";
@@ -163,13 +164,14 @@ program
   .command("init")
   .description("Scaffold store/ and store-shots.config.json, and add the app to your list (run it inside the app)")
   .option("--project <dir>", "app directory (default: current directory)")
-  .option("--name <name>", "project name (default: app.json name)")
+  .option("--name <name>", "project name (default: from app.json, capacitor.config or Info.plist)")
   .option(
     "--locales <list>",
     "comma-separated store locales (default: fastlane/metadata dirs or CFBundleLocalizations)",
   )
   .option("--default-locale <locale>", "default locale (default: en-US if present)")
-  .option("--landscape", "landscape store sets (apps that run sideways, like games)")
+  .option("--landscape", "landscape store sets (default: the app's own orientation)")
+  .option("--portrait", "portrait store sets (default: the app's own orientation)")
   .option("--force", "overwrite existing files")
   .action(
     (opts: {
@@ -178,6 +180,7 @@ program
       locales?: string;
       defaultLocale?: string;
       landscape?: boolean;
+      portrait?: boolean;
       force?: boolean;
     }) => {
       const appRoot = path.resolve(opts.project ?? process.cwd());
@@ -191,17 +194,33 @@ program
         process.exit(2);
       }
 
+      // Same proposal the editor's Import page shows; flags override it.
+      let proposal: AppProposal;
+      try {
+        proposal = inspectApp(appRoot, { allowUnknown: true });
+      } catch (err) {
+        if (!(err instanceof ImportError)) throw err;
+        console.error(err.message);
+        process.exit(2);
+      }
+      const orientation = opts.landscape ? "landscape" : opts.portrait ? "portrait" : proposal.orientation;
+      const locales = opts.locales
+        ?.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       const result = initProject({
         appRoot,
-        projectName: opts.name,
-        locales: opts.locales
-          ?.split(",")
-          .map((s) => s.trim())
-          .filter(Boolean),
-        defaultLocale: opts.defaultLocale,
-        orientation: opts.landscape ? "landscape" : "portrait",
+        projectName: opts.name ?? proposal.projectName,
+        bundleId: proposal.bundleId,
+        locales: locales ?? proposal.locales,
+        defaultLocale: opts.defaultLocale ?? (locales ? undefined : proposal.defaultLocale),
+        orientation,
+        targets: targetsFor({ orientation, ipad: proposal.ipad, play: proposal.play }),
         force: opts.force,
       });
+      const { sources } = proposal;
+      console.log(`name ${sources.projectName}, locales ${sources.locales}, orientation ${sources.orientation},`);
+      console.log(`iPad ${sources.ipad}, Google Play ${sources.play}\n`);
       for (const f of result.created) console.log(`created  ${f}`);
       for (const f of result.skipped) console.log(`skipped  ${f} (exists)`);
 
