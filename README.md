@@ -150,8 +150,24 @@ It signs its requests with the app's App Store Connect key, found the way fastla
 tools find it: `APP_STORE_CONNECT_API_KEY_PATH`, `fastlane/asc_api_key.json`, or
 `AuthKey_<KEY_ID>.p8` in `fastlane/` or `~/.appstoreconnect/private_keys` with the ids from the
 Fastfile. The key is read in memory only to sign a token, and never written or logged.
+`asc push default` does the same for the app's own product page: on the version that takes edits
+(Prepare for Submission, or rejected) it uploads the default page's screenshots, iPhone Duo
+screenshots, header and search results images, and the app previews in `store/previews/<locale>/`.
+Text stays deliver's job, and so does making the version: with none taking edits it says which
+version is live or in review and stops. The editor has the same Check and Upload draft under
+**Default page in App Store Connect**.
+
 Treatments with the same `experiment` name are tested together; **unlink** in the page panel
 forgets a page's App Store Connect id after you delete the page or end the test there.
+
+### iPhone Duo
+
+The foldable iPhone has its own screenshot sets, which App Store Connect requires from April 2027:
+`iphone-duo-1398x2034` (outer screen) and `iphone-duo-2007x2853` (inner screen), and the same
+landscape. They render from the iPhone captures (or from Duo captures, with `sourceDevices`) into
+`store/generated/duo/<locale>/`, because deliver has no display type for them. `asc push` uploads
+them through the Asset Library, in the page's order, for custom pages, treatments and the default
+page. Readiness notes when an app has none yet.
 
 ### Header and search results images
 
@@ -208,6 +224,7 @@ Every target renders at the exact pixel size the store accepts, as an opaque PNG
 | `play-feature-1024x500`                                             | Google Play, feature graphic                           | 1024 × 500  |
 | `appreview-6.9-886x1920`                                            | App Preview poster                                     | 886 × 1920  |
 | `event-card-1920x1080`, `event-detail-1080x1920`                    | In-app event card and details page                     |             |
+| `iphone-duo-1398x2034`, `iphone-duo-2007x2853` (and landscape)      | App Store, iPhone Duo outer and inner screen           |             |
 | `header-3840x1646`                                                  | App Store product page header (iOS 27)                 | 3840 × 1646 |
 | `search-3840x2560`                                                  | App Store search results asset (iOS 27)                | 3840 × 2560 |
 | `universal-5244x2950`                                               | Header and search results in one image (iOS 27)        | 5244 × 2950 |
