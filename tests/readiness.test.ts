@@ -158,14 +158,22 @@ describe("readiness on the fixture", () => {
     expect(byId(readinessReport(load()), "icon").status).toBe("warn");
   });
 
-  it("checks credential existence without reading them when fastlane is enabled", () => {
+  it("locates the App Store Connect key without reading a .p8 when fastlane is enabled", () => {
     editJson(path.join(fx.root, "store-shots.config.json"), (c) => (c.fastlane = { enabled: true }));
     let r = readinessReport(load());
     expect(byId(r, "credentials").status).toBe("fail");
+    // A .p8 is only located (its content is never parsed here), with the ids the Fastfile names.
     fs.writeFileSync(path.join(fx.root, "fastlane/AuthKey_ABC123.p8"), "not a real key");
-    fs.writeFileSync(path.join(fx.root, "fastlane/asc_api_key.json"), "{}");
     fs.writeFileSync(path.join(fx.root, "fastlane/Deliverfile"), "");
-    fs.writeFileSync(path.join(fx.root, "fastlane/Fastfile"), "");
+    fs.writeFileSync(path.join(fx.root, "fastlane/Fastfile"), 'ASC_KEY_ID = "ABC123"\nASC_ISSUER_ID = "iss"\n');
+    r = readinessReport(load());
+    expect(byId(r, "credentials").status).toBe("pass");
+    // A Deliverfile that reads fastlane's JSON key file needs it there.
+    fs.writeFileSync(path.join(fx.root, "fastlane/Deliverfile"), 'api_key_path("fastlane/asc_api_key.json")\n');
+    r = readinessReport(load());
+    expect(byId(r, "credentials").details.join("\n")).toMatch(/reads fastlane\/asc_api_key\.json, which is missing/);
+    // Only its existence is checked; the contents (the key) are not read here.
+    fs.writeFileSync(path.join(fx.root, "fastlane/asc_api_key.json"), "not json at all");
     r = readinessReport(load());
     expect(byId(r, "credentials").status).toBe("pass");
   });

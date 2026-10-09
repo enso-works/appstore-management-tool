@@ -13,7 +13,7 @@ export interface VideoInfo {
   height: number;
   /** Average frame rate of the video track (samples / track duration). */
   fps: number;
-  /** Highest frame rate anywhere in the track: a variable-rate screen recording can average 25 and peak at 60. */
+  /** Highest frame rate held for half a second or more: a variable-rate screen recording can average 25 and peak at 60. */
   maxFps: number;
   bytes: number;
 }
@@ -113,20 +113,33 @@ export function readVideoInfo(file: string): VideoInfo {
     const height = Math.round(moov.readUInt32BE(tkhd.end - 4) / 65536);
     const track = timing(moov, mdhd);
     const entries = moov.readUInt32BE(stts.start + 4);
-    let samples = 0;
-    let minDelta = Infinity;
+    // Frame times from the sample table, then the busiest half second: jittery variable-rate
+    // recordings split one 60 fps stretch into many short runs, a single short gap is no rate.
+    const times: number[] = [];
+    let t = 0;
     for (let i = 0; i < entries; i++) {
-      samples += moov.readUInt32BE(stts.start + 8 + i * 8);
+      const count = moov.readUInt32BE(stts.start + 8 + i * 8);
       const delta = moov.readUInt32BE(stts.start + 12 + i * 8);
-      if (delta > 0) minDelta = Math.min(minDelta, delta);
+      for (let k = 0; k < count && times.length < 200_000; k++) {
+        times.push(t);
+        t += delta;
+      }
+    }
+    const samples = times.length;
+    const window = track.timescale / 2;
+    let maxFps = 0;
+    for (let lo = 0, hi = 0; hi < times.length; hi++) {
+      while (times[hi] - times[lo] >= window) lo++;
+      if (times[hi] - times[0] >= window) maxFps = Math.max(maxFps, (hi - lo + 1) / 0.5);
     }
     const trackSeconds = track.duration / track.timescale;
+    const average = trackSeconds > 0 ? samples / trackSeconds : 0;
     return {
       durationSeconds: movie.duration / movie.timescale,
       width,
       height,
-      fps: trackSeconds > 0 ? samples / trackSeconds : 0,
-      maxFps: Number.isFinite(minDelta) ? track.timescale / minDelta : 0,
+      fps: average,
+      maxFps: Math.max(maxFps, average),
       bytes,
     };
   }

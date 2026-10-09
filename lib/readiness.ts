@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { appFacts, type AppFacts } from "./app-facts";
+import { findAscKey } from "./asc/auth";
 import { type Project } from "./config";
 import { analyzeKeywords, listMetadataLocales, readMetadataLocale } from "./metadata";
 import { dirExists, displayRelative, fileExists, resolveWithin } from "./paths";
@@ -194,7 +195,13 @@ function checkMetadataLocales(project: Project): ReadinessCheck {
       continue;
     }
     const missing = state.fields.filter((x) => !x.present || x.length === 0).map((x) => x.field);
-    if (missing.length) f.fail(`${locale}: missing or empty ${missing.join(", ")}`);
+    // App Store Connect has no "What's New" for an app's first version.
+    const first = /^1(\.0){0,2}$/.test(factsOf(project).version?.value ?? "");
+    const required = first ? missing.filter((m) => m !== "release_notes") : missing;
+    if (required.length) f.fail(`${locale}: missing or empty ${required.join(", ")}`);
+    if (first && missing.includes("release_notes")) {
+      f.info(`${locale}: no release_notes, which a first version (1.0) does not have`);
+    }
   }
   const extra = listMetadataLocales(project).filter((l) => !project.config.locales.includes(l));
   if (extra.length) f.warn(`on disk but not in config.locales: ${extra.join(", ")} (uploaded by deliver anyway)`);
@@ -478,7 +485,8 @@ function checkAppPreviews(project: Project): ReadinessCheck {
         );
       }
       // The peak rate, not the average: 29.97 is fine, a 60 fps stretch in a screen recording is not.
-      if (info.maxFps > PREVIEW_LIMITS.maxFps + 0.05) {
+      // 10% slack: one early frame in a half second is jitter, not a faster rate.
+      if (info.maxFps > PREVIEW_LIMITS.maxFps * 1.1) {
         f.fail(`${rel}: ${Math.round(info.maxFps * 100) / 100} fps; at most ${PREVIEW_LIMITS.maxFps}`);
       }
       if (info.bytes > PREVIEW_LIMITS.maxBytes) {
@@ -568,13 +576,33 @@ function checkCredentials(project: Project): ReadinessCheck {
     f.fail("no fastlane/ directory");
   } else {
     const names = fs.readdirSync(fl);
-    if (!names.some((n) => /^AuthKey_.+\.p8$/.test(n))) f.fail("fastlane/AuthKey_<KEY_ID>.p8 missing");
-    if (!names.includes("asc_api_key.json")) f.fail("fastlane/asc_api_key.json missing");
+    // The same lookup the App Store Connect client uses (existence only): the app's fastlane/
+    // folder, APP_STORE_CONNECT_API_KEY_PATH, or ~/.appstoreconnect/private_keys.
+    const key = findAscKey(project);
+    if (!key) {
+      f.fail(
+        "no App Store Connect key: fastlane/asc_api_key.json, AuthKey_<KEY_ID>.p8 (with the ids in the Fastfile) or APP_STORE_CONNECT_API_KEY_PATH",
+      );
+    } else if (!key.source.startsWith("fastlane/")) {
+      f.info(`App Store Connect key from ${key.source}`);
+    }
+    // The lanes read what their own files name; that file has to be there too.
+    const laneText = ["Fastfile", "Deliverfile"]
+      .filter((n) => names.includes(n))
+      .map((n) => fs.readFileSync(path.join(fl, n), "utf8"))
+      .join("\n");
+    if (/asc_api_key\.json/.test(laneText) && !names.includes("asc_api_key.json")) {
+      f.fail("the Fastfile or Deliverfile reads fastlane/asc_api_key.json, which is missing");
+    }
+    const readsLocalP8 = /fastlane\/AuthKey_|expand_path\(\s*["']AuthKey_/.test(laneText);
+    if (readsLocalP8 && !names.some((n) => /^AuthKey_.+\.p8$/.test(n))) {
+      f.fail("the Fastfile reads fastlane/AuthKey_<KEY_ID>.p8, which is missing");
+    }
     if (!names.includes("Deliverfile")) f.fail("fastlane/Deliverfile missing (screenshots/metadata lanes need it)");
     if (!names.includes("Fastfile")) f.fail("fastlane/Fastfile missing");
   }
-  // Existence only. Contents are never read.
-  return f.check(id, title, "see fastlane/CREDENTIALS.md; the tool never reads these files");
+  // The key is only located here; the App Store Connect client reads it when it signs a request.
+  return f.check(id, title, "see fastlane/CREDENTIALS.md");
 }
 
 function checkVersion(project: Project): ReadinessCheck {

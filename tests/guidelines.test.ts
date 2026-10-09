@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadProject } from "../lib/config";
+import { withSetCopy } from "../lib/content";
 import { readinessReport, type ReadinessReport } from "../lib/readiness";
 import { buildJob, buildRenderPlan, buildSetPlan } from "../lib/render-plan";
 import { getTarget, isScreenshotSet, shortLabel } from "../lib/targets";
@@ -167,14 +168,96 @@ describe("Apple guideline checks", () => {
         ],
       });
       write("en-US", "plus.mp4", { width: 1080, height: 1920, seconds: 20, fps: 30 });
+      // Jittery 60 fps: deltas alternate between 1/50 and 1/75 s, never a long uniform run.
+      write("en-US", "jitter.mp4", {
+        width: 886,
+        height: 1920,
+        seconds: 20,
+        fps: 25,
+        runs: [...Array.from({ length: 60 }, (_, i) => [1, i % 2 ? 50 : 75] as [number, number]), [450, 25]],
+      });
+      // One short gap between two frames is not 120 fps.
+      write("en-US", "blip.mp4", {
+        width: 886,
+        height: 1920,
+        seconds: 20,
+        fps: 30,
+        runs: [
+          [300, 30],
+          [1, 120],
+          [299, 30],
+        ],
+      });
       const text = byId(readinessReport(load()), "app-previews").details.join("\n");
       expect(text).toMatch(/almost\.mp4: 14\.96 s/);
       expect(text).toMatch(/vfr\.mp4: 60 fps/);
       expect(text).not.toMatch(/plus\.mp4/);
+      expect(text).not.toMatch(/blip\.mp4/);
+      expect(text).toMatch(/jitter\.mp4: \d+(\.\d+)? fps/);
     });
   });
 
   describe("named sets", () => {
+    const content = () => path.join(fx.root, "store", "content", "en-US.json");
+
+    it("renders a page's own copy over the default page's", () => {
+      const lc = {
+        locale: "en-US",
+        screens: { home: { headline: "Default", caption: "Shared" } },
+        sets: { planners: { screens: { home: { headline: "Page only" } } } },
+      };
+      expect(withSetCopy(lc, "planners").screens.home).toEqual({ headline: "Page only", caption: "Shared" });
+      expect(withSetCopy(lc, undefined).screens.home.headline).toBe("Default");
+      expect(withSetCopy(lc, "other").screens.home.headline).toBe("Default");
+    });
+
+    it("checks each page's fields and text against what its kind allows", () => {
+      editJson(manifest(), (m) => {
+        m.sets = [
+          { id: "planners", kind: "custom", deepLink: "demo://plan", screens: ["planning"] },
+          { id: "test-a", kind: "ppo", deepLink: "demo://x", screens: ["home"] },
+        ];
+      });
+      editJson(content(), (c) => {
+        c.sets = {
+          planners: {
+            promotionalText: "x".repeat(171),
+            keywords: ["planner", "spaceships"],
+            screens: { home: { headline: "Not on this page" } },
+          },
+          "test-a": { keywords: ["planner"] },
+          ghost: {},
+        };
+      });
+      const items = validateProject(load()).issues.items;
+      const byCode = (code: string) => items.filter((i) => i.code === code).map((i) => i.message);
+      expect(byCode("sets.promotional-text")[0]).toMatch(/171\/170/);
+      expect(byCode("sets.keyword-not-in-app")[0]).toMatch(/"spaceships"/);
+      expect(byCode("sets.keyword-not-in-app")[0]).not.toMatch(/"planner"/);
+      expect(byCode("sets.field-kind")).toHaveLength(2); // the treatment's deep link and its keywords
+      expect(byCode("sets.content-screen")[0]).toMatch(/home/);
+      expect(byCode("sets.content-unknown")[0]).toMatch(/ghost/);
+    });
+
+    it("keeps a set's own copy problems to that set", () => {
+      editJson(manifest(), (m) => {
+        m.sets = [{ id: "planners", kind: "custom", screens: ["planning", "home"] }];
+      });
+      editJson(content(), (c) => {
+        c.sets = { planners: { screens: { home: { headline: "漢字 planner" } } } };
+      });
+      const glyph = validateProject(load()).issues.items.filter((i) => i.code === "content.glyph-missing");
+      expect(glyph.map((i) => i.key)).toEqual(["sets/planners/en-US"]);
+      expect(glyph[0].message).toMatch(/\(set "planners"\)/);
+    });
+
+    it("rejects a deep link that is not a URL", () => {
+      editJson(manifest(), (m) => {
+        m.sets = [{ id: "planners", kind: "custom", deepLink: "plan screen", screens: ["planning"] }];
+      });
+      expect(validateProject(load()).issues.items.some((i) => i.code === "manifest.schema")).toBe(true);
+    });
+
     it("renders a custom product page's screens in its own order and folder, renumbered", () => {
       editJson(manifest(), (m) => {
         m.screens[1].enabled = false;
@@ -228,6 +311,12 @@ describe("Apple guideline checks", () => {
       const codes = validateProject(load()).issues.items.map((i) => i.code);
       expect(codes).toContain("sets.unknown-screen");
       expect(codes).toContain("sets.too-many-sets");
+      // Four treatments split over two experiments are within the limit.
+      editJson(manifest(), (m) => {
+        m.sets[0].screens = ["home"];
+        m.sets[3].experiment = "icons";
+      });
+      expect(validateProject(load()).issues.items.map((i) => i.code)).not.toContain("sets.too-many-sets");
     });
   });
 
@@ -256,6 +345,16 @@ describe("Apple guideline checks", () => {
       expect(shortLabel(getTarget("event-detail-1080x1920")!)).toBe("Event details");
       // Event media do not count towards the 3-10 screenshots of a set.
       expect(v.issues.items.filter((i) => i.code.startsWith("plan.") && i.key?.startsWith("event"))).toEqual([]);
+    });
+
+    it("renders event media only for screens that name them", () => {
+      editJson(config(), (c) => {
+        c.targets.push("event-card-1920x1080");
+      });
+      const project = load();
+      const v = validateProject(project);
+      expect(buildRenderPlan(project, v.manifest!).some((j) => j.target.family === "event")).toBe(false);
+      expect(v.issues.items.filter((i) => i.level === "error" && /event/.test(i.message))).toEqual([]);
     });
 
     it("requires the banner layout for the wide event card", () => {
