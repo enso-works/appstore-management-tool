@@ -795,6 +795,11 @@ export default function Editor({ name }: { name: string }) {
 
   // ---- save --------------------------------------------------------------
   const saveRef = useRef<() => Promise<void>>(async () => {});
+  // The latest state, for a save that finishes after more edits came in.
+  const latestRef = useRef({ manifest, content });
+  latestRef.current = { manifest, content };
+  // One save at a time; an autosave that comes in meanwhile runs once the current one ends.
+  const savingRef = useRef({ running: false, again: false });
   const dirtyKey = `${dirty.manifest}|${[...dirty.content].join(",")}|${JSON.stringify(manifest)}|${JSON.stringify(content)}`;
   useEffect(() => {
     if (!isDirty) return;
@@ -805,6 +810,12 @@ export default function Editor({ name }: { name: string }) {
 
   async function save() {
     if (!snap) return;
+    if (savingRef.current.running) {
+      savingRef.current.again = true;
+      return;
+    }
+    savingRef.current.running = true;
+    const sent = { manifest, content };
     setStatus("Saving…");
     try {
       let em = etags;
@@ -858,11 +869,21 @@ export default function Editor({ name }: { name: string }) {
         latestIssues = body.issues;
       }
       setIssues(latestIssues);
-      setDirty({ manifest: false, content: new Set() });
+      // Only what this save sent is clean: an edit made while it ran is still unsaved.
+      setDirty((d) => ({
+        manifest: d.manifest && latestRef.current.manifest !== sent.manifest,
+        content: new Set([...d.content].filter((l) => latestRef.current.content[l] !== sent.content[l])),
+      }));
       setStatus("Saved");
       setTimeout(() => setStatus((v) => (v === "Saved" ? "" : v)), 1500);
     } catch (err) {
       setStatus(`Save failed: ${(err as Error).message}`);
+    } finally {
+      savingRef.current.running = false;
+      if (savingRef.current.again) {
+        savingRef.current.again = false;
+        void saveRef.current();
+      }
     }
   }
   saveRef.current = save;
