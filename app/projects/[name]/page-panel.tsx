@@ -94,7 +94,7 @@ export default function PagePanel({
           <input
             className={styles.input}
             value={page.deepLink ?? ""}
-            placeholder="rallo://tour"
+            placeholder="myapp://screen"
             onChange={(e) => onChange({ deepLink: e.target.value || undefined })}
           />
         </label>
