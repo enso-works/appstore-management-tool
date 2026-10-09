@@ -153,6 +153,26 @@ Fastfile. The key is read in memory only to sign a token, and never written or l
 Treatments with the same `experiment` name are tested together; **unlink** in the page panel
 forgets a page's App Store Connect id after you delete the page or end the test there.
 
+### Header and search results images
+
+Since iOS 27 a product page can lead with a wide header image, and search results can show a
+creative asset instead of the first screenshots. Three opt-in targets render them from the iPhone
+captures with the `feature-graphic` layout:
+
+- `header-3840x1646`: the product page header (21:9);
+- `search-3840x2560`: the search results asset (3:2);
+- `universal-5244x2950`: one 16:9 image for both. App Store Connect crops it to 21:9 for the
+  header and 3:2 for search, so the layout keeps text and device where both crops show them, and
+  **Guides** in the editor draws the two crops.
+
+A page shows one of each: the default page from its enabled screens (into
+`store/generated/creative/<locale>/`), a custom page or treatment from its own screens. A screen
+made only for them takes no screenshot position, so give it `"enabled": false` and add it to the
+pages that show it. `asc push` puts them in the app's Asset Library, named with their checksum so an
+unchanged image is not sent again, and places them on the page once Apple has processed them.
+When a page has no image of its own for a slot, a placement made by hand in App Store Connect stays. The page panel names the page's header and search screens, and readiness checks
+every rendered one.
+
 ### In-app events
 
 Event media render from the same captures, whichever way round the app runs: `event-card-1920x1080`
@@ -188,6 +208,9 @@ Every target renders at the exact pixel size the store accepts, as an opaque PNG
 | `play-feature-1024x500`                                             | Google Play, feature graphic                           | 1024 × 500  |
 | `appreview-6.9-886x1920`                                            | App Preview poster                                     | 886 × 1920  |
 | `event-card-1920x1080`, `event-detail-1080x1920`                    | In-app event card and details page                     |             |
+| `header-3840x1646`                                                  | App Store product page header (iOS 27)                 | 3840 × 1646 |
+| `search-3840x2560`                                                  | App Store search results asset (iOS 27)                | 3840 × 2560 |
+| `universal-5244x2950`                                               | Header and search results in one image (iOS 27)        | 5244 × 2950 |
 
 `generate` renders every target × locale × screen, checks the size of each file before writing
 it, and skips anything whose inputs have not changed.
