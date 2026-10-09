@@ -15,6 +15,7 @@ export interface ProjectPaths {
   outputPlay: string;
   metadata: string;
   generated: string;
+  previews: string;
   appJson: string;
 }
 
@@ -115,6 +116,7 @@ export function loadProject(configPath: string): Project {
     outputPlay: resolveWithin(root, p.outputPlay),
     metadata: resolveWithin(root, p.metadata),
     generated: resolveWithin(root, p.generated),
+    previews: resolveWithin(root, p.previews),
     appJson: path.join(root, "app.json"),
   };
 

@@ -68,6 +68,11 @@
           "default": "store/generated",
           "type": "string",
           "minLength": 1
+        },
+        "previews": {
+          "default": "store/previews",
+          "type": "string",
+          "minLength": 1
         }
       },
       "additionalProperties": false

@@ -29,6 +29,14 @@ export interface AppFacts {
   icon?: Fact<{ abs: string; rel: string }>;
   /** Runs on iPad (and so needs an iPad screenshot set). */
   ipad: Fact<boolean>;
+  /**
+   * The interface style the app declares: "automatic" follows the system
+   * (so it has a Dark Mode), "light" or "dark" is fixed. Unset when the app
+   * does not say (a native app without UIUserInterfaceStyle).
+   */
+  interfaceStyle?: Fact<"automatic" | "light" | "dark">;
+  /** The icon's dark and tinted variants (iOS 18 and later), when the app has any. */
+  iconVariants?: Fact<{ dark: boolean; tinted: boolean }>;
   /** app.json exists but cannot be read; Expo facts are missing because of it. */
   appJsonError?: string;
 }
@@ -60,7 +68,63 @@ export function appFacts(root: string): AppFacts {
     const found = findAppIcon(root, xcode?.iconSet ?? "AppIcon");
     if (found) icon = { value: { abs: found, rel: path.relative(root, found) }, source: "asset catalog" };
   }
-  return { kind, version, icon, ipad, appJsonError: error };
+  const style = (v: unknown) => (v === "automatic" || v === "light" || v === "dark" ? v : undefined);
+  const plistStyle = plist?.interfaceStyle?.toLowerCase();
+  const interfaceStyle = pick<"automatic" | "light" | "dark">(
+    [
+      style((expo?.ios as { userInterfaceStyle?: unknown } | undefined)?.userInterfaceStyle),
+      "app.json ios.userInterfaceStyle",
+    ],
+    [style(expo?.userInterfaceStyle), "app.json userInterfaceStyle"],
+    // Expo's default is light. A native app without the key follows the system, but
+    // whether it was designed for Dark Mode is unknown, so the fact stays unset.
+    [expo ? "light" : undefined, "app.json (no userInterfaceStyle: Expo's default, light)"],
+    [
+      plistStyle === "light" || plistStyle === "dark" ? plistStyle : plistStyle ? "automatic" : undefined,
+      "Info.plist UIUserInterfaceStyle",
+    ],
+  );
+
+  return {
+    kind,
+    version,
+    icon,
+    ipad,
+    interfaceStyle,
+    iconVariants: iconVariantsOf(root, expo, xcode?.iconSet),
+    appJsonError: error,
+  };
+}
+
+/**
+ * Dark and tinted icons: Expo's ios.icon as { light, dark, tinted } or an
+ * Icon Composer `.icon` file (which carries its own appearances), else the
+ * appearance entries of the asset catalog's icon set.
+ */
+function iconVariantsOf(
+  root: string,
+  expo: Record<string, unknown> | undefined,
+  iconSet = "AppIcon",
+): AppFacts["iconVariants"] {
+  if (expo) {
+    const icon = (expo.ios as { icon?: unknown } | undefined)?.icon;
+    if (typeof icon === "string" && icon.endsWith(".icon")) {
+      return { value: { dark: true, tinted: true }, source: "app.json ios.icon (Icon Composer file)" };
+    }
+    if (icon && typeof icon === "object") {
+      const i = icon as { dark?: unknown; tinted?: unknown };
+      return { value: { dark: !!str(i.dark), tinted: !!str(i.tinted) }, source: "app.json ios.icon" };
+    }
+    return { value: { dark: false, tinted: false }, source: "app.json has one icon" };
+  }
+  const set = findIconSet(root, iconSet);
+  if (!set) return undefined;
+  const images = readIconSetImages(set);
+  const has = (value: string) =>
+    images.some(
+      (i) => i.filename && (i.appearances ?? []).some((a) => a.appearance === "luminosity" && a.value === value),
+    );
+  return { value: { dark: has("dark"), tinted: has("tinted") }, source: "asset catalog" };
 }
 
 /** app.json as Expo writes it (wrapped or flat), or why it cannot be read. */
@@ -122,6 +186,8 @@ export interface PlistFacts {
   orientation?: Orientation;
   localizations?: string[];
   version?: string;
+  /** UIUserInterfaceStyle: Light, Dark or Automatic. */
+  interfaceStyle?: string;
 }
 
 /** The few Info.plist keys the tool needs, from the XML form source trees keep. */
@@ -149,6 +215,7 @@ export function readInfoPlist(root: string): PlistFacts | undefined {
     orientation,
     localizations: array("CFBundleLocalizations"),
     version: string("CFBundleShortVersionString"),
+    interfaceStyle: string("UIUserInterfaceStyle"),
   };
 }
 
@@ -203,8 +270,23 @@ export function readXcodeProject(root: string): XcodeFacts | undefined {
  * one. Dark and tinted variants (with `appearances`) are not the store icon.
  */
 export function findAppIcon(root: string, iconSet = "AppIcon"): string | undefined {
+  for (const set of findIconSets(root, iconSet)) {
+    const image = readIconSetImages(set).find(
+      (i) =>
+        i.filename &&
+        i.size === "1024x1024" &&
+        !i.appearances &&
+        (i.idiom === "universal" || i.idiom === "ios-marketing"),
+    );
+    if (image?.filename) return path.join(set, image.filename);
+  }
+  return undefined;
+}
+
+/** `<iconSet>.appiconset` folders under ios/ (the app's catalog, skipping Pods and build output). */
+function findIconSets(root: string, iconSet: string): string[] {
   const ios = path.join(root, "ios");
-  if (!dirExists(ios)) return undefined;
+  if (!dirExists(ios)) return [];
   const sets: string[] = [];
   const walk = (dir: string, depth: number) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -215,24 +297,32 @@ export function findAppIcon(root: string, iconSet = "AppIcon"): string | undefin
     }
   };
   walk(ios, 1);
-  for (const set of sets) {
-    try {
-      const contents = JSON.parse(fs.readFileSync(path.join(set, "Contents.json"), "utf8")) as {
-        images?: { filename?: string; size?: string; idiom?: string; appearances?: unknown }[];
-      };
-      const image = (contents.images ?? []).find(
-        (i) =>
-          i.filename &&
-          i.size === "1024x1024" &&
-          !i.appearances &&
-          (i.idiom === "universal" || i.idiom === "ios-marketing"),
-      );
-      if (image?.filename) return path.join(set, image.filename);
-    } catch {
-      // an unreadable Contents.json is a set without a usable icon
-    }
+  return sets;
+}
+
+/** The icon set that holds the store icon, else the first one found. */
+function findIconSet(root: string, iconSet: string): string | undefined {
+  const sets = findIconSets(root, iconSet);
+  return sets.find((set) => readIconSetImages(set).some((i) => i.filename && i.size === "1024x1024")) ?? sets[0];
+}
+
+interface IconSetImage {
+  filename?: string;
+  size?: string;
+  idiom?: string;
+  appearances?: { appearance?: string; value?: string }[];
+}
+
+function readIconSetImages(set: string): IconSetImage[] {
+  try {
+    const contents = JSON.parse(fs.readFileSync(path.join(set, "Contents.json"), "utf8")) as {
+      images?: IconSetImage[];
+    };
+    return contents.images ?? [];
+  } catch {
+    // an unreadable Contents.json is a set without a usable icon
+    return [];
   }
-  return undefined;
 }
 
 export function readPackageJson(root: string): Record<string, unknown> | undefined {

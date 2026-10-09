@@ -1,12 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
-import { appFacts } from "./app-facts";
+import { appFacts, type AppFacts } from "./app-facts";
 import { type Project } from "./config";
 import { analyzeKeywords, listMetadataLocales, readMetadataLocale } from "./metadata";
 import { dirExists, displayRelative, fileExists, resolveWithin } from "./paths";
 import { isJpegFile, readImageInfo, type ImageInfo } from "./image";
 import { isPngFile, readPngInfo, type PngInfo } from "./png";
 import { METADATA_FIELDS } from "./schema";
+import { readVideoInfo, type VideoInfo } from "./video";
 import { getTarget, isScreenshotSet, outputDirFor, targetIds, type DeviceFamily, type Orientation } from "./targets";
 
 export type CheckStatus = "pass" | "warn" | "fail" | "skip";
@@ -72,7 +73,10 @@ const CHECKS: { id: string; title: string; run: CheckFn }[] = [
   { id: "required-sizes", title: "Screenshot sets cover the sizes Apple requires", run: checkRequiredSizes },
   { id: "screenshots", title: "Screenshots complete per locale and target", run: checkScreenshots },
   { id: "screenshot-consistency", title: "Same screenshot count in every locale", run: checkScreenshotConsistency },
+  { id: "dark-mode", title: "A Dark Mode screenshot, if the app has Dark Mode", run: checkDarkMode },
+  { id: "app-previews", title: "App previews meet Apple's specification", run: checkAppPreviews },
   { id: "icon", title: "App icon is 1024x1024 opaque PNG", run: checkIcon },
+  { id: "icon-variants", title: "Dark and tinted app icons", run: checkIconVariants },
   { id: "credentials", title: "Fastlane credentials present", run: checkCredentials },
   { id: "version", title: "App version consistent", run: checkVersion },
 ];
@@ -83,6 +87,8 @@ const CHECKS: { id: string; title: string; run: CheckFn }[] = [
  * becomes a failed check, never a failed report.
  */
 export function readinessReport(project: Project): ReadinessReport {
+  // Several checks read the app's facts; read them once per report.
+  facts = undefined;
   const checks = CHECKS.map(({ id, title, run }) => {
     try {
       return run(project);
@@ -102,6 +108,13 @@ export function readinessReport(project: Project): ReadinessReport {
     checks,
     status: worst(checks.map((c) => c.status)),
   };
+}
+
+let facts: { root: string; value: AppFacts } | undefined;
+
+function factsOf(project: Project): AppFacts {
+  if (facts?.root !== project.root) facts = { root: project.root, value: appFacts(project.root) };
+  return facts.value;
 }
 
 function worst(statuses: CheckStatus[]): CheckStatus {
@@ -322,7 +335,7 @@ function checkRequiredSizes(project: Project): ReadinessCheck {
     );
   }
   const hasIpad13 = ios.some((t) => t.family === "ipad" && t.displayClass === "13-inch");
-  const { ipad } = appFacts(project.root);
+  const { ipad } = factsOf(project);
   if (ipad.value && !hasIpad13) {
     f.fail(
       `the app runs on iPad (${ipad.source}), so App Store Connect requires an iPad 13" set; add ${requiredTargetId("ipad", "13-inch", orientation)}`,
@@ -359,11 +372,154 @@ function checkScreenshotConsistency(project: Project): ReadinessCheck {
   return f.check("screenshot-consistency", "Same screenshot count in every locale");
 }
 
+/**
+ * Apple's product page guidance (verified 2026-10-09): "If your app supports
+ * Dark Mode, consider including at least one screenshot that showcases what
+ * the experience looks like." A screen says what its capture shows with
+ * `appearance` in the manifest.
+ */
+function checkDarkMode(project: Project): ReadinessCheck {
+  const id = "dark-mode";
+  const title = "A Dark Mode screenshot, if the app has Dark Mode";
+  const style = factsOf(project).interfaceStyle;
+  if (!style) return skipped(id, title, "the app does not declare an interface style (UIUserInterfaceStyle)");
+  if (style.value !== "automatic") return skipped(id, title, `the app is always ${style.value} (${style.source})`);
+  const f = new Findings();
+  let manifest: { screens: { id: string; enabled: boolean; appearance?: string }[] } | undefined;
+  try {
+    manifest = JSON.parse(fs.readFileSync(project.paths.manifest, "utf8"));
+  } catch {
+    return skipped(id, title, "the manifest is unreadable (validate reports why)");
+  }
+  const shown = (manifest?.screens ?? []).filter((s) => s.enabled !== false);
+  if (!shown.some((s) => s.appearance === "dark")) {
+    f.warn(
+      `the app follows the system appearance (${style.source}), but no screen is marked appearance: "dark"; Apple suggests showing Dark Mode in at least one screenshot`,
+    );
+  }
+  return f.check(
+    id,
+    title,
+    'capture one screen in Dark Mode and set "appearance": "dark" on it in store/manifest.json',
+  );
+}
+
+/**
+ * Accepted App Preview sizes per display class (verified 2026-10-09), either
+ * way round: 886x1920 for every iPhone with Face ID or Dynamic Island,
+ * 1080x1920 and 750x1334 for the Home-button iPhones, 1200x1600 for iPads
+ * from 10.5" up, 900x1200 for 9.7" and older 12.9".
+ */
+const PREVIEW_CLASSES: { device: string; width: number; height: number }[] = [
+  { device: "iPhone", width: 886, height: 1920 },
+  { device: 'iPhone 5.5"', width: 1080, height: 1920 },
+  { device: 'iPhone 4.7"', width: 750, height: 1334 },
+  { device: "iPad", width: 1200, height: 1600 },
+  { device: 'iPad 9.7"', width: 900, height: 1200 },
+];
+
+function previewClass(width: number, height: number) {
+  return PREVIEW_CLASSES.find(
+    (c) => (c.width === width && c.height === height) || (c.width === height && c.height === width),
+  );
+}
+
+export const PREVIEW_LIMITS = { minSeconds: 15, maxSeconds: 30, maxFps: 30, maxBytes: 500 * 1024 * 1024, perSet: 3 };
+
+/**
+ * App previews are optional; when <previews>/<locale>/ has videos, each must
+ * be one of Apple's accepted sizes, 15-30 seconds, at most 30 fps and 500 MB,
+ * with at most three per device and locale.
+ */
+function checkAppPreviews(project: Project): ReadinessCheck {
+  const id = "app-previews";
+  const title = "App previews meet Apple's specification";
+  if (!dirExists(project.paths.previews)) {
+    return skipped(id, title, `no ${project.config.paths.previews}/ (app previews are optional)`);
+  }
+  const f = new Findings();
+  const { ipad } = factsOf(project);
+  const dirs = fs.readdirSync(project.paths.previews, { withFileTypes: true }).filter((e) => e.isDirectory());
+  for (const d of dirs) {
+    if (!project.config.locales.includes(d.name)) {
+      f.warn(`${d.name}/ is not one of the app's locales`);
+      continue;
+    }
+    const counts = new Map<string, number>();
+    for (const name of fs.readdirSync(path.join(project.paths.previews, d.name)).sort()) {
+      if (name.startsWith(".")) continue;
+      const rel = `${d.name}/${name}`;
+      if (!/\.(mov|m4v|mp4)$/i.test(name)) {
+        f.warn(`${rel}: App Store Connect takes .mov, .m4v or .mp4`);
+        continue;
+      }
+      let info: VideoInfo;
+      try {
+        info = readVideoInfo(path.join(project.paths.previews, d.name, name));
+      } catch (err) {
+        f.fail(`${rel}: unreadable (${(err as Error).message})`);
+        continue;
+      }
+      const size = previewClass(info.width, info.height);
+      if (!size) {
+        f.fail(
+          `${rel}: ${info.width}x${info.height}; App Store Connect takes 886x1920 for current iPhones and 1200x1600 for iPads (either way round)`,
+        );
+      } else {
+        counts.set(size.device, (counts.get(size.device) ?? 0) + 1);
+        if (size.device.startsWith("iPad") && !ipad.value) {
+          f.warn(`${rel}: an iPad preview, but the app does not run on iPad`);
+        }
+      }
+      const secs = info.durationSeconds;
+      if (secs < PREVIEW_LIMITS.minSeconds || secs > PREVIEW_LIMITS.maxSeconds) {
+        f.fail(
+          `${rel}: ${Math.round(secs * 100) / 100} s; previews are ${PREVIEW_LIMITS.minSeconds} to ${PREVIEW_LIMITS.maxSeconds} seconds`,
+        );
+      }
+      // The peak rate, not the average: 29.97 is fine, a 60 fps stretch in a screen recording is not.
+      if (info.maxFps > PREVIEW_LIMITS.maxFps + 0.05) {
+        f.fail(`${rel}: ${Math.round(info.maxFps * 100) / 100} fps; at most ${PREVIEW_LIMITS.maxFps}`);
+      }
+      if (info.bytes > PREVIEW_LIMITS.maxBytes) {
+        f.fail(`${rel}: ${Math.round(info.bytes / 1024 / 1024)} MB; at most 500 MB`);
+      }
+    }
+    for (const [device, n] of counts) {
+      if (n > PREVIEW_LIMITS.perSet) f.fail(`${d.name}: ${n} ${device} previews; at most ${PREVIEW_LIMITS.perSet}`);
+    }
+  }
+  return f.check(id, title, "App Store Connect takes previews by hand; deliver does not upload them");
+}
+
+/**
+ * iOS 18 and later show a dark and a tinted home screen icon. Without them
+ * the system derives both from the light icon, which rarely looks designed.
+ */
+function checkIconVariants(project: Project): ReadinessCheck {
+  const id = "icon-variants";
+  const title = "Dark and tinted app icons";
+  const variants = factsOf(project).iconVariants;
+  if (!variants) return skipped(id, title, "no icon set found to inspect");
+  const missing = (["dark", "tinted"] as const).filter((v) => !variants.value[v]);
+  const f = new Findings();
+  if (missing.length) {
+    f.warn(
+      `no ${missing.join(" or ")} icon (${variants.source}); iOS 18 and later derive ${missing.length > 1 ? "them" : "it"} from the light icon`,
+    );
+  }
+  return f.check(
+    id,
+    title,
+    'Expo: ios.icon as { "light", "dark", "tinted" } or an Icon Composer .icon file; Xcode: the appearances in the AppIcon set',
+  );
+}
+
 function checkIcon(project: Project): ReadinessCheck {
   const id = "icon";
   const title = "App icon is 1024x1024 opaque PNG";
   const f = new Findings();
-  const facts = appFacts(project.root);
+  const facts = factsOf(project);
   if (facts.appJsonError) {
     f.fail(facts.appJsonError);
     return f.check(id, title);
@@ -423,7 +579,7 @@ function checkCredentials(project: Project): ReadinessCheck {
 
 function checkVersion(project: Project): ReadinessCheck {
   const f = new Findings();
-  const facts = appFacts(project.root);
+  const facts = factsOf(project);
   if (facts.appJsonError) {
     f.fail(facts.appJsonError);
     return f.check("version", "App version consistent");

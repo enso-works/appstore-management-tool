@@ -252,6 +252,13 @@
                 }
               ]
             }
+          },
+          "appearance": {
+            "type": "string",
+            "enum": [
+              "light",
+              "dark"
+            ]
           }
         },
         "required": [

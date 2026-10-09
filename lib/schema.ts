@@ -105,6 +105,8 @@ export const projectConfigSchema = z.strictObject({
       outputPlay: relativePath.default("fastlane/metadata/android"),
       metadata: relativePath.default("fastlane/metadata"),
       generated: relativePath.default("store/generated"),
+      /** App Preview videos, <previews>/<locale>/*.mp4|m4v|mov; readiness checks them, App Store Connect takes them by hand. */
+      previews: relativePath.default("store/previews"),
     })
     .prefault({}),
   targets: z.array(z.enum(targetIds as [string, ...string[]])).min(1),
@@ -275,6 +277,8 @@ export const screenSchema = z.strictObject({
   overrides: z.record(z.string(), z.unknown()).prefault({}),
   /** Extra image/text elements composited over the template. Text layers read content field <layer id>. */
   layers: z.array(layerSchema).prefault([]),
+  /** What the capture shows. Apple suggests one Dark Mode screenshot when the app supports it; readiness looks for it. */
+  appearance: z.enum(["light", "dark"]).optional(),
 });
 
 /**
