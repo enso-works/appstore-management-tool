@@ -68,8 +68,12 @@ export function issueBlocksJob(issue: Issue, job: RenderJob): boolean {
     issue.key === job.locale ||
     // A set's own errors block its jobs; the default page's per-set counts do not.
     (job.set
-      ? issue.key === `sets/${job.set}` || issue.key === `sets/${job.set}/${job.locale}`
-      : issue.key === `${job.target.id}/${job.locale}`)
+      ? issue.key === `sets/${job.set}` ||
+        issue.key === `sets/${job.set}/${job.locale}` ||
+        // A page's creative assets (two headers, say) block only those.
+        (issue.key === `sets/${job.set}/creative` && job.target.family === "creative")
+      : issue.key === `${job.target.id}/${job.locale}` ||
+        (issue.key === "creative" && job.target.family === "creative"))
   );
 }
 

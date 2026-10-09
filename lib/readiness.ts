@@ -9,7 +9,15 @@ import { isJpegFile, readImageInfo, type ImageInfo } from "./image";
 import { isPngFile, readPngInfo, type PngInfo } from "./png";
 import { METADATA_FIELDS } from "./schema";
 import { readVideoInfo, type VideoInfo } from "./video";
-import { getTarget, isScreenshotSet, outputDirFor, targetIds, type DeviceFamily, type Orientation } from "./targets";
+import {
+  getTarget,
+  isScreenshotSet,
+  outputDirFor,
+  targetIds,
+  targetProfiles,
+  type DeviceFamily,
+  type Orientation,
+} from "./targets";
 
 export type CheckStatus = "pass" | "warn" | "fail" | "skip";
 
@@ -76,6 +84,7 @@ const CHECKS: { id: string; title: string; run: CheckFn }[] = [
   { id: "screenshot-consistency", title: "Same screenshot count in every locale", run: checkScreenshotConsistency },
   { id: "dark-mode", title: "A Dark Mode screenshot, if the app has Dark Mode", run: checkDarkMode },
   { id: "app-previews", title: "App previews meet Apple's specification", run: checkAppPreviews },
+  { id: "creative-assets", title: "Header and search results images", run: checkCreativeAssets },
   { id: "icon", title: "App icon is 1024x1024 opaque PNG", run: checkIcon },
   { id: "icon-variants", title: "Dark and tinted app icons", run: checkIconVariants },
   { id: "credentials", title: "Fastlane credentials present", run: checkCredentials },
@@ -409,6 +418,52 @@ function checkDarkMode(project: Project): ReadinessCheck {
     title,
     'capture one screen in Dark Mode and set "appearance": "dark" on it in store/manifest.json',
   );
+}
+
+/**
+ * Header and search results images are optional and show on iOS 27 and
+ * later. Each one rendered, for the default page in <generated>/creative/ and
+ * for named pages in <generated>/sets/, must be the size App Store Connect
+ * takes (one of the creative targets), a PNG and opaque.
+ */
+function checkCreativeAssets(project: Project): ReadinessCheck {
+  const id = "creative-assets";
+  const title = "Header and search results images";
+  const creative = Object.values(targetProfiles).filter((t) => t.family === "creative");
+  const tokenOf = (file: string) => creative.find((t) => file.endsWith(`_${t.fileToken}.png`));
+  const generated = project.paths.generated;
+  const dirs: string[] = [];
+  const localesIn = (dir: string) => (dirExists(dir) ? fs.readdirSync(dir).map((l) => path.join(dir, l)) : []);
+  dirs.push(...localesIn(path.join(generated, "creative")));
+  // Only pages the manifest still has: a removed page's old renders are never uploaded.
+  let sets: string[] = [];
+  try {
+    sets = (JSON.parse(fs.readFileSync(project.paths.manifest, "utf8")).sets ?? []).map((s: { id: string }) => s.id);
+  } catch {
+    // an unreadable manifest is validate's to report
+  }
+  for (const set of sets) dirs.push(...localesIn(path.join(generated, "sets", set)));
+  const f = new Findings();
+  let count = 0;
+  for (const dir of dirs.filter(dirExists)) {
+    for (const name of fs.readdirSync(dir)) {
+      const target = tokenOf(name);
+      if (!target) continue;
+      count++;
+      const file = path.join(dir, name);
+      const rel = displayRelative(project.root, file);
+      const { info, error } = safePng(file);
+      if (!info) f.fail(`${rel}: ${error}`);
+      else if (info.width !== target.width || info.height !== target.height)
+        f.fail(`${rel}: ${info.width}x${info.height}, App Store Connect takes ${target.width}x${target.height}`);
+      else if (info.hasAlpha) f.fail(`${rel}: has an alpha channel; App Store Connect takes opaque images only`);
+    }
+  }
+  if (count === 0) {
+    return skipped(id, title, "none rendered (optional; they show on iOS 27 and later)");
+  }
+  f.info(`${count} image(s) checked`);
+  return f.check(id, title, "render them again with store-shots generate");
 }
 
 /**

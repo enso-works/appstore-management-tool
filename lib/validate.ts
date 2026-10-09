@@ -6,7 +6,14 @@ import { displayRelative, fileExists, resolveWithin } from "./paths";
 import { readImageInfo } from "./image";
 import { buildRenderPlan, buildSetPlan, ordersOf, type RenderJob } from "./render-plan";
 import type { LocaleContent, Manifest, ScreenDefinition } from "./schema";
-import { deviceFamilyOf, getTarget, isOptInTarget, isScreenshotSet } from "./targets";
+import {
+  creativePlacementsOf,
+  deviceFamilyOf,
+  getTarget,
+  isOptInTarget,
+  isScreenshotSet,
+  showsIphoneCapture,
+} from "./targets";
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
 import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
@@ -51,6 +58,7 @@ export function validateProject(project: Project): ValidationResult {
 
   validateManifest(project, manifest, issues);
   validateSets(project, manifest, issues);
+  validateCreative(project, manifest, issues);
   validateContent(project, manifest, content, issues);
   validateStoreClaims(project, manifest, content, issues);
   validateSetContent(project, manifest, content, issues);
@@ -91,7 +99,8 @@ function validateSets(project: Project, manifest: Manifest, issues: IssueList) {
         issues.error("sets.unknown-screen", `Set "${set.id}" lists unknown screen "${id}"`, { key, file });
         continue;
       }
-      count += screen.panorama?.slices ?? 1;
+      // A screen made only for opt-in targets (a header, say) is not a screenshot.
+      if (!screen.targets?.every(isOptInTarget)) count += screen.panorama?.slices ?? 1;
     }
     if (new Set(set.screens).size !== set.screens.length) {
       issues.error("sets.duplicate-screen", `Set "${set.id}" lists a screen twice`, { key, file });
@@ -142,6 +151,54 @@ function validateSets(project: Project, manifest: Manifest, issues: IssueList) {
         "sets.too-many-sets",
         `${n} treatments in experiment "${name}"; a test has at most ${SET_LIMITS.ppo}`,
         { file },
+      );
+    }
+  }
+}
+
+/**
+ * A page shows one product page header and one search results asset per
+ * locale (App Store Connect's limit, verified 2026-10-09): on the default page
+ * from its enabled screens, on a named set from the set's screens. A universal
+ * image fills the header and, unless a dedicated search image is there,
+ * search results too.
+ */
+function validateCreative(project: Project, manifest: Manifest, issues: IssueList) {
+  const file = displayRelative(project.root, project.paths.manifest);
+  const pages = [
+    { name: "The default page", key: "creative", screens: manifest.screens.filter((s) => s.enabled) },
+    ...(manifest.sets ?? []).map((set) => ({
+      name: `"${set.id}"`,
+      key: `sets/${set.id}/creative`,
+      screens: set.screens
+        .map((id) => manifest.screens.find((s) => s.id === id))
+        .filter((s): s is ScreenDefinition => !!s),
+    })),
+  ];
+  const configured = new Set(project.config.targets);
+  for (const page of pages) {
+    const by = { header: [] as string[], search: [] as string[], universal: [] as string[] };
+    for (const screen of page.screens) {
+      for (const t of screen.targets ?? []) {
+        if (!configured.has(t)) continue;
+        const placements = creativePlacementsOf(t);
+        if (placements.length === 2) by.universal.push(screen.id);
+        else if (placements[0]) by[placements[0]].push(screen.id);
+      }
+    }
+    const headers = [...by.header, ...by.universal];
+    if (headers.length > 1) {
+      issues.error(
+        "creative.too-many",
+        `${page.name} has ${headers.length} header images (${headers.join(", ")}); a page shows one`,
+        { key: page.key, file, hint: "keep one screen with a header or universal target on the page" },
+      );
+    }
+    if (by.search.length > 1) {
+      issues.error(
+        "creative.too-many",
+        `${page.name} has ${by.search.length} search results images (${by.search.join(", ")}); a page shows one`,
+        { key: page.key, file },
       );
     }
   }
@@ -311,14 +368,14 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
             { key, file },
           );
         } else if (
-          target.family === "event" &&
+          showsIphoneCapture(target) &&
           target.orientation === "landscape" &&
           template.id !== "feature-graphic"
         ) {
           // The card is landscape but the captures are portrait iPhone ones; only the banner layout fits both.
           issues.error(
             "manifest.template-unsupported-target",
-            `Screen "${screen.id}" renders the event card with "${template.id}"; use the feature-graphic template, which fits a portrait phone into a wide card`,
+            `Screen "${screen.id}" renders the ${target.displayClass} with "${template.id}"; use the feature-graphic template, which fits a portrait phone into a wide card`,
             { key, file },
           );
         }
@@ -590,14 +647,13 @@ function validateSources(project: Project, plan: RenderJob[], issues: IssueList)
     }
     try {
       const info = readImageInfo(job.sourcePath);
-      // Event media use the iPhone captures as they are; compare them with the app's iPhone sets.
+      // Event and creative media use the iPhone captures as they are; compare them with the app's iPhone sets.
       const iphone = project.config.targets.map((t) => getTarget(t)).find((t) => t?.family === "iphone");
-      const expected =
-        job.target.family === "event"
-          ? iphone
-            ? iphone.width / iphone.height
-            : 1320 / 2868
-          : job.target.width / job.target.height;
+      const expected = showsIphoneCapture(job.target)
+        ? iphone
+          ? iphone.width / iphone.height
+          : 1320 / 2868
+        : job.target.width / job.target.height;
       const actual = info.width / info.height;
       if (Math.abs(expected - actual) > 0.01) {
         issues.warn(

@@ -5,7 +5,7 @@ import { loadProject } from "../lib/config";
 import { withSetCopy } from "../lib/content";
 import { readinessReport, type ReadinessReport } from "../lib/readiness";
 import { buildJob, buildRenderPlan, buildSetPlan } from "../lib/render-plan";
-import { getTarget, isScreenshotSet, shortLabel } from "../lib/targets";
+import { creativePlacementsOf, getTarget, isScreenshotSet, safeAreaOf, shortLabel } from "../lib/targets";
 import { generateProject } from "../lib/generate";
 import { validateProject } from "../lib/validate";
 import { readVideoInfo } from "../lib/video";
@@ -367,6 +367,102 @@ describe("Apple guideline checks", () => {
       const issues = validateProject(load()).issues.items;
       expect(
         issues.some((i) => i.code === "manifest.template-unsupported-target" && /feature-graphic/.test(i.message)),
+      ).toBe(true);
+    });
+  });
+
+  describe("creative assets", () => {
+    it("are App Store Connect's header and search results sizes, the universal one filling both", () => {
+      expect(["header-3840x1646", "search-3840x2560", "universal-5244x2950"].map((id) => getTarget(id)!)).toEqual([
+        expect.objectContaining({ width: 3840, height: 1646 }),
+        expect.objectContaining({ width: 3840, height: 2560 }),
+        expect.objectContaining({ width: 5244, height: 2950 }),
+      ]);
+      expect(creativePlacementsOf("header-3840x1646")).toEqual(["header"]);
+      expect(creativePlacementsOf("universal-5244x2950")).toEqual(["header", "search"]);
+      expect(isScreenshotSet("universal-5244x2950")).toBe(false);
+      expect(shortLabel(getTarget("universal-5244x2950")!)).toBe("Header + search");
+      // The 21:9 header crop and the 3:2 search crop, centred: only their overlap is safe.
+      expect(safeAreaOf(getTarget("universal-5244x2950")!)).toEqual({ left: 410, top: 352, width: 4425, height: 2247 });
+      expect(safeAreaOf(getTarget("header-3840x1646")!)).toEqual({ left: 0, top: 0, width: 3840, height: 1646 });
+    });
+
+    it("render from the iPhone captures into store/generated/creative with the banner layout", async () => {
+      editJson(config(), (c) => {
+        c.targets.push("header-3840x1646");
+      });
+      editJson(manifest(), (m) => {
+        m.screens.push({
+          id: "banner",
+          order: 3,
+          template: "feature-graphic",
+          targets: ["header-3840x1646"],
+          source: { filePattern: "01-home.png" },
+        });
+      });
+      const project = load();
+      const v = validateProject(project);
+      expect(v.issues.items.filter((i) => i.level === "error" && i.code.startsWith("manifest."))).toEqual([]);
+      const job = buildJob(project, v.manifest!.screens[2], "header-3840x1646", "en-US")!;
+      expect(job.sourceDevice).toBe("iphone");
+      expect(path.relative(fx.root, job.outputPath)).toBe(
+        path.join("store", "generated", "creative", "en-US", "03_banner_HEADER.png"),
+      );
+    });
+
+    it("allow one header and one search results image per page", () => {
+      editJson(config(), (c) => {
+        c.targets.push("header-3840x1646", "search-3840x2560", "universal-5244x2950");
+      });
+      const banner = (id: string, targets: string[]) => ({
+        id,
+        order: 3,
+        template: "feature-graphic",
+        targets,
+        source: { filePattern: "01-home.png" },
+      });
+      editJson(manifest(), (m) => {
+        m.screens.push(banner("wide", ["header-3840x1646"]), banner("both", ["universal-5244x2950"]));
+        m.screens.push({ ...banner("search", ["search-3840x2560"]), enabled: false });
+        m.sets = [
+          { id: "page", kind: "custom", screens: ["home", "search", "both"] },
+          { id: "two", kind: "custom", screens: ["home", "wide", "both"] },
+        ];
+      });
+      const issues = validateProject(load()).issues.items.filter((i) => i.code === "creative.too-many");
+      // The default page and "two" have two headers each; on "page" the universal image gives way
+      // to the page's own search image. The errors block only the pages' creative images.
+      expect(issues.map((i) => [i.key, i.message])).toEqual([
+        ["creative", "The default page has 2 header images (wide, both); a page shows one"],
+        ["sets/two/creative", '"two" has 2 header images (wide, both); a page shows one'],
+      ]);
+    });
+
+    it("are checked by readiness once rendered: size, PNG, opaque", async () => {
+      expect(byId(readinessReport(load()), "creative-assets").status).toBe("skip");
+      const dir = path.join(fx.root, "store", "generated", "creative", "en-US");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.copyFileSync(
+        path.join(fx.root, "store", "raw", "iphone", "en-US", "01-home.png"),
+        path.join(dir, "03_banner_HEADER.png"),
+      );
+      const check = byId(readinessReport(load()), "creative-assets");
+      expect(check.status).toBe("fail");
+      expect(check.details[0]).toMatch(/03_banner_HEADER\.png: \d+x\d+, App Store Connect takes 3840x1646/);
+    });
+
+    it("require the banner layout", () => {
+      editJson(config(), (c) => {
+        c.targets.push("search-3840x2560");
+      });
+      editJson(manifest(), (m) => {
+        m.screens.push({ id: "wide", order: 3, template: "hero-top", targets: ["search-3840x2560"] });
+      });
+      const issues = validateProject(load()).issues.items;
+      expect(
+        issues.some(
+          (i) => i.code === "manifest.template-unsupported-target" && /"hero-top".*search-3840x2560/.test(i.message),
+        ),
       ).toBe(true);
     });
   });
