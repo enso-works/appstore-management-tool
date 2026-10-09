@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { loadProject } from "../lib/config";
 import { readinessReport, type ReadinessReport } from "../lib/readiness";
 import { buildJob, buildRenderPlan, buildSetPlan } from "../lib/render-plan";
-import { isScreenshotSet } from "../lib/targets";
+import { getTarget, isScreenshotSet, shortLabel } from "../lib/targets";
 import { generateProject } from "../lib/generate";
 import { validateProject } from "../lib/validate";
 import { readVideoInfo } from "../lib/video";
@@ -253,6 +253,7 @@ describe("Apple guideline checks", () => {
         path.join("store", "generated", "events", "en-US", "03_event_EVENT_CARD.png"),
       );
       expect(isScreenshotSet("event-card-1920x1080")).toBe(false);
+      expect(shortLabel(getTarget("event-detail-1080x1920")!)).toBe("Event details");
       // Event media do not count towards the 3-10 screenshots of a set.
       expect(v.issues.items.filter((i) => i.code.startsWith("plan.") && i.key?.startsWith("event"))).toEqual([]);
     });

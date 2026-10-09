@@ -177,6 +177,32 @@ export function deviceFamilyOf(target: TargetProfile): DeviceFamily {
 }
 
 /**
+ * A short name for a target in the editor: `iPhone 6.9"`, `iPad 13"`, `Play
+ * phone`. Pass the targets shown alongside it to add the orientation when the
+ * same display class appears in both.
+ */
+export function shortLabel(target: TargetProfile, alongside: readonly TargetProfile[] = []): string {
+  const inches = target.displayClass.match(/^[\d.]+/)?.[0];
+  const base = target.id.startsWith("appreview-")
+    ? `Preview ${inches}"`
+    : target.family === "event"
+      ? target.displayClass === "event card"
+        ? "Event card"
+        : "Event details"
+      : target.family === "iphone"
+        ? `iPhone ${inches}"`
+        : target.family === "ipad"
+          ? `iPad ${inches}"`
+          : target.family === "feature-graphic"
+            ? "Feature graphic"
+            : `Play ${target.family}`;
+  const twin = alongside.some(
+    (t) => t.id !== target.id && t.family === target.family && t.displayClass === target.displayClass,
+  );
+  return twin ? `${base} ${target.orientation}` : base;
+}
+
+/**
  * Store targets for an app: the iPhone sets Apple asks for (6.9" and 6.1"),
  * iPad 13" for iPad apps and the Play phone set for Play apps, all in one
  * orientation. App Preview posters and the Play feature graphic stay opt-in.

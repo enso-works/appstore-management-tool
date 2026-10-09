@@ -4,6 +4,7 @@ import { loadProject } from "../lib/config";
 import { inputsHash } from "../lib/generate";
 import { templateInputFor } from "../lib/render/html";
 import { buildRenderPlan } from "../lib/render-plan";
+import { getTarget, shortLabel } from "../lib/targets";
 import { validateProject } from "../lib/validate";
 import { editJson, tempFixture } from "./helpers";
 
@@ -73,5 +74,24 @@ describe("layers per target", () => {
     } finally {
       fx.cleanup();
     }
+  });
+});
+
+describe("shortLabel", () => {
+  const t = (id: string) => getTarget(id)!;
+
+  it("names targets the way the layer panel shows them", () => {
+    expect(shortLabel(t("iphone-6.9-2868x1320"))).toBe('iPhone 6.9"');
+    expect(shortLabel(t("ipad-13-2752x2064"))).toBe('iPad 13"');
+    expect(shortLabel(t("play-phone-1080x1920"))).toBe("Play phone");
+    expect(shortLabel(t("play-feature-1024x500"))).toBe("Feature graphic");
+    expect(shortLabel(t("appreview-6.9-886x1920"))).toBe('Preview 6.9"');
+  });
+
+  it("adds the orientation only when both orientations of a class are shown", () => {
+    const both = [t("iphone-6.9-1320x2868"), t("iphone-6.9-2868x1320"), t("ipad-13-2064x2752")];
+    expect(shortLabel(both[0], both)).toBe('iPhone 6.9" portrait');
+    expect(shortLabel(both[1], both)).toBe('iPhone 6.9" landscape');
+    expect(shortLabel(both[2], both)).toBe('iPad 13"');
   });
 });

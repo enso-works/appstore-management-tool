@@ -696,6 +696,25 @@ export default function Editor({ name }: { name: string }) {
     }));
   }
 
+  /** Give text layer `to` the text of `from` in every locale that has it (duplicates and per-target splits). */
+  function copyLayerContentField(from: string, to: string) {
+    const locales = (snap?.config.locales ?? []).filter(
+      (l) => typeof content[l]?.screens[screenId]?.[from] === "string",
+    );
+    if (locales.length === 0) return;
+    setContent((c) => {
+      const next = { ...c };
+      for (const l of locales) {
+        const lc = next[l];
+        const fields2 = lc?.screens[screenId];
+        if (!lc || !fields2) continue;
+        next[l] = { ...lc, screens: { ...lc.screens, [screenId]: { ...fields2, [to]: fields2[from] } } };
+      }
+      return next;
+    });
+    setDirty((d) => ({ ...d, content: new Set([...d.content, ...locales]) }));
+  }
+
   /** Delete an element (layer) from the current screen, pruning localized text and selection. */
   function deleteLayer(id: string) {
     if (!screen) return;
@@ -1626,6 +1645,10 @@ export default function Editor({ name }: { name: string }) {
                     onChange={(layers) => updateScreen({ layers })}
                     textOf={(id) => (typeof fields[id] === "string" ? (fields[id] as string) : "")}
                     onTextChange={(id, text) => setField(id, text)}
+                    onCopyText={copyLayerContentField}
+                    targets={snap.targets}
+                    targetId={targetId}
+                    onShowTarget={setTargetId}
                     aspect={target ? target.height / target.width : 2}
                     slices={screen.panorama?.slices ?? 1}
                     onDelete={deleteLayer}

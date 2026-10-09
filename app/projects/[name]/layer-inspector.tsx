@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { layersFor } from "@/lib/layers";
 import type { Layer } from "@/lib/schema";
+import { shortLabel, type TargetProfile } from "@/lib/targets";
 import ColorField from "./color-field";
 import styles from "./editor.module.css";
 
@@ -20,6 +22,13 @@ interface Props {
   /** Current locale's text for a text layer (content field <layer id>). */
   textOf: (id: string) => string;
   onTextChange: (id: string, text: string) => void;
+  /** Copy a text layer's text, in every locale, to another layer id. */
+  onCopyText: (from: string, to: string) => void;
+  /** The project's targets, and the one the preview shows. */
+  targets: TargetProfile[];
+  targetId: string;
+  /** Switch the preview to another target. */
+  onShowTarget: (id: string) => void;
   /** Delete an element entirely (layers + localized text + selection). */
   onDelete: (id: string) => void;
   locale: string;
@@ -39,10 +48,21 @@ function freshId(prefix: string, layers: Layer[]): string {
   }
 }
 
+/** "All targets", or the short names of the targets a layer is limited to. */
+function targetSummary(layer: Layer, targets: TargetProfile[]): string {
+  if (!layer.targets) return "all";
+  return targets
+    .filter((t) => layer.targets!.includes(t.id))
+    .map((t) => shortLabel(t, targets))
+    .join(", ");
+}
+
 /**
  * Asset-library elements on a screen (roadmap "layers"): add images from
  * store/assets or extra text elements, position them by dragging in the
  * preview, fine-tune here. Text layers are localized via content fields.
+ * A layer can be limited to some targets, so a wide iPhone canvas and a
+ * squarer iPad one each get their own copy of a character, placed for it.
  */
 export default function LayerInspector({
   projectName,
@@ -52,6 +72,10 @@ export default function LayerInspector({
   onChange,
   textOf,
   onTextChange,
+  onCopyText,
+  targets,
+  targetId,
+  onShowTarget,
   onDelete,
   locale,
   aspect,
@@ -59,8 +83,21 @@ export default function LayerInspector({
 }: Props) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [picking, setPicking] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const layer = layers.find((l) => l.id === selectedLayerId) ?? null;
+  const target = targets.find((t) => t.id === targetId);
+  const drawn = new Set(layersFor(layers, targetId).map((l) => l.id));
+  const assetUrl = (rel: string) =>
+    `/api/projects/${encodeURIComponent(projectName)}/file?kind=asset&path=${encodeURIComponent(rel)}`;
+  // Art first (characters, logos, images), backgrounds last: they are rarely a layer.
+  const groups = Object.entries(
+    assets.reduce<Record<string, Asset[]>>((acc, a) => {
+      const dir = a.rel.includes("/") ? a.rel.slice(0, a.rel.lastIndexOf("/")) : "";
+      (acc[dir] ??= []).push(a);
+      return acc;
+    }, {}),
+  ).sort(([a], [b]) => Number(a === "backgrounds") - Number(b === "backgrounds") || a.localeCompare(b));
 
   useEffect(() => {
     let alive = true;
@@ -81,6 +118,33 @@ export default function LayerInspector({
   function addImage(assetRel: string) {
     const id = freshId("img", layers);
     onChange([...layers, { type: "image", id, asset: assetRel, x: 0.75, y: 0.25, width: 0.3 }]);
+    onSelect(id);
+    setPicking(false);
+  }
+
+  /** Turn a target on or off for a layer; all of them on is the same as no list. */
+  function toggleTarget(l: Layer, id: string) {
+    const current = l.targets ?? targets.map((t) => t.id);
+    const next = current.includes(id) ? current.filter((t) => t !== id) : [...current, id];
+    if (next.length === 0) return;
+    const all = targets.every((t) => next.includes(t.id));
+    patch(l.id, { targets: all ? undefined : targets.map((t) => t.id).filter((t) => next.includes(t)) });
+  }
+
+  /**
+   * Give the shown target its own copy of a layer: the copy is limited to this
+   * target and the original stops drawing here, so moving one no longer moves
+   * the other.
+   */
+  function splitForTarget(l: Layer) {
+    const shared = (l.targets ?? targets.map((t) => t.id)).filter((t) => t !== targetId);
+    if (shared.length === 0) return;
+    const family = target?.family ?? "target";
+    const id = layers.some((x) => x.id === `${l.id}-${family}`) ? freshId(`${l.id}-`, layers) : `${l.id}-${family}`;
+    const copy = { ...structuredClone(l), id, targets: [targetId] } as Layer;
+    const next = layers.flatMap((x) => (x.id === l.id ? [{ ...x, targets: shared } as Layer, copy] : [x]));
+    onChange(next);
+    if (l.type === "text") onCopyText(l.id, id);
     onSelect(id);
   }
 
@@ -124,19 +188,13 @@ export default function LayerInspector({
   return (
     <div className={styles.bgEditor}>
       <div className={styles.inline}>
-        <select
-          className={styles.select}
-          value=""
-          title="add an image element from the asset library"
-          onChange={(e) => e.target.value && addImage(e.target.value)}
+        <button
+          className={`${styles.btnSmall} ${picking ? styles.chipActive : ""}`}
+          title="add an image from store/assets"
+          onClick={() => setPicking((p) => !p)}
         >
-          <option value="">+ image from assets…</option>
-          {assets.map((a) => (
-            <option key={a.rel} value={a.rel}>
-              {a.rel}
-            </option>
-          ))}
-        </select>
+          + art
+        </button>
         <button className={styles.btnSmall} disabled={uploading} onClick={() => fileRef.current?.click()}>
           {uploading ? "…" : "Upload"}
         </button>
@@ -152,19 +210,50 @@ export default function LayerInspector({
         />
       </div>
 
+      {picking && (
+        <div className={styles.artPicker}>
+          {assets.length === 0 && (
+            <span className={styles.small}>No images in store/assets yet. Upload one, or add files there.</span>
+          )}
+          {groups.map(([dir, items]) => (
+            <div key={dir || "."}>
+              <div className={styles.artGroup}>{dir || "store/assets"}</div>
+              <div className={styles.artGrid}>
+                {items.map((a) => (
+                  <button key={a.rel} className={styles.artTile} title={a.rel} onClick={() => addImage(a.rel)}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={assetUrl(a.rel)} alt="" loading="lazy" />
+                    <span>{a.name.replace(/\.[^.]+$/, "")}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {layers.length > 0 && (
         <div className={styles.layerList}>
           {layers.map((l) => (
-            <div key={l.id} className={`${styles.layerRow} ${l.id === selectedLayerId ? styles.layerRowActive : ""}`}>
+            <div
+              key={l.id}
+              className={`${styles.layerRow} ${l.id === selectedLayerId ? styles.layerRowActive : ""} ${drawn.has(l.id) ? "" : styles.layerRowOff}`}
+            >
               <button
                 className={styles.layerRowMain}
                 onClick={() => onSelect(l.id)}
-                title={l.type === "image" ? l.asset : "text element - click to edit"}
+                title={`${l.type === "image" ? l.asset : "text element"}${drawn.has(l.id) ? "" : ` - not drawn on ${target ? shortLabel(target, targets) : targetId}`}`}
               >
-                <span className={styles.layerKind}>{l.type === "image" ? "img" : "T"}</span>
+                {l.type === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className={styles.layerThumb} src={assetUrl(l.asset)} alt="" loading="lazy" />
+                ) : (
+                  <span className={styles.layerKind}>T</span>
+                )}
                 <span className={styles.layerName}>
                   {l.type === "image" ? (l.asset.split("/").pop() ?? l.asset) : textOf(l.id) || "(empty text)"}
                 </span>
+                {targets.length > 1 && <span className={styles.layerTargets}>{targetSummary(l, targets)}</span>}
               </button>
               <button className={styles.layerDelete} title="delete this element (Del)" onClick={() => onDelete(l.id)}>
                 {"\u00d7"}
@@ -176,6 +265,50 @@ export default function LayerInspector({
 
       {layer && (
         <>
+          {!drawn.has(layer.id) && (
+            <div className={styles.layerNotice}>
+              <span>Not drawn on {target ? shortLabel(target, targets) : targetId}.</span>
+              <span className={styles.spacer} />
+              {layer.targets?.[0] && (
+                <button className={styles.btnSmall} onClick={() => onShowTarget(layer.targets![0])}>
+                  Show {shortLabel(targets.find((t) => t.id === layer.targets![0]) ?? targets[0], targets)}
+                </button>
+              )}
+            </div>
+          )}
+          {targets.length > 1 && (
+            <div className={styles.row}>
+              <span title="the targets this element is drawn on">Targets</span>
+              <span className={styles.chips} style={{ flexWrap: "wrap", margin: 0 }}>
+                {targets.map((t) => {
+                  const on = !layer.targets || layer.targets.includes(t.id);
+                  return (
+                    <button
+                      key={t.id}
+                      className={`${styles.chip} ${on ? styles.chipActive : ""}`}
+                      title={`${t.width}×${t.height}${on ? "" : " - not drawn here"}`}
+                      onClick={() => toggleTarget(layer, t.id)}
+                    >
+                      {shortLabel(t, targets)}
+                    </button>
+                  );
+                })}
+              </span>
+            </div>
+          )}
+          {targets.length > 1 && drawn.has(layer.id) && (layer.targets?.length ?? targets.length) > 1 && (
+            <div className={styles.inline}>
+              <span className={styles.small}>Moving it moves it on every target in blue.</span>
+              <span className={styles.spacer} />
+              <button
+                className={styles.btnSmall}
+                title={`make a copy for ${target ? shortLabel(target, targets) : "this target"} only, so it can be placed on its own`}
+                onClick={() => splitForTarget(layer)}
+              >
+                Own copy here
+              </button>
+            </div>
+          )}
           {layer.type === "text" && (
             <div className={styles.field}>
               <div className={styles.fieldHead}>
@@ -351,7 +484,7 @@ export default function LayerInspector({
                     y: Math.round((layer.y + 0.05) * 1000) / 1000,
                   };
                   onChange([...layers, copy]);
-                  if (layer.type === "text") onTextChange(id, textOf(layer.id));
+                  if (layer.type === "text") onCopyText(layer.id, id);
                   onSelect(id);
                 }}
               >
