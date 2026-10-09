@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Issue } from "@/lib/issues";
-import type { LocaleContent, Manifest, ProjectConfig, ScreenDefinition } from "@/lib/schema";
+import type { LocaleContent, Manifest, ProjectConfig, ScreenDefinition, ScreenSet, SetContent } from "@/lib/schema";
 import { isScreenshotSet, type TargetProfile } from "@/lib/targets";
 import type { TemplateDescriptor } from "@/templates/types";
 import type { InPageResult } from "@/lib/render/checks";
@@ -15,6 +15,7 @@ import ReleasePanel from "./release-panel";
 import BackgroundEditor from "./background-editor";
 import ColorField from "./color-field";
 import LayerInspector from "./layer-inspector";
+import PagePanel from "./page-panel";
 import PreviewCanvas, { type CanvasItem } from "./preview-canvas";
 import { liveImageUrl } from "@/lib/live";
 import styles from "./editor.module.css";
@@ -156,6 +157,9 @@ export default function Editor({ name }: { name: string }) {
   const [newScreenId, setNewScreenId] = useState("");
   const [view, setView] = useState<"screens" | "store" | "release">("screens");
   const [canvasMode, setCanvasMode] = useState<"single" | "strip" | "locales">("single");
+  // "" is the default product page; otherwise a named set (custom product page or treatment).
+  const [pageId, setPageId] = useState("");
+  const [appKeywords, setAppKeywords] = useState<Record<string, string[]>>({});
   const [storeLook, setStoreLook] = useState(false);
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [frames, setFrames] = useState<{ name: string; width: number; height: number }[] | null>(null);
@@ -226,10 +230,45 @@ export default function Editor({ name }: { name: string }) {
   const screen = screens.find((s) => s.id === screenId);
   const target = snap?.targets.find((t) => t.id === targetId);
   const template = snap?.templates.find((t) => t.id === screen?.template);
-  const fields: Fields = (content[locale]?.screens[screenId] as Fields | undefined) ?? {};
+  const page = pageId ? manifest.sets?.find((s) => s.id === pageId) : undefined;
+  /** A screen's copy in a locale as the shown page renders it: the page's own fields over the default page's. */
+  const fieldsFor = (l: string, id: string): Fields => ({
+    ...((content[l]?.screens[id] as Fields | undefined) ?? {}),
+    ...((page ? content[l]?.sets?.[page.id]?.screens[id] : undefined) ?? {}),
+  });
+  const fields: Fields = fieldsFor(locale, screenId);
+  // The screens the shown page has, in its order (the default page: every enabled screen).
+  const pageScreens: ScreenDefinition[] = page
+    ? page.screens.map((id) => screens.find((s) => s.id === id)).filter((s): s is ScreenDefinition => !!s)
+    : screens.filter((s) => s.enabled);
   const refLocale = snap?.config.defaultLocale ?? "";
   const refFields: Fields = (content[refLocale]?.screens[screenId] as Fields | undefined) ?? {};
   const isDirty = dirty.manifest || dirty.content.size > 0;
+
+  // A custom page picks its keywords from the app's keyword field in each locale.
+  useEffect(() => {
+    if (page?.kind !== "custom" || appKeywords[locale]) return;
+    let alive = true;
+    void fetch(`/api/projects/${encodeURIComponent(name)}/metadata`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : undefined))
+      .then((d) => {
+        if (!alive || !d) return;
+        const byLocale: Record<string, string[]> = {};
+        for (const [l, v] of Object.entries(
+          d.locales as Record<string, { fields: { field: string; value: string }[] }>,
+        )) {
+          const raw = v.fields.find((f) => f.field === "keywords")?.value ?? "";
+          byLocale[l] = raw
+            .split(",")
+            .map((k) => k.trim())
+            .filter(Boolean);
+        }
+        setAppKeywords(byLocale);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [page?.kind, locale, name, appKeywords]);
 
   // ---- preview -----------------------------------------------------------
   const screenKey = JSON.stringify(screen);
@@ -387,22 +426,21 @@ export default function Editor({ name }: { name: string }) {
   }
   const gridJobs: GridJob[] =
     canvasMode !== "locales"
-      ? screens
-          .filter((s) => s.enabled)
-          .map((s) => {
-            const f = (content[locale]?.screens[s.id] as Fields | undefined) ?? {};
-            return {
-              id: s.id,
-              locale,
-              screen: s,
-              fields: f,
-              order: s.order,
-              key: JSON.stringify([targetId, locale, content[locale]?.direction, s, f]),
-            };
-          })
+      ? pageScreens.map((s, i) => {
+          const f = fieldsFor(locale, s.id);
+          return {
+            id: s.id,
+            locale,
+            screen: s,
+            fields: f,
+            // A page numbers its screens from 1 in its own order.
+            order: page ? i + 1 : s.order,
+            key: JSON.stringify([targetId, locale, content[locale]?.direction, s, f]),
+          };
+        })
       : canvasMode === "locales" && screen
         ? (snap?.config.locales ?? []).map((l, i) => {
-            const f = (content[l]?.screens[screen.id] as Fields | undefined) ?? {};
+            const f = fieldsFor(l, screen.id);
             return {
               id: l,
               locale: l,
@@ -621,6 +659,18 @@ export default function Editor({ name }: { name: string }) {
     pushHistory();
     setContent((c) => {
       const lc = c[locale] ?? emptyContent(locale);
+      if (page) {
+        // On a named page the edit is that page's own copy.
+        const own = lc.sets?.[page.id] ?? { screens: {} };
+        const ownScreen = { ...(own.screens[screenId] ?? {}), [field]: value };
+        return {
+          ...c,
+          [locale]: {
+            ...lc,
+            sets: { ...lc.sets, [page.id]: { ...own, screens: { ...own.screens, [screenId]: ownScreen } } },
+          },
+        };
+      }
       const next: LocaleContent = {
         ...lc,
         screens: { ...lc.screens, [screenId]: { ...(lc.screens[screenId] ?? {}), [field]: value } },
@@ -628,6 +678,93 @@ export default function Editor({ name }: { name: string }) {
       return { ...c, [locale]: next };
     });
     setDirty((d) => ({ ...d, content: new Set(d.content).add(locale) }));
+  }
+
+  /**
+   * Change the manifest's named sets (custom product pages and treatments). Works on the
+   * latest state, so a reply that arrives late (an upload's id) does not undo edits since.
+   */
+  function updateSets(change: (sets: ScreenSet[]) => ScreenSet[]) {
+    pushHistory();
+    setManifest((m) => {
+      const sets = change(m.sets ?? []);
+      return { ...m, sets: sets.length ? sets : undefined };
+    });
+    setDirty((d) => ({ ...d, manifest: true }));
+  }
+
+  function patchPage(patch: Partial<ScreenSet>) {
+    if (!page) return;
+    const id = page.id;
+    updateSets((sets) => sets.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  }
+
+  /** This page's promotional text or keywords in the current locale. */
+  function patchPageText(patch: Partial<SetContent>) {
+    if (!page) return;
+    pushHistory();
+    setContent((c) => {
+      const lc = c[locale] ?? emptyContent(locale);
+      const own = { screens: {}, ...lc.sets?.[page.id], ...patch };
+      return { ...c, [locale]: { ...lc, sets: { ...lc.sets, [page.id]: own } } };
+    });
+    setDirty((d) => ({ ...d, content: new Set(d.content).add(locale) }));
+  }
+
+  function newPage(kind: "custom" | "ppo") {
+    const label = kind === "custom" ? "custom product page" : "optimization treatment";
+    const name = prompt(`Name of the new ${label}:`)?.trim();
+    if (!name) return;
+    const base =
+      name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || kind;
+    let id = base;
+    for (let i = 2; manifest.sets?.some((s) => s.id === id); i++) id = `${base}-${i}`;
+    const screensNow = screens.filter((s) => s.enabled).map((s) => s.id);
+    const first = screensNow.length ? screensNow : screens.slice(0, 1).map((s) => s.id);
+    if (first.length === 0) {
+      alert("Add a screen first: a page shows screens from the manifest.");
+      return;
+    }
+    updateSets((sets) => [...sets, { id, kind, name, screens: first }]);
+    setPageId(id);
+  }
+
+  function deletePage() {
+    if (!page || !confirm(`Delete "${page.name ?? page.id}"? Its copy in every locale goes too.`)) return;
+    const gone = page.id;
+    updateSets((sets) => sets.filter((s) => s.id !== gone));
+    setContent((c) => {
+      const next = { ...c };
+      for (const [l, lc] of Object.entries(next)) {
+        if (!lc.sets?.[page.id]) continue;
+        const sets = { ...lc.sets };
+        delete sets[page.id];
+        next[l] = { ...lc, sets: Object.keys(sets).length ? sets : undefined };
+      }
+      return next;
+    });
+    setDirty((d) => ({
+      ...d,
+      content: new Set([...d.content, ...Object.keys(content).filter((l) => content[l]?.sets?.[page.id])]),
+    }));
+    setPageId("");
+  }
+
+  /** Put a screen on the shown page or take it off; `move` shifts it within the page. */
+  function pageScreen(id: string, action: "add" | "remove" | "up" | "down") {
+    if (!page) return;
+    let list = [...page.screens];
+    const i = list.indexOf(id);
+    if (action === "add" && i < 0) list.push(id);
+    else if (action === "remove" && list.length > 1) list = list.filter((x) => x !== id);
+    else if ((action === "up" && i > 0) || (action === "down" && i >= 0 && i < list.length - 1)) {
+      const j = action === "up" ? i - 1 : i + 1;
+      [list[i], list[j]] = [list[j], list[i]];
+    } else return;
+    patchPage({ screens: list });
   }
 
   function updateScreen(patch: Partial<ScreenDefinition>) {
@@ -874,6 +1011,18 @@ export default function Editor({ name }: { name: string }) {
         manifest: d.manifest && latestRef.current.manifest !== sent.manifest,
         content: new Set([...d.content].filter((l) => latestRef.current.content[l] !== sent.content[l])),
       }));
+      // An unlink ("" id) has done its job once saved; keeping it would strip ids `asc push` writes later.
+      if (sent.manifest.sets?.some((s) => s.ascId === "")) {
+        setManifest((m) => ({
+          ...m,
+          sets: m.sets?.map((s) => {
+            if (s.ascId !== "") return s;
+            const next = { ...s };
+            delete next.ascId;
+            return next;
+          }),
+        }));
+      }
       setStatus("Saved");
       setTimeout(() => setStatus((v) => (v === "Saved" ? "" : v)), 1500);
     } catch (err) {
@@ -968,12 +1117,15 @@ export default function Editor({ name }: { name: string }) {
     if (isDirty && !confirm("You have unsaved edits. Generate from the files on disk anyway?")) return;
     setGen({ running: true });
     setShowLog(true);
+    const only = page ? { sets: [page.id] } : {};
     const filter =
       scope === "screen"
-        ? { screens: [screenId], locales: [locale] }
+        ? { ...only, screens: [screenId], locales: [locale] }
         : scope === "locale"
-          ? { locales: [locale] }
-          : undefined;
+          ? { ...only, locales: [locale] }
+          : page
+            ? only
+            : undefined;
     try {
       const res = await fetch(`/api/projects/${encodeURIComponent(name)}/generate`, {
         method: "POST",
@@ -1223,6 +1375,36 @@ export default function Editor({ name }: { name: string }) {
                 </option>
               ))}
             </select>
+            <select
+              value={pageId}
+              className={styles.select}
+              // The "+ New" entries are actions: the browser must not restore one on reload.
+              autoComplete="off"
+              title="the product page shown: the default page, a custom product page or an optimization treatment"
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "+custom" || v === "+ppo") {
+                  e.target.value = pageId;
+                  newPage(v === "+custom" ? "custom" : "ppo");
+                } else setPageId(v);
+              }}
+            >
+              <option value="">Default page</option>
+              {(["custom", "ppo"] as const).map((kind) => {
+                const list = (manifest.sets ?? []).filter((s) => s.kind === kind);
+                return list.length ? (
+                  <optgroup key={kind} label={kind === "custom" ? "Custom product pages" : "Optimization treatments"}>
+                    {list.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name ?? s.id}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : null;
+              })}
+              <option value="+custom">+ New custom product page…</option>
+              <option value="+ppo">+ New optimization treatment…</option>
+            </select>
           </>
         )}
         <span className={styles.spacer} />
@@ -1271,8 +1453,14 @@ export default function Editor({ name }: { name: string }) {
             <div className={styles.sectionTitle}>
               Screens <span className={styles.muted}>({screens.length})</span>
             </div>
+            {page && (
+              <p className={styles.small}>
+                {page.name ?? page.id}: {page.screens.length} screen{page.screens.length === 1 ? "" : "s"} in its own
+                order. Screens below the line are not on it.
+              </p>
+            )}
             <ul className={styles.screens}>
-              {screens.map((s) => {
+              {(page ? pageScreens : screens).map((s, i) => {
                 const st = screenStatus(s);
                 return (
                   <li key={s.id}>
@@ -1307,14 +1495,54 @@ export default function Editor({ name }: { name: string }) {
                         ) : null}
                       </span>
                       <span className={`${styles.dot} ${styles[st.level]}`} />
-                      <span className={styles.order}>{String(s.order).padStart(2, "0")}</span>
+                      <span className={styles.order}>{String(page ? i + 1 : s.order).padStart(2, "0")}</span>
                       <span className={styles.screenId}>{s.id}</span>
-                      {!s.enabled && <span className={styles.muted}>off</span>}
+                      {!page && !s.enabled && <span className={styles.muted}>off</span>}
                     </button>
+                    {page && (
+                      <span className={styles.pageScreenTools}>
+                        <button title="earlier on this page" disabled={i === 0} onClick={() => pageScreen(s.id, "up")}>
+                          ↑
+                        </button>
+                        <button
+                          title="later on this page"
+                          disabled={i === pageScreens.length - 1}
+                          onClick={() => pageScreen(s.id, "down")}
+                        >
+                          ↓
+                        </button>
+                        <button
+                          title="take it off this page"
+                          disabled={pageScreens.length === 1}
+                          onClick={() => pageScreen(s.id, "remove")}
+                        >
+                          {"\u00d7"}
+                        </button>
+                      </span>
+                    )}
                   </li>
                 );
               })}
             </ul>
+            {page && (
+              <ul className={`${styles.screens} ${styles.offPage}`}>
+                {screens
+                  .filter((s) => !page.screens.includes(s.id))
+                  .map((s) => (
+                    <li key={s.id}>
+                      <button className={styles.screenBtn} onClick={() => setScreenId(s.id)}>
+                        <span className={styles.screenId}>{s.id}</span>
+                        {!s.enabled && <span className={styles.muted}>off the default page</span>}
+                      </button>
+                      <span className={styles.pageScreenTools}>
+                        <button title="add it to this page" onClick={() => pageScreen(s.id, "add")}>
+                          +
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            )}
             <div className={styles.addRow}>
               <input
                 value={newScreenId}
@@ -1507,6 +1735,21 @@ export default function Editor({ name }: { name: string }) {
           </main>
 
           <aside className={styles.right}>
+            {page && (
+              <PagePanel
+                // A fresh panel per page: one page's upload result is not another's.
+                key={page.id}
+                projectName={name}
+                dirty={isDirty}
+                page={page}
+                text={content[locale]?.sets?.[page.id]}
+                locale={locale}
+                appKeywords={appKeywords[locale] ?? []}
+                onChange={patchPage}
+                onTextChange={patchPageText}
+                onDelete={deletePage}
+              />
+            )}
             {screen && (
               <>
                 <div className={styles.sectionTitle}>

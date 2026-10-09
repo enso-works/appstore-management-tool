@@ -886,6 +886,76 @@
   color: inherit;
 }
 
+.linkBtn {
+  font: inherit;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.pagePanel {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.screens li:has(.pageScreenTools) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.screens li:has(.pageScreenTools) .screenBtn {
+  flex: 1;
+  min-width: 0;
+}
+
+.pushSteps {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.pageScreenTools {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.pageScreenTools button {
+  font: inherit;
+  font-size: 12px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.pageScreenTools button:hover:not(:disabled) {
+  color: var(--fg);
+  border-color: var(--line-strong);
+}
+
+.pageScreenTools button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.offPage {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+  opacity: 0.75;
+}
+
 .searchTag {
   margin-left: 0.5em;
   padding: 0.05em 0.45em;
