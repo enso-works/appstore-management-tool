@@ -23,6 +23,7 @@ import { writeContactSheets } from "../lib/sheet";
 import { downloadFrames, framesAvailable, framesDir, listFrames } from "../lib/frames";
 import { AscAuthError, tokenSource } from "../lib/asc/auth";
 import { AscApiError, AscClient } from "../lib/asc/client";
+import { AscPushError, pushBlockers, pushSet } from "../lib/asc/push";
 import { ascStatus, AscStatusError } from "../lib/asc/status";
 import { loadManifest } from "../lib/content";
 import { expandArgs, findBlender, planScenes, renderScenes, sceneDirs, ScenesError } from "../lib/scenes";
@@ -720,6 +721,55 @@ asc
       if (err instanceof AscAuthError || err instanceof AscStatusError || err instanceof AscApiError) {
         console.error(err.message);
         process.exit(err instanceof AscApiError ? 1 : 2);
+      }
+      throw err;
+    }
+  });
+
+asc
+  .command("push <set>")
+  .description(
+    "Upload a named set as a draft custom product page or optimization treatment; shows the plan, changes nothing without --yes, never submits",
+  )
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--yes", "make the changes the plan shows")
+  .option(
+    "--experiment <name>",
+    "treatments without an experiment in the manifest: the draft experiment to add them to",
+    "store-shots",
+  )
+  .option("--traffic <percent>", "treatments: share of traffic for a new experiment", "50")
+  .action(async (setId: string, opts: { project?: string; yes?: boolean; experiment: string; traffic: string }) => {
+    const project = openProject(opts.project);
+    const v = validateProject(project);
+    const blocking = pushBlockers(v.issues.items, setId);
+    if (!v.manifest || blocking.length) {
+      printIssues(blocking);
+      console.error("Fix these before uploading.");
+      process.exit(1);
+    }
+    try {
+      const r = await pushSet(project, new AscClient(tokenSource(project)), v.manifest, v.content, setId, {
+        apply: !!opts.yes,
+        experimentName: opts.experiment,
+        trafficProportion: Number(opts.traffic),
+        log: (l) => console.log(l),
+      });
+      if (!opts.yes) {
+        for (const s of r.steps) console.log(`${s.action.padEnd(6)} ${s.what}`);
+        const changes = r.steps.filter((s) => s.action !== "keep" && s.action !== "skip").length;
+        console.log(
+          changes ? `\n${changes} change(s). Run again with --yes to make them.` : "\nApp Store Connect is up to date.",
+        );
+      } else {
+        console.log(
+          `\nDone. "${setId}" is a draft in App Store Connect${r.ascId ? ` (${r.ascId})` : ""}; submit it there when ready.`,
+        );
+      }
+    } catch (err) {
+      if (err instanceof AscAuthError || err instanceof AscPushError || err instanceof AscApiError) {
+        console.error(err.message);
+        process.exit(err instanceof AscAuthError ? 2 : 1);
       }
       throw err;
     }
