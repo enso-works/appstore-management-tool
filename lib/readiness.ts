@@ -543,7 +543,7 @@ function checkAppPreviews(project: Project): ReadinessCheck {
       if (n > PREVIEW_LIMITS.perSet) f.fail(`${d.name}: ${n} ${device} previews; at most ${PREVIEW_LIMITS.perSet}`);
     }
   }
-  return f.check(id, title, "App Store Connect takes previews by hand; deliver does not upload them");
+  return f.check(id, title, "deliver does not upload previews; store-shots asc push default does");
 }
 
 /**

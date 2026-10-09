@@ -23,7 +23,7 @@ import { writeContactSheets } from "../lib/sheet";
 import { downloadFrames, framesAvailable, framesDir, listFrames } from "../lib/frames";
 import { AscAuthError, tokenSource } from "../lib/asc/auth";
 import { AscApiError, AscClient } from "../lib/asc/client";
-import { AscPushError, pushBlockers, pushSet } from "../lib/asc/push";
+import { AscPushError, DEFAULT_PAGE, pushBlockers, pushPage } from "../lib/asc/push";
 import { ascStatus, AscStatusError } from "../lib/asc/status";
 import { loadManifest } from "../lib/content";
 import { expandArgs, findBlender, planScenes, renderScenes, sceneDirs, ScenesError } from "../lib/scenes";
@@ -729,7 +729,7 @@ asc
 asc
   .command("push <set>")
   .description(
-    "Upload a named set as a draft custom product page or optimization treatment; shows the plan, changes nothing without --yes, never submits",
+    'Upload a named set as a draft custom product page or optimization treatment, or "default" for the product page\'s media on the editable version; shows the plan, changes nothing without --yes, never submits',
   )
   .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
   .option("--yes", "make the changes the plan shows")
@@ -749,7 +749,7 @@ asc
       process.exit(1);
     }
     try {
-      const r = await pushSet(project, new AscClient(tokenSource(project)), v.manifest, v.content, setId, {
+      const r = await pushPage(project, new AscClient(tokenSource(project)), v.manifest, v.content, setId, {
         apply: !!opts.yes,
         experimentName: opts.experiment,
         trafficProportion: Number(opts.traffic),
@@ -763,7 +763,9 @@ asc
         );
       } else {
         console.log(
-          `\nDone. "${setId}" is a draft in App Store Connect${r.ascId ? ` (${r.ascId})` : ""}; submit it there when ready.`,
+          setId === DEFAULT_PAGE
+            ? "\nDone. The version's media are in App Store Connect; submit the version there when ready."
+            : `\nDone. "${setId}" is a draft in App Store Connect${r.ascId ? ` (${r.ascId})` : ""}; submit it there when ready.`,
         );
       }
     } catch (err) {

@@ -393,3 +393,6 @@ export const allSchemas = {
 export function formatZodError(error: z.ZodError): string[] {
   return error.issues.map((i) => `${i.path.length ? i.path.join(".") + ": " : ""}${i.message}`);
 }
+
+/** The name `asc push` takes for the app's own product page; no set may use it. */
+export const DEFAULT_PAGE = "default";

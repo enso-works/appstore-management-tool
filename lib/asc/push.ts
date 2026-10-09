@@ -4,16 +4,18 @@ import path from "node:path";
 import type { Project } from "../config";
 import { readJsonFile } from "../config";
 import { formatJson, jsonStyleFor } from "../json-style";
-import type { LocaleContent, Manifest, ScreenSet } from "../schema";
+import { DEFAULT_PAGE, type LocaleContent, type Manifest, type ScreenSet } from "../schema";
 import { withSetCopy } from "../content";
 import { resolveFontStack } from "../fonts";
 import { inputsHash, readToolVersion, templatesSourceHash } from "../generate";
 import { readGeneratedManifest } from "../generated-manifest";
-import { buildSetPlan } from "../render-plan";
+import { buildRenderPlan, buildSetPlan, type RenderJob } from "../render-plan";
 import { AscApiError, related, type AscClient, type Resource } from "./client";
 import type { Issue } from "../issues";
 import { AscStatusError, findAscApp } from "./status";
-import { creativePlacementsOf, type CreativePlacement } from "../targets";
+import { readVideoInfo } from "../video";
+import { PREVIEW_LIMITS, previewClass, VIDEO_MIME } from "../previews";
+import { creativePlacementsOf, getTarget, isDuo, type CreativePlacement } from "../targets";
 
 /**
  * Upload a named set to App Store Connect as a draft: a custom product page
@@ -91,26 +93,162 @@ export async function pushSet(
   const set = { ...found, ascId: found.ascId || undefined };
   const ctx: Ctx = { project, client, apply: opts.apply, steps: [], log: opts.log ?? (() => {}) };
   // Local checks first: stale renders are the user's next step, before any network or key trouble.
-  const { screenshots: files, creative } = setFiles(project, set, manifest, content);
-  if (files.size === 0) {
+  const files = setFiles(project, set, manifest, content);
+  if (files.screenshots.size === 0 && files.duo.size === 0) {
     throw new AscPushError(`No App Store screenshots for "${set.id}": it shows no iPhone or iPad target`);
   }
   const appId = await findApp(project, client);
   ctx.appId = appId;
   const ascId =
     set.kind === "custom"
-      ? await pushCustomPage(ctx, appId, set, content, files, creative)
+      ? await pushCustomPage(ctx, appId, set, content, files)
       : await pushTreatment(
           ctx,
           appId,
           set,
           files,
-          creative,
           set.experiment ?? opts.experimentName ?? "store-shots",
           opts.trafficProportion ?? 50,
         );
   if (opts.apply && ascId && ascId !== set.ascId) rememberAscId(project, set.id, ascId);
   return { set: set.id, steps: ctx.steps, ascId, applied: opts.apply };
+}
+
+export { DEFAULT_PAGE };
+
+/** Version states App Store Connect takes screenshot and preview edits in. */
+const VERSION_EDITABLE = new Set([
+  "PREPARE_FOR_SUBMISSION",
+  "READY_FOR_REVIEW",
+  "DEVELOPER_REJECTED",
+  "REJECTED",
+  "METADATA_REJECTED",
+  "INVALID_BINARY",
+]);
+
+/**
+ * Upload the default product page's media to the app's editable version: its
+ * screenshots, iPhone Duo screenshots, header and search results images, and
+ * the app previews in <previews>/<locale>/. Text stays deliver's job, and so
+ * does making the version; with no version taking edits this says so and
+ * stops. Like pushSet it plans first and never submits.
+ */
+export async function pushDefaultPage(
+  project: Project,
+  client: AscClient,
+  manifest: Manifest,
+  content: Map<string, LocaleContent>,
+  opts: { apply: boolean; log?: (line: string) => void },
+): Promise<PushResult> {
+  const ctx: Ctx = { project, client, apply: opts.apply, steps: [], log: opts.log ?? (() => {}) };
+  const files = defaultPageFiles(project, manifest, content);
+  const previews = previewFiles(project, ctx);
+  if (files.screenshots.size === 0 && files.duo.size === 0 && previews.size === 0) {
+    throw new AscPushError("Nothing to upload: the default page renders no App Store screenshots");
+  }
+  const appId = await findApp(project, client);
+  ctx.appId = appId;
+  const versions = await client.get<{ versionString?: string; appVersionState?: string; appStoreState?: string }>(
+    `/v1/apps/${appId}/appStoreVersions`,
+    { "filter[platform]": "IOS", limit: "10" },
+  );
+  const all = (Array.isArray(versions.data) ? versions.data : [versions.data]).filter(Boolean);
+  const stateOf = (v: (typeof all)[number]) => v.attributes?.appVersionState ?? v.attributes?.appStoreState ?? "";
+  const version = all.find((v) => VERSION_EDITABLE.has(stateOf(v)));
+  if (!version) {
+    const pending = all.find((v) => IN_REVIEW.has(stateOf(v)));
+    throw new AscPushError(
+      pending
+        ? `Version ${pending.attributes?.versionString} is ${stateOf(pending)}; App Store Connect takes no screenshot edits until review ends`
+        : `No version takes edits${all[0] ? ` (${all[0].attributes?.versionString} is ${stateOf(all[0])})` : ""}; create the next version in App Store Connect, then push again`,
+    );
+  }
+  ctx.steps.push({
+    action: "keep",
+    what: `version ${version.attributes?.versionString} (${stateOf(version)})`,
+  });
+  const locs = await client.getAll<{ locale: string }>(
+    `/v1/appStoreVersions/${version.id}/appStoreVersionLocalizations`,
+  );
+  for (const locale of [...new Set([...localesOf(files), ...previews.keys()])]) {
+    const loc = locs.data.find((l) => l.attributes?.locale === locale);
+    if (!loc) {
+      ctx.steps.push({
+        action: "skip",
+        what: `${locale}: version ${version.attributes?.versionString} has no ${locale} localization yet (deliver adds it with the text)`,
+      });
+      continue;
+    }
+    const ref: LocalizationRef = {
+      type: "appStoreVersionLocalizations",
+      id: loc.id,
+      path: "appStoreVersionLocalizations",
+      relationship: "appStoreVersionLocalization",
+    };
+    // A locale with only previews keeps whatever else App Store Connect shows there.
+    if (localesOf(files).includes(locale)) await syncLocalization(ctx, ref, DEFAULT_PAGE, locale, files);
+    const byType = previews.get(locale);
+    if (byType) await syncMedia(ctx, PREVIEWS, ref, locale, byType);
+  }
+  return { set: DEFAULT_PAGE, steps: ctx.steps, ascId: version.id, applied: opts.apply };
+}
+
+/**
+ * App previews by locale and preview type, from <previews>/<locale>/ in name
+ * order. Readiness checks them against Apple's specification; a size this
+ * cannot place is skipped with a note.
+ */
+function previewFiles(project: Project, ctx: Ctx): Map<string, Map<string, string[]>> {
+  const out = new Map<string, Map<string, string[]>>();
+  const root = project.paths.previews;
+  if (!fs.existsSync(root)) return out;
+  // The app's own locales only: a folder for any other is not the app's to upload.
+  for (const locale of project.config.locales) {
+    const dir = path.join(root, locale);
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue;
+    for (const name of fs.readdirSync(dir).sort()) {
+      if (!VIDEO_MIME[path.extname(name).toLowerCase()]) continue;
+      const file = path.join(dir, name);
+      let type: string | undefined;
+      try {
+        const { width, height } = readVideoInfo(file);
+        type = previewClass(width, height)?.type;
+      } catch {
+        // unreadable: readiness reports it
+      }
+      if (!type) {
+        ctx.steps.push({
+          action: "skip",
+          what: `${locale}: ${name} is no App Store preview size (readiness says why)`,
+        });
+        continue;
+      }
+      const byType = out.get(locale) ?? new Map<string, string[]>();
+      byType.set(type, [...(byType.get(type) ?? []), file]);
+      out.set(locale, byType);
+    }
+  }
+  for (const [locale, byType] of out) {
+    for (const [type, files] of byType) {
+      if (files.length > PREVIEWS.max)
+        throw new AscPushError(`${locale} ${type}: ${files.length} previews; App Store Connect takes ${PREVIEWS.max}`);
+    }
+  }
+  return out;
+}
+
+/** `asc push <set>`: a named set, or the default page for "default". */
+export function pushPage(
+  project: Project,
+  client: AscClient,
+  manifest: Manifest,
+  content: Map<string, LocaleContent>,
+  setId: string,
+  opts: { apply: boolean; log?: (line: string) => void; experimentName?: string; trafficProportion?: number },
+): Promise<PushResult> {
+  return setId === DEFAULT_PAGE
+    ? pushDefaultPage(project, client, manifest, content, opts)
+    : pushSet(project, client, manifest, content, setId, opts);
 }
 
 async function findApp(project: Project, client: AscClient): Promise<string> {
@@ -122,8 +260,16 @@ async function findApp(project: Project, client: AscClient): Promise<string> {
   }
 }
 
-/** Validation errors that stop an upload of `setId`: global ones and any about that set, in any locale. */
+/**
+ * Validation errors that stop an upload of `setId`: global ones and any about
+ * that set, in any locale; for the default page, any error not about a set.
+ */
 export function pushBlockers(issues: Issue[], setId: string): Issue[] {
+  if (setId === DEFAULT_PAGE) {
+    // The default page sends iOS media only: errors about sets or Play targets do not stop it.
+    const android = (key: string) => getTarget(key.split("/")[0])?.platform === "android";
+    return issues.filter((i) => i.level === "error" && !i.key?.startsWith("sets/") && !(i.key && android(i.key)));
+  }
   return issues.filter(
     (i) => i.level === "error" && (!i.key || i.key === `sets/${setId}` || i.key.startsWith(`sets/${setId}/`)),
   );
@@ -132,63 +278,110 @@ export function pushBlockers(issues: Issue[], setId: string): Issue[] {
 /** A page's creative assets in one locale: the file for each placement (one universal file may fill both). */
 export type PageCreative = Partial<Record<CreativePlacement, string>>;
 
+/** A page's rendered files, per locale. */
+export interface PageFiles {
+  /** locale -> display type -> files in the page's order. */
+  screenshots: Map<string, Map<string, string[]>>;
+  /** locale -> iPhone Duo files in the page's order (Asset Library only). */
+  duo: Map<string, string[]>;
+  /** locale -> header and search results files. */
+  creative: Map<string, PageCreative>;
+}
+
+/** Every locale the page has a file for. */
+function localesOf(files: PageFiles): string[] {
+  return [...new Set([...files.screenshots.keys(), ...files.duo.keys(), ...files.creative.keys()])];
+}
+
 /**
- * The set's rendered files: screenshots as locale -> display type -> files in
- * the set's order, and creative assets as locale -> placement -> file. Exactly
- * the files the set's render plan names, each checked against the renderer's
- * input hash, so a removed screen's old file is never sent and neither is a
- * render older than the copy, capture or layout it shows.
+ * The set's rendered files: exactly the files its render plan names, each
+ * checked against the renderer's input hash, so a removed screen's old file
+ * is never sent and neither is a render older than the copy, capture or
+ * layout it shows.
  */
 export function setFiles(
   project: Project,
   set: ScreenSet,
   manifest: Manifest,
   content: Map<string, LocaleContent>,
-): { screenshots: Map<string, Map<string, string[]>>; creative: Map<string, PageCreative> } {
+): PageFiles {
+  return collectFiles(
+    project,
+    buildSetPlan(project, manifest, { sets: [set.id] }),
+    (lc) => withSetCopy(lc, set.id),
+    `Render "${set.id}" again first (store-shots generate --set ${set.id})`,
+    content,
+  );
+}
+
+/** The default product page's rendered App Store files, checked the same way. */
+export function defaultPageFiles(project: Project, manifest: Manifest, content: Map<string, LocaleContent>): PageFiles {
+  return collectFiles(
+    project,
+    buildRenderPlan(project, manifest).filter((j) => j.target.platform === "ios"),
+    (lc) => lc,
+    "Render the default page again first (store-shots generate)",
+    content,
+  );
+}
+
+function collectFiles(
+  project: Project,
+  jobs: RenderJob[],
+  copyFor: (lc: LocaleContent) => LocaleContent,
+  rerun: string,
+  content: Map<string, LocaleContent>,
+): PageFiles {
   const generated = readGeneratedManifest(project);
   const { stack } = resolveFontStack(project);
   const fontHashes = stack.flatMap((f) => f.files.map((x) => x.sha256));
   const templatesHash = templatesSourceHash();
   const toolVersion = readToolVersion();
-  const out = new Map<string, Map<string, string[]>>();
-  const creative = new Map<string, PageCreative>();
+  const out: PageFiles = { screenshots: new Map(), duo: new Map(), creative: new Map() };
   const problems: string[] = [];
-  for (const job of buildSetPlan(project, manifest, { sets: [set.id] })) {
+  for (const job of jobs) {
     const type = DISPLAY_TYPES[job.target.id];
+    const duo = isDuo(job.target);
     const placements = creativePlacementsOf(job.target);
     const lc = content.get(job.locale);
-    if ((!type && !placements.length) || !lc) continue;
-    const hash = inputsHash(project, job, withSetCopy(lc, set.id), toolVersion, fontHashes, templatesHash);
+    if ((!type && !duo && !placements.length) || !lc) continue;
+    const hash = inputsHash(project, job, copyFor(lc), toolVersion, fontHashes, templatesHash);
     for (const abs of job.outputPaths) {
       const rel = path.relative(project.root, abs).split(path.sep).join("/");
       const entry = generated?.files.find((f) => f.path === rel);
       if (!fs.existsSync(abs)) problems.push(`${rel} is missing`);
       else if (entry?.inputsSha256 !== hash) problems.push(`${rel} is older than its copy, capture or layout`);
       else if (placements.length) {
-        const page = creative.get(job.locale) ?? {};
+        const page = out.creative.get(job.locale) ?? {};
         // A dedicated image wins over the universal one for its placement.
         for (const p of placements) if (placements.length === 1 || !page[p]) page[p] = abs;
-        creative.set(job.locale, page);
+        out.creative.set(job.locale, page);
+      } else if (duo) {
+        out.duo.set(job.locale, [...(out.duo.get(job.locale) ?? []), abs]);
       } else if (type) {
-        const byType = out.get(job.locale) ?? new Map<string, string[]>();
+        const byType = out.screenshots.get(job.locale) ?? new Map<string, string[]>();
         // Portrait and landscape sets of one device share a display type; App Store Connect takes both in one set.
         byType.set(type, [...(byType.get(type) ?? []), abs]);
-        out.set(job.locale, byType);
+        out.screenshots.set(job.locale, byType);
       }
     }
   }
   if (problems.length) {
     throw new AscPushError(
-      `Render "${set.id}" again first (store-shots generate --set ${set.id}): ${problems.slice(0, 3).join("; ")}${problems.length > 3 ? ` and ${problems.length - 3} more` : ""}`,
+      `${rerun}: ${problems.slice(0, 3).join("; ")}${problems.length > 3 ? ` and ${problems.length - 3} more` : ""}`,
     );
   }
-  for (const [locale, byType] of out) {
+  for (const [locale, byType] of out.screenshots) {
     for (const [type, shots] of byType) {
       if (shots.length > 10)
         throw new AscPushError(`${locale} ${type}: ${shots.length} screenshots; App Store Connect takes 10`);
     }
   }
-  return { screenshots: out, creative };
+  for (const [locale, shots] of out.duo) {
+    if (shots.length > 10)
+      throw new AscPushError(`${locale} iPhone Duo: ${shots.length} screenshots; App Store Connect takes 10`);
+  }
+  return out;
 }
 
 // ---- custom product pages -------------------------------------------------
@@ -198,8 +391,7 @@ async function pushCustomPage(
   appId: string,
   set: ScreenSet,
   content: Map<string, LocaleContent>,
-  files: Map<string, Map<string, string[]>>,
-  creative: Map<string, PageCreative>,
+  files: PageFiles,
 ): Promise<string | undefined> {
   const { client } = ctx;
   const name = set.name ?? set.id;
@@ -212,7 +404,7 @@ async function pushCustomPage(
   if (set.ascId && !page)
     throw new AscPushError(`Custom product page ${set.ascId} ("${name}") is gone from App Store Connect`);
   const promo = (locale: string) => content.get(locale)?.sets?.[set.id]?.promotionalText;
-  const locales = [...files.keys()];
+  const locales = localesOf(files);
 
   if (!page) {
     // A new page is created with its first version and localizations in one request.
@@ -253,8 +445,7 @@ async function pushCustomPage(
         const keywords = content.get(l)?.sets?.[set.id]?.keywords ?? [];
         if (keywords.length) ctx.steps.push({ action: "update", what: `${l} keywords + ${keywords.join(", ")}` });
       }
-      planScreenshots(ctx, files, "the new page");
-      planCreative(ctx, creative, "the new page");
+      planFiles(ctx, files, "the new page");
       return undefined;
     }
     page = one(created);
@@ -294,8 +485,7 @@ async function pushCustomPage(
     );
     if (!created) {
       for (const l of locales) ctx.steps.push({ action: "create", what: `${l} localization` });
-      planScreenshots(ctx, files, "the new version");
-      planCreative(ctx, creative, "the new version");
+      planFiles(ctx, files, "the new version");
       return page.id;
     }
     version = one(created);
@@ -325,8 +515,7 @@ async function pushCustomPage(
         }),
       );
       if (!created) {
-        planScreenshots(ctx, new Map([[locale, files.get(locale)!]]), `the new ${locale} localization`);
-        planCreative(ctx, pick(creative, locale), `the new ${locale} localization`);
+        planFiles(ctx, files, `the new ${locale} localization`, locale);
         continue;
       }
       loc = one(created);
@@ -348,8 +537,7 @@ async function pushCustomPage(
       path: "appCustomProductPageLocalizations",
       relationship: "appCustomProductPageLocalization",
     };
-    await syncScreenshots(ctx, ref, locale, files.get(locale)!);
-    if (usesCreative(ctx.project)) await syncCreative(ctx, ref, set.id, locale, creative.get(locale) ?? {});
+    await syncLocalization(ctx, ref, set.id, locale, files);
   }
   return page.id;
 }
@@ -396,8 +584,7 @@ async function pushTreatment(
   ctx: Ctx,
   appId: string,
   set: ScreenSet,
-  files: Map<string, Map<string, string[]>>,
-  creative: Map<string, PageCreative>,
+  files: PageFiles,
   experimentName: string,
   trafficProportion: number,
 ): Promise<string | undefined> {
@@ -450,8 +637,7 @@ async function pushTreatment(
         action: "create",
         what: `treatment "${name}"${set.appIconName ? ` with icon ${set.appIconName}` : ""}`,
       });
-      planScreenshots(ctx, files, "the new treatment");
-      planCreative(ctx, creative, "the new treatment");
+      planFiles(ctx, files, "the new treatment");
       return undefined;
     }
     experiment = one(created);
@@ -479,8 +665,7 @@ async function pushTreatment(
         }),
     );
     if (!created) {
-      planScreenshots(ctx, files, "the new treatment");
-      planCreative(ctx, creative, "the new treatment");
+      planFiles(ctx, files, "the new treatment");
       return undefined;
     }
     treatment = one(created) as Resource<{ name?: string; appIconName?: string }>;
@@ -502,7 +687,7 @@ async function pushTreatment(
   const existing = await client.getAll<{ locale: string }>(
     `/v1/appStoreVersionExperimentTreatments/${treatment.id}/appStoreVersionExperimentTreatmentLocalizations`,
   );
-  for (const [locale, byType] of files) {
+  for (const locale of localesOf(files)) {
     let loc: Resource | undefined = existing.data.find((l) => l.attributes?.locale === locale);
     if (!loc) {
       const created = await act(ctx, { action: "create", what: `${locale} treatment localization` }, () =>
@@ -519,8 +704,7 @@ async function pushTreatment(
         }),
       );
       if (!created) {
-        planScreenshots(ctx, new Map([[locale, byType]]), `the new ${locale} localization`);
-        planCreative(ctx, pick(creative, locale), `the new ${locale} localization`);
+        planFiles(ctx, files, `the new ${locale} localization`, locale);
         continue;
       }
       loc = one(created);
@@ -531,8 +715,7 @@ async function pushTreatment(
       path: "appStoreVersionExperimentTreatmentLocalizations",
       relationship: "appStoreVersionExperimentTreatmentLocalization",
     };
-    await syncScreenshots(ctx, ref, locale, byType);
-    if (usesCreative(ctx.project)) await syncCreative(ctx, ref, set.id, locale, creative.get(locale) ?? {});
+    await syncLocalization(ctx, ref, set.id, locale, files);
   }
   return treatment.id;
 }
@@ -552,80 +735,151 @@ function md5(file: string): string {
   return crypto.createHash("md5").update(fs.readFileSync(file)).digest("hex");
 }
 
-/** In a dry run of something that does not exist yet, every screenshot would be uploaded. */
-function planScreenshots(ctx: Ctx, files: Map<string, Map<string, string[]>>, where: string) {
-  for (const [locale, byType] of files) {
-    for (const [type, shots] of byType) {
-      ctx.steps.push({ action: "upload", what: `${locale} ${type}: ${shots.length} screenshot(s) to ${where}` });
+/** The checksum of a file of any size, read in chunks (app previews run to hundreds of MB). */
+function md5Streamed(file: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("md5");
+    fs.createReadStream(file)
+      .on("data", (chunk) => hash.update(chunk))
+      .on("error", reject)
+      .on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+/** In a dry run of something that does not exist yet, every file would be uploaded (only `locale`'s, if given). */
+function planFiles(ctx: Ctx, files: PageFiles, where: string, locale?: string) {
+  for (const l of localesOf(files)) {
+    if (locale && l !== locale) continue;
+    for (const [type, shots] of files.screenshots.get(l) ?? []) {
+      ctx.steps.push({ action: "upload", what: `${l} ${type}: ${shots.length} screenshot(s) to ${where}` });
+    }
+    const duo = files.duo.get(l) ?? [];
+    if (duo.length)
+      ctx.steps.push({ action: "upload", what: `${l} iPhone Duo: ${duo.length} screenshot(s) to ${where}` });
+    for (const [placement, file] of Object.entries(files.creative.get(l) ?? {}) as [CreativePlacement, string][]) {
+      ctx.steps.push({
+        action: "upload",
+        what: `${l} ${PLACEMENT_LABEL[placement]}: ${path.basename(file)} to ${where}`,
+      });
     }
   }
 }
 
+/** Everything one page localization shows: screenshots, iPhone Duo screenshots, header and search results images. */
+async function syncLocalization(ctx: Ctx, ref: LocalizationRef, pageId: string, locale: string, files: PageFiles) {
+  await syncScreenshots(ctx, ref, locale, files.screenshots.get(locale) ?? new Map());
+  if (usesDuo(ctx.project)) await syncDuo(ctx, ref, pageId, locale, files.duo.get(locale) ?? []);
+  if (usesCreative(ctx.project)) await syncCreative(ctx, ref, pageId, locale, files.creative.get(locale) ?? {});
+}
+
+/** Screenshots and app previews: the same sets-of-items API under different names. */
+interface MediaKind {
+  /** /v1/<loc>/<id>/<sets> and POST /v1/<sets>. */
+  sets: "appScreenshotSets" | "appPreviewSets";
+  /** The set's items, and POST /v1/<items>. */
+  items: "appScreenshots" | "appPreviews";
+  /** The set attribute naming its device. */
+  typeAttr: "screenshotDisplayType" | "previewType";
+  /** The item's relationship to its set. */
+  setRel: "appScreenshotSet" | "appPreviewSet";
+  /** How many a set holds. */
+  max: number;
+  noun: string;
+}
+
+const SCREENSHOTS: MediaKind = {
+  sets: "appScreenshotSets",
+  items: "appScreenshots",
+  typeAttr: "screenshotDisplayType",
+  setRel: "appScreenshotSet",
+  max: 10,
+  noun: "screenshot",
+};
+
+const PREVIEWS: MediaKind = {
+  sets: "appPreviewSets",
+  items: "appPreviews",
+  typeAttr: "previewType",
+  setRel: "appPreviewSet",
+  max: PREVIEW_LIMITS.perSet,
+  noun: "preview",
+};
+
+function syncScreenshots(ctx: Ctx, loc: LocalizationRef, locale: string, byType: Map<string, string[]>) {
+  return syncMedia(ctx, SCREENSHOTS, loc, locale, byType);
+}
+
 /**
- * Make each display type's set hold exactly the local files, in order. A set
- * whose screenshots already match by checksum is left alone; otherwise its
- * screenshots are replaced.
+ * Make each type's set hold exactly the local files, in order. A set whose
+ * items already match by checksum is left alone; otherwise its items are
+ * replaced.
  */
-async function syncScreenshots(ctx: Ctx, loc: LocalizationRef, locale: string, byType: Map<string, string[]>) {
+async function syncMedia(
+  ctx: Ctx,
+  kind: MediaKind,
+  loc: LocalizationRef,
+  locale: string,
+  byType: Map<string, string[]>,
+) {
   const { client } = ctx;
-  const sets = await client.getAll<{ screenshotDisplayType: string }>(`/v1/${loc.path}/${loc.id}/appScreenshotSets`, {
-    include: "appScreenshots",
+  const sets = await client.getAll<Record<string, string>>(`/v1/${loc.path}/${loc.id}/${kind.sets}`, {
+    include: kind.items,
   });
-  for (const [type, shots] of byType) {
-    let set = sets.data.find((s) => s.attributes?.screenshotDisplayType === type);
+  for (const [type, files] of byType) {
+    let set = sets.data.find((s) => s.attributes?.[kind.typeAttr] === type);
     // The set's own relationship gives the display order; `included` may come in any order.
     const current = set
-      ? related(set, "appScreenshots")
-          .map((id) => sets.included.find((r) => r.type === "appScreenshots" && r.id === id))
-          .filter((r): r is Resource<ScreenshotAttributes> => !!r)
+      ? related(set, kind.items)
+          .map((id) => sets.included.find((r) => r.type === kind.items && r.id === id))
+          .filter((r): r is Resource<MediaAttributes> => !!r)
       : [];
-    const local = shots.map(md5);
+    const local = await Promise.all(files.map(md5Streamed));
     // Apple fills in the checksum once it has processed an upload; until then the file name
     // (ours, in order) stands in for it. A reservation that never got its bytes still differs.
-    const processing = (s: Resource<ScreenshotAttributes>) =>
+    const processing = (s: Resource<MediaAttributes>) =>
       !s.attributes?.sourceFileChecksum && s.attributes?.assetDeliveryState?.state === "UPLOAD_COMPLETE";
-    const same = (s: Resource<ScreenshotAttributes>, i: number) =>
+    const same = (s: Resource<MediaAttributes>, i: number) =>
       s.attributes?.sourceFileChecksum === local[i] ||
-      (processing(s) && s.attributes?.fileName === path.basename(shots[i]));
+      (processing(s) && s.attributes?.fileName === path.basename(files[i]));
     if (current.length === local.length && current.every(same)) {
       const pending = current.filter(processing).length;
       ctx.steps.push({
         action: "keep",
-        what: `${locale} ${type}: ${shots.length} screenshot(s) unchanged${pending ? ` (${pending} still processing at Apple)` : ""}`,
+        what: `${locale} ${type}: ${files.length} ${kind.noun}(s) unchanged${pending ? ` (${pending} still processing at Apple)` : ""}`,
       });
       continue;
     }
     const removeOld = async () => {
       for (const s of current) {
-        await act(ctx, { action: "delete", what: `${locale} ${type}: old screenshot ${s.id}` }, () =>
-          client.delete(`/v1/appScreenshots/${s.id}`),
+        await act(ctx, { action: "delete", what: `${locale} ${type}: old ${kind.noun} ${s.id}` }, () =>
+          client.delete(`/v1/${kind.items}/${s.id}`),
         );
       }
     };
-    // With room for both, the new screenshots go up before the old ones go: a failed upload
+    // With room for both, the new items go up before the old ones go: a failed upload
     // leaves the old ones in place (with whatever new ones made it) instead of a half-empty
     // page, and the next run, which compares checksums, puts the set right.
-    const uploadFirst = current.length + shots.length <= 10;
+    const uploadFirst = current.length + files.length <= kind.max;
     if (!uploadFirst) await removeOld();
     if (!set) {
-      const created = await act(ctx, { action: "create", what: `${locale} ${type} screenshot set` }, () =>
-        client.post("/v1/appScreenshotSets", {
+      const created = await act(ctx, { action: "create", what: `${locale} ${type} ${kind.noun} set` }, () =>
+        client.post(`/v1/${kind.sets}`, {
           data: {
-            type: "appScreenshotSets",
-            attributes: { screenshotDisplayType: type },
+            type: kind.sets,
+            attributes: { [kind.typeAttr]: type },
             relationships: { [loc.relationship]: { data: { type: loc.type, id: loc.id } } },
           },
         }),
       );
       if (!created) {
-        ctx.steps.push({ action: "upload", what: `${locale} ${type}: ${shots.length} screenshot(s)` });
+        ctx.steps.push({ action: "upload", what: `${locale} ${type}: ${files.length} ${kind.noun}(s)` });
         continue;
       }
-      set = one(created) as Resource<{ screenshotDisplayType: string }>;
+      set = one(created) as Resource<Record<string, string>>;
     }
-    for (const [i, file] of shots.entries()) {
+    for (const [i, file] of files.entries()) {
       await act(ctx, { action: "upload", what: `${locale} ${type}: ${path.basename(file)}` }, () =>
-        uploadScreenshot(client, set!.id, file, local[i]),
+        uploadMedia(client, kind, set!.id, file, local[i]),
       );
     }
     if (uploadFirst) await removeOld();
@@ -633,35 +887,48 @@ async function syncScreenshots(ctx: Ctx, loc: LocalizationRef, locale: string, b
 }
 
 /** Reserve, upload the parts App Store Connect asks for, then commit with the checksum. */
-async function uploadScreenshot(client: AscClient, setId: string, file: string, checksum: string) {
-  const bytes = fs.readFileSync(file);
+async function uploadMedia(client: AscClient, kind: MediaKind, setId: string, file: string, checksum: string) {
+  const fileSize = fs.statSync(file).size;
+  const mimeType = kind === PREVIEWS ? VIDEO_MIME[path.extname(file).toLowerCase()] : undefined;
   const reserved = one(
-    await client.post<{ uploadOperations?: UploadOperation[] }>("/v1/appScreenshots", {
+    await client.post<{ uploadOperations?: UploadOperation[] }>(`/v1/${kind.items}`, {
       data: {
-        type: "appScreenshots",
-        attributes: { fileName: path.basename(file), fileSize: bytes.length },
-        relationships: { appScreenshotSet: { data: { type: "appScreenshotSets", id: setId } } },
+        type: kind.items,
+        attributes: { fileName: path.basename(file), fileSize, ...(mimeType ? { mimeType } : {}) },
+        relationships: { [kind.setRel]: { data: { type: kind.sets, id: setId } } },
       },
     }),
   ) as Resource<{ uploadOperations?: UploadOperation[] }>;
-  await uploadParts(client, reserved.attributes?.uploadOperations, bytes);
+  await uploadParts(client, reserved.attributes?.uploadOperations, file);
   await commit(() =>
-    client.patch(`/v1/appScreenshots/${reserved.id}`, {
-      data: { type: "appScreenshots", id: reserved.id, attributes: { uploaded: true, sourceFileChecksum: checksum } },
+    client.patch(`/v1/${kind.items}/${reserved.id}`, {
+      data: { type: kind.items, id: reserved.id, attributes: { uploaded: true, sourceFileChecksum: checksum } },
     }),
   );
 }
 
-async function uploadParts(client: AscClient, ops: UploadOperation[] | undefined, bytes: Buffer) {
-  for (const op of ops ?? []) {
-    await client.uploadPart(
-      {
-        method: op.method,
-        url: op.url,
-        headers: Object.fromEntries((op.requestHeaders ?? []).map((h) => [h.name, h.value])),
-      },
-      bytes.subarray(op.offset, op.offset + op.length),
-    );
+/** Send each part App Store Connect asked for, read from the bytes or, part by part, from the file. */
+async function uploadParts(client: AscClient, ops: UploadOperation[] | undefined, source: Buffer | string) {
+  const fd = typeof source === "string" ? fs.openSync(source, "r") : undefined;
+  try {
+    for (const op of ops ?? []) {
+      let part: Buffer;
+      if (fd === undefined) part = (source as Buffer).subarray(op.offset, op.offset + op.length);
+      else {
+        part = Buffer.alloc(op.length);
+        fs.readSync(fd, part, 0, op.length, op.offset);
+      }
+      await client.uploadPart(
+        {
+          method: op.method,
+          url: op.url,
+          headers: Object.fromEntries((op.requestHeaders ?? []).map((h) => [h.name, h.value])),
+        },
+        part,
+      );
+    }
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
 }
 
@@ -675,7 +942,7 @@ async function commit(run: () => Promise<unknown>) {
   }
 }
 
-type ScreenshotAttributes = {
+type MediaAttributes = {
   fileName?: string;
   sourceFileChecksum?: string;
   assetDeliveryState?: { state?: string };
@@ -698,6 +965,9 @@ const PLACEMENT_TYPES: Record<CreativePlacement, string> = {
 };
 const PLACEMENT_LABEL: Record<CreativePlacement, string> = { header: "header", search: "search results" };
 
+/** Image states that will never show: such an image is sent again. */
+const BROKEN = ["FAILED", "REJECTED", "ARCHIVED"];
+
 /** Images this tool uploads carry this prefix in their Asset Library name; others are left alone. */
 const REFERENCE_PREFIX = "store-shots ";
 
@@ -709,22 +979,9 @@ function referenceNameFor(setId: string, locale: string, file: string): string {
   return `${REFERENCE_PREFIX}${setId} ${locale} ${path.basename(file, path.extname(file))} ${md5(file).slice(0, 12)}`;
 }
 
-/** Apps without creative targets never touch the Asset Library. */
+/** Apps without creative or Duo targets never touch the Asset Library. */
 const usesCreative = (project: Project) => project.config.targets.some((t) => creativePlacementsOf(t).length > 0);
-
-const pick = (creative: Map<string, PageCreative>, locale: string) =>
-  new Map(creative.has(locale) ? [[locale, creative.get(locale)!]] : []);
-
-function planCreative(ctx: Ctx, creative: Map<string, PageCreative>, where: string) {
-  for (const [locale, page] of creative) {
-    for (const [placement, file] of Object.entries(page) as [CreativePlacement, string][]) {
-      ctx.steps.push({
-        action: "upload",
-        what: `${locale} ${PLACEMENT_LABEL[placement]}: ${path.basename(file)} to ${where}`,
-      });
-    }
-  }
-}
+const usesDuo = (project: Project) => project.config.targets.some((t) => isDuo(t));
 
 /**
  * Make the localization's header and search results placements show the
@@ -764,7 +1021,7 @@ async function syncCreative(ctx: Ctx, loc: LocalizationRef, setId: string, local
     }
     const name = referenceNameFor(setId, locale, file);
     // An image Apple could not process is sent again, whatever its name.
-    const broken = ["FAILED", "REJECTED", "ARCHIVED"].includes(image?.attributes?.state ?? "");
+    const broken = BROKEN.includes(image?.attributes?.state ?? "");
     if (image?.attributes?.referenceName === name && !broken) {
       ctx.steps.push({ action: "keep", what: `${label}: ${path.basename(file)} unchanged` });
       continue;
@@ -801,10 +1058,19 @@ async function syncCreative(ctx: Ctx, loc: LocalizationRef, setId: string, local
       }),
     );
   }
-  // Old images this tool uploaded go once nothing shows them; anything else stays in the library.
+  await dropOldImages(ctx, locale, replaced, [...uploaded.values()]);
+}
+
+/** Old images this tool uploaded go once nothing shows them; anything else stays in the library. */
+async function dropOldImages(
+  ctx: Ctx,
+  locale: string,
+  replaced: Resource<{ referenceName?: string }>[],
+  keep: string[],
+) {
+  const { client } = ctx;
   for (const old of new Map(replaced.map((r) => [r.id, r])).values()) {
-    if (!old.attributes?.referenceName?.startsWith(REFERENCE_PREFIX) || [...uploaded.values()].includes(old.id))
-      continue;
+    if (!old.attributes?.referenceName?.startsWith(REFERENCE_PREFIX) || keep.includes(old.id)) continue;
     if (!ctx.apply) {
       ctx.steps.push({
         action: "delete",
@@ -827,6 +1093,124 @@ async function syncCreative(ctx: Ctx, loc: LocalizationRef, setId: string, local
       });
     }
   }
+}
+
+// ---- iPhone Duo screenshots (Asset Library) -------------------------------
+
+const DUO_GROUP = "IPHONE_DUO_PROFILE";
+
+/**
+ * Make the localization's iPhone Duo screenshots the local files, in order.
+ * App Store Connect takes them only as Asset Library placements: images go
+ * up (or are reused by name), placements of images that are no longer wanted
+ * go, new ones are made, and an ordering request sets the order. When the
+ * page has no Duo files, only placements this tool made are removed.
+ */
+async function syncDuo(ctx: Ctx, loc: LocalizationRef, pageId: string, locale: string, files: string[]) {
+  const { client } = ctx;
+  const label = `${locale} iPhone Duo`;
+  const placements = await client.getAll<{ placementType?: string; placementGroup?: string }>(
+    `/v1/${loc.path}/${loc.id}/placements`,
+    {
+      include: "image",
+      "filter[placementType]": "APP_SCREENSHOT",
+      "filter[placementGroup]": DUO_GROUP,
+      sort: "placementGroupPosition",
+    },
+  );
+  const current = placements.data.map((p) => ({
+    placement: p,
+    image: placements.included.find((r) => r.type === "appAssetLibraryImages" && r.id === related(p, "image")[0]) as
+      Resource<{ referenceName?: string; state?: string }> | undefined,
+  }));
+  const names = files.map((f) => referenceNameFor(pageId, locale, f));
+  const ours = (c: (typeof current)[number]) => c.image?.attributes?.referenceName?.startsWith(REFERENCE_PREFIX);
+  if (!files.length) {
+    for (const c of current.filter(ours)) {
+      await act(ctx, { action: "delete", what: `${label}: ${c.image!.attributes!.referenceName}` }, () =>
+        client.delete(`/v1/appAssetLibraryPlacements/${c.placement.id}`),
+      );
+    }
+    if (current.some((c) => !ours(c)))
+      ctx.steps.push({ action: "keep", what: `${label}: set in App Store Connect, not by store-shots` });
+    await dropOldImages(
+      ctx,
+      locale,
+      current.filter(ours).flatMap((c) => (c.image ? [c.image] : [])),
+      [],
+    );
+    return;
+  }
+  const healthy = (c: (typeof current)[number]) => !BROKEN.includes(c.image?.attributes?.state ?? "");
+  if (
+    current.length === names.length &&
+    current.every((c, i) => c.image?.attributes?.referenceName === names[i] && healthy(c))
+  ) {
+    ctx.steps.push({ action: "keep", what: `${label}: ${files.length} screenshot(s) unchanged` });
+    return;
+  }
+  // Images first, each processed before anything shown goes away.
+  const imageIds: string[] = [];
+  for (const [i, file] of files.entries()) {
+    const placed = current.find((c) => c.image?.attributes?.referenceName === names[i] && healthy(c));
+    let id = placed?.image?.id ?? (await libraryImage(ctx, names[i], "APP_SCREENSHOTS_AND_PREVIEWS"));
+    if (id === undefined) {
+      id = await act(ctx, { action: "upload", what: `${label}: ${path.basename(file)} to the Asset Library` }, () =>
+        uploadLibraryImage(ctx, file, names[i], "APP_SCREENSHOTS_AND_PREVIEWS"),
+      );
+    }
+    if (id) await whenProcessed(ctx, id);
+    imageIds.push(id ?? "");
+  }
+  // Placements of images still wanted stay; the rest go, which also makes room under the limit of 10.
+  const keep = new Map<string, string>();
+  const removed: Resource<{ referenceName?: string }>[] = [];
+  for (const c of current) {
+    const wanted = c.image && healthy(c) && imageIds.includes(c.image.id) && !keep.has(c.image.id);
+    if (wanted) keep.set(c.image!.id, c.placement.id);
+    else {
+      await act(
+        ctx,
+        { action: "delete", what: `${label}: placement of ${c.image?.attributes?.referenceName ?? c.placement.id}` },
+        () => client.delete(`/v1/appAssetLibraryPlacements/${c.placement.id}`),
+      );
+      if (c.image) removed.push(c.image);
+    }
+  }
+  const ordered: string[] = [];
+  for (const [i, imageId] of imageIds.entries()) {
+    const existing = imageId ? keep.get(imageId) : undefined;
+    if (existing) {
+      ordered.push(existing);
+      continue;
+    }
+    const created = await act(ctx, { action: "create", what: `${label}: place ${path.basename(files[i])}` }, () =>
+      client.post("/v1/appAssetLibraryPlacements", {
+        data: {
+          type: "appAssetLibraryPlacements",
+          attributes: { placementType: "APP_SCREENSHOT", placementGroup: DUO_GROUP },
+          relationships: {
+            image: { data: { type: "appAssetLibraryImages", id: imageId } },
+            [loc.relationship]: { data: { type: loc.type, id: loc.id } },
+          },
+        },
+      }),
+    );
+    if (created) ordered.push(one(created).id);
+  }
+  await act(ctx, { action: "update", what: `${label}: order of ${files.length} screenshot(s)` }, () =>
+    client.post("/v1/appAssetLibraryPlacementOrderingRequests", {
+      data: {
+        type: "appAssetLibraryPlacementOrderingRequests",
+        attributes: { placementGroup: DUO_GROUP },
+        relationships: {
+          orderedPlacements: { data: ordered.map((id) => ({ type: "appAssetLibraryPlacements", id })) },
+          [loc.relationship]: { data: { type: loc.type, id: loc.id } },
+        },
+      },
+    }),
+  );
+  await dropOldImages(ctx, locale, removed, imageIds);
 }
 
 async function assetLibraryId(ctx: Ctx): Promise<string> {
@@ -854,10 +1238,14 @@ async function whenProcessed(ctx: Ctx, imageId: string, wait = (ms: number) => n
 }
 
 /** An image of that name already in the library (an earlier run that stopped before placing it). */
-async function libraryImage(ctx: Ctx, referenceName: string): Promise<string | undefined> {
+async function libraryImage(
+  ctx: Ctx,
+  referenceName: string,
+  category: AssetCategory = "CREATIVE_ASSETS",
+): Promise<string | undefined> {
   const found = await ctx.client.get<{ referenceName?: string; state?: string }>(
     `/v1/appAssetLibraries/${await assetLibraryId(ctx)}/images`,
-    { "filter[referenceName]": referenceName, "filter[category]": "CREATIVE_ASSETS", limit: "5" },
+    { "filter[referenceName]": referenceName, "filter[category]": category, limit: "5" },
   );
   const usable = (Array.isArray(found.data) ? found.data : [found.data]).find(
     (r) =>
@@ -868,7 +1256,14 @@ async function libraryImage(ctx: Ctx, referenceName: string): Promise<string | u
 }
 
 /** Reserve the image in the app's Asset Library, upload its parts, then commit it. */
-async function uploadLibraryImage(ctx: Ctx, file: string, referenceName: string): Promise<string> {
+type AssetCategory = "CREATIVE_ASSETS" | "APP_SCREENSHOTS_AND_PREVIEWS";
+
+async function uploadLibraryImage(
+  ctx: Ctx,
+  file: string,
+  referenceName: string,
+  category: AssetCategory = "CREATIVE_ASSETS",
+): Promise<string> {
   const { client } = ctx;
   const bytes = fs.readFileSync(file);
   const reserved = one(
@@ -876,7 +1271,7 @@ async function uploadLibraryImage(ctx: Ctx, file: string, referenceName: string)
       data: {
         type: "appAssetLibraryImages",
         attributes: {
-          category: "CREATIVE_ASSETS",
+          category,
           fileName: path.basename(file),
           fileSize: bytes.length,
           referenceName,

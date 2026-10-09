@@ -17,7 +17,7 @@ import {
 } from "./targets";
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
 import { getTemplateModule } from "../templates";
-import { formatZodError } from "./schema";
+import { DEFAULT_PAGE, formatZodError } from "./schema";
 import { readMetadataLocale } from "./metadata";
 import { requiredFontFamilies, resolveFontStack } from "./fonts";
 import { GlyphChecker, suggestFamilyFor } from "./glyphs";
@@ -93,6 +93,16 @@ function validateSets(project: Project, manifest: Manifest, issues: IssueList) {
   for (const set of sets) {
     const key = `sets/${set.id}`;
     if (ids.has(set.id)) issues.error("sets.duplicate-id", `Two sets are called "${set.id}"`, { key, file });
+    // `asc push default` means the app's own product page.
+    if (set.id === DEFAULT_PAGE)
+      issues.error(
+        "sets.reserved-id",
+        `A set cannot be called "${DEFAULT_PAGE}"; that name is the default product page`,
+        {
+          key,
+          file,
+        },
+      );
     ids.add(set.id);
     let count = 0;
     for (const id of set.screens) {

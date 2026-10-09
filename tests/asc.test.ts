@@ -5,13 +5,13 @@ import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AscAuthError, findAscKey, signToken, tokenSource } from "../lib/asc/auth";
 import { AscApiError, AscClient } from "../lib/asc/client";
-import { AscPushError, pushSet } from "../lib/asc/push";
+import { AscPushError, pushBlockers, pushDefaultPage, pushSet } from "../lib/asc/push";
 import { ascStatus } from "../lib/asc/status";
 import { loadProject } from "../lib/config";
 import { generateProject } from "../lib/generate";
 import { ExportRenderer } from "../lib/render/export";
 import { validateProject } from "../lib/validate";
-import { editJson, readJson, tempFixture } from "./helpers";
+import { editJson, mp4, readJson, tempFixture } from "./helpers";
 
 const { privateKey, publicKey } = crypto.generateKeyPairSync("ec", { namedCurve: "P-256" });
 const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -294,7 +294,7 @@ describe("App Store Connect", () => {
 });
 
 /** A fake App Store Connect that remembers what was created, enough for pushSet. */
-function statefulApi(opts: { pageState?: string } = {}) {
+function statefulApi(opts: { pageState?: string; versionState?: string } = {}) {
   const db = {
     pages: [] as { id: string; name: string; versions: string[] }[],
     versions: new Map<string, { id: string; state: string; deepLink?: string; locs: string[] }>(),
@@ -311,8 +311,14 @@ function statefulApi(opts: { pageState?: string } = {}) {
       string,
       { id: string; referenceName: string; fileName: string; uploaded?: boolean; parts: number }
     >(),
-    placements: new Map<string, { id: string; type: string; image: string; loc: string }>(),
+    placements: new Map<
+      string,
+      { id: string; type: string; group: string; image: string; loc: string; position: number }
+    >(),
+    orderings: [] as { group: string; loc: string; ids: string[] }[],
   };
+  // The app's version and its localization, for the default page.
+  db.locs.set("vloc1", { id: "vloc1", locale: "en-US", sets: [], keywords: [] });
   let n = 0;
   const id = (p: string) => `${p}${++n}`;
   const writes: string[] = [];
@@ -399,20 +405,40 @@ function statefulApi(opts: { pageState?: string } = {}) {
         ? res({ data: loc.keywords.map((k) => ({ type: "appKeywords", id: k })) })
         : new Response(null, { status: 204 });
     }
-    if ((m = p.match(/^\/v1\/appCustomProductPageLocalizations\/(\w+)\/appScreenshotSets$/))) {
-      const sets = db.locs.get(m[1])!.sets.map((s) => db.sets.get(s)!);
+    if (p === "/v1/apps/app1/appStoreVersions")
+      return res({
+        data: [
+          {
+            type: "appStoreVersions",
+            id: "ver-app",
+            attributes: { versionString: "2.0", appVersionState: opts.versionState ?? "PREPARE_FOR_SUBMISSION" },
+          },
+        ],
+      });
+    if (p === "/v1/appStoreVersions/ver-app/appStoreVersionLocalizations")
+      return res({ data: [{ type: "appStoreVersionLocalizations", id: "vloc1", attributes: { locale: "en-US" } }] });
+    const LOC = "(?:appCustomProductPageLocalizations|appStoreVersionLocalizations)";
+    const locOf = (rel: Record<string, { data: { id: string } }>) =>
+      (rel.appCustomProductPageLocalization ?? rel.appStoreVersionLocalization).data.id;
+    if ((m = p.match(new RegExp(`^/v1/${LOC}/(\\w+)/(appScreenshotSets|appPreviewSets)$`)))) {
+      const previews = m[2] === "appPreviewSets";
+      const items = previews ? "appPreviews" : "appScreenshots";
+      const sets = db.locs
+        .get(m[1])!
+        .sets.map((s) => db.sets.get(s)!)
+        .filter((s) => s.type.startsWith("APP_") !== previews);
       return res({
         data: sets.map((s) => ({
-          type: "appScreenshotSets",
+          type: m![2],
           id: s.id,
-          attributes: { screenshotDisplayType: s.type },
-          relationships: { appScreenshots: { data: s.shots.map((x) => ({ type: "appScreenshots", id: x })) } },
+          attributes: previews ? { previewType: s.type } : { screenshotDisplayType: s.type },
+          relationships: { [items]: { data: s.shots.map((x) => ({ type: items, id: x })) } },
         })),
         included: sets.flatMap((s) =>
           s.shots.map((x) => {
             const shot = db.shots.get(x)!;
             return {
-              type: "appScreenshots",
+              type: items,
               id: x,
               attributes: {
                 fileName: shot.fileName,
@@ -424,21 +450,24 @@ function statefulApi(opts: { pageState?: string } = {}) {
         ),
       });
     }
-    if (p === "/v1/appScreenshotSets" && method === "POST") {
-      const s = { id: id("set"), type: body.data.attributes.screenshotDisplayType, shots: [] as string[] };
+    if ((p === "/v1/appScreenshotSets" || p === "/v1/appPreviewSets") && method === "POST") {
+      const type = body.data.attributes.screenshotDisplayType ?? body.data.attributes.previewType;
+      const s = { id: id("set"), type, shots: [] as string[] };
       db.sets.set(s.id, s);
-      db.locs.get(body.data.relationships.appCustomProductPageLocalization.data.id)!.sets.push(s.id);
-      return res({ data: { type: "appScreenshotSets", id: s.id, attributes: { screenshotDisplayType: s.type } } }, 201);
+      db.locs.get(locOf(body.data.relationships))!.sets.push(s.id);
+      return res({ data: { type: body.data.type, id: s.id, attributes: {} } }, 201);
     }
-    if (p === "/v1/appScreenshots" && method === "POST") {
+    if ((p === "/v1/appScreenshots" || p === "/v1/appPreviews") && method === "POST") {
       const shot = { id: id("shot"), fileName: body.data.attributes.fileName as string, parts: 0 };
       db.shots.set(shot.id, shot);
-      db.sets.get(body.data.relationships.appScreenshotSet.data.id)!.shots.push(shot.id);
+      const rel = body.data.relationships.appScreenshotSet ?? body.data.relationships.appPreviewSet;
+      db.sets.get(rel.data.id)!.shots.push(shot.id);
+      if (p === "/v1/appPreviews") expect(body.data.attributes.mimeType).toBe("video/mp4");
       const size = body.data.attributes.fileSize;
       return res(
         {
           data: {
-            type: "appScreenshots",
+            type: body.data.type,
             id: shot.id,
             attributes: {
               uploadOperations: [
@@ -456,12 +485,19 @@ function statefulApi(opts: { pageState?: string } = {}) {
         201,
       );
     }
-    if ((m = p.match(/^\/v1\/appScreenshots\/(\w+)$/)) && method === "PATCH") {
-      Object.assign(db.shots.get(m[1])!, {
-        uploaded: body.data.attributes.uploaded,
-        checksum: body.data.attributes.sourceFileChecksum,
-      });
-      return res({ data: { type: "appScreenshots", id: m[1] } });
+    if ((m = p.match(/^\/v1\/(?:appScreenshots|appPreviews)\/(\w+)$/))) {
+      if (method === "PATCH") {
+        Object.assign(db.shots.get(m[1])!, {
+          uploaded: body.data.attributes.uploaded,
+          checksum: body.data.attributes.sourceFileChecksum,
+        });
+        return res({ data: { type: "appScreenshots", id: m[1] } });
+      }
+      if (method === "DELETE") {
+        db.shots.delete(m[1]);
+        for (const set of db.sets.values()) set.shots = set.shots.filter((x) => x !== m![1]);
+        return new Response(null, { status: 204 });
+      }
     }
     // Asset Library: images, and placements tying them to a page localization.
     const imageJson = (i: { id: string; referenceName: string; fileName: string; uploaded?: boolean }) => ({
@@ -473,13 +509,17 @@ function statefulApi(opts: { pageState?: string } = {}) {
         state: i.uploaded ? "COMPLETE" : "AWAITING_UPLOAD",
       },
     });
-    if ((m = p.match(/^\/v1\/appCustomProductPageLocalizations\/(\w+)\/placements$/))) {
-      const mine = [...db.placements.values()].filter((x) => x.loc === m![1]);
+    if ((m = p.match(new RegExp(`^/v1/${LOC}/(\\w+)/placements$`)))) {
+      const types = u.searchParams.get("filter[placementType]")?.split(",");
+      const group = u.searchParams.get("filter[placementGroup]");
+      const mine = [...db.placements.values()]
+        .filter((x) => x.loc === m![1] && (!types || types.includes(x.type)) && (!group || x.group === group))
+        .sort((a, b) => a.position - b.position);
       return res({
         data: mine.map((x) => ({
           type: "appAssetLibraryPlacements",
           id: x.id,
-          attributes: { placementType: x.type, placementGroup: "DEFAULT_PROFILE" },
+          attributes: { placementType: x.type, placementGroup: x.group },
           relationships: { image: { data: { type: "appAssetLibraryImages", id: x.image } } },
         })),
         included: [...new Set(mine.map((x) => x.image))].map((i) => imageJson(db.images.get(i)!)),
@@ -491,7 +531,9 @@ function statefulApi(opts: { pageState?: string } = {}) {
       return res({ data: [...db.images.values()].filter((i) => !name || i.referenceName === name).map(imageJson) });
     }
     if (p === "/v1/appAssetLibraryImages" && method === "POST") {
-      expect(body.data.attributes.category).toBe("CREATIVE_ASSETS");
+      expect(body.data.attributes.category).toBe(
+        /IPHONE_DUO/.test(body.data.attributes.fileName) ? "APP_SCREENSHOTS_AND_PREVIEWS" : "CREATIVE_ASSETS",
+      );
       expect(body.data.relationships.assetLibrary.data.id).toBe("lib1");
       const image = {
         id: id("img"),
@@ -535,15 +577,23 @@ function statefulApi(opts: { pageState?: string } = {}) {
       });
     }
     if (p === "/v1/appAssetLibraryPlacements" && method === "POST") {
-      const loc = body.data.relationships.appCustomProductPageLocalization.data.id;
+      const loc = locOf(body.data.relationships);
       const type = body.data.attributes.placementType;
-      expect(body.data.attributes.placementGroup).toBe("DEFAULT_PROFILE");
-      // One image per placement type and localization, as App Store Connect allows.
-      if ([...db.placements.values()].some((x) => x.loc === loc && x.type === type))
+      const group = body.data.attributes.placementGroup;
+      expect(group).toBe(type === "APP_SCREENSHOT" ? "IPHONE_DUO_PROFILE" : "DEFAULT_PROFILE");
+      // One header or search image, or ten screenshots, per localization, as App Store Connect allows.
+      const taken = [...db.placements.values()].filter((x) => x.loc === loc && x.type === type && x.group === group);
+      if (taken.length >= (type === "APP_SCREENSHOT" ? 10 : 1))
         return res({ errors: [{ status: "409", detail: "placement limit reached" }] }, 409);
-      const placement = { id: id("pl"), type, image: body.data.relationships.image.data.id, loc };
+      const placement = { id: id("pl"), type, group, image: body.data.relationships.image.data.id, loc, position: 99 };
       db.placements.set(placement.id, placement);
       return res({ data: { type: "appAssetLibraryPlacements", id: placement.id } }, 201);
+    }
+    if (p === "/v1/appAssetLibraryPlacementOrderingRequests" && method === "POST") {
+      const ids: string[] = body.data.relationships.orderedPlacements.data.map((d: { id: string }) => d.id);
+      db.orderings.push({ group: body.data.attributes.placementGroup, loc: locOf(body.data.relationships), ids });
+      ids.forEach((pid, i) => (db.placements.get(pid)!.position = i));
+      return res({ data: { type: "appAssetLibraryPlacementOrderingRequests", id: id("ord") } }, 201);
     }
     if ((m = p.match(/^\/v1\/appAssetLibraryPlacements\/(\w+)$/)) && method === "DELETE") {
       db.placements.delete(m[1]);
@@ -636,7 +686,7 @@ describe("asc push", () => {
     const api = statefulApi();
     const r = await push(api, true);
     expect(r.ascId).toMatch(/^page/);
-    const loc = [...api.db.locs.values()][0];
+    const loc = [...api.db.locs.values()].find((l) => l.id !== "vloc1")!;
     expect(loc).toMatchObject({ locale: "en-US", promotionalText: "Plan the week" });
     expect(loc.keywords.sort()).toEqual(["notes", "planner"]);
     const set = [...api.db.sets.values()][0];
@@ -748,6 +798,46 @@ describe("asc push", () => {
     expect(api.db.images.size).toBe(0);
   }, 120_000);
 
+  it("puts iPhone Duo screenshots in the Asset Library as the page's ordered Duo placements", async () => {
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+      c.targets = ["iphone-6.9-1320x2868", "iphone-duo-2007x2853"];
+    });
+    await render();
+    const out = path.join(fx.root, "store/generated/sets/planners/en-US");
+    expect(fs.readdirSync(out).filter((f) => f.includes("DUO"))).toEqual([
+      "01_planning_IPHONE_DUO_INNER.png",
+      "02_home_IPHONE_DUO_INNER.png",
+    ]);
+    const api = statefulApi();
+    const plan = await push(api, false);
+    expect(plan.steps).toContainEqual({ action: "upload", what: "en-US iPhone Duo: 2 screenshot(s) to the new page" });
+
+    await push(api, true);
+    const duo = () =>
+      [...api.db.placements.values()]
+        .filter((x) => x.group === "IPHONE_DUO_PROFILE")
+        .sort((a, b) => a.position - b.position)
+        .map((x) => api.db.images.get(x.image)!.fileName);
+    expect(duo()).toEqual(["01_planning_IPHONE_DUO_INNER.png", "02_home_IPHONE_DUO_INNER.png"]);
+    expect(api.db.orderings).toHaveLength(1);
+    // The classic screenshots still go to their screenshot set.
+    expect([...api.db.sets.values()].map((x) => x.type)).toEqual(["APP_IPHONE_67"]);
+
+    api.writes.length = 0;
+    const again = await push(api, true);
+    expect(api.writes).toEqual([]);
+    expect(again.steps).toContainEqual({ action: "keep", what: "en-US iPhone Duo: 2 screenshot(s) unchanged" });
+
+    // A new order: the page shows the new files in it, and the old images leave the library.
+    editJson(path.join(fx.root, "store", "manifest.json"), (m) => {
+      m.sets[0].screens = ["home", "planning"];
+    });
+    await render();
+    await push(api, true);
+    expect(duo()).toEqual(["01_home_IPHONE_DUO_INNER.png", "02_planning_IPHONE_DUO_INNER.png"]);
+    expect(api.db.images.size).toBe(2);
+  }, 120_000);
+
   it("refuses to touch a page that is in review", async () => {
     await render();
     const api = statefulApi({ pageState: "WAITING_FOR_REVIEW" });
@@ -766,4 +856,73 @@ describe("asc push", () => {
     });
     await expect(push(statefulApi(), false)).rejects.toThrow(/02_home_IPHONE_69\.png is older than its copy/);
   }, 60_000);
+});
+
+describe("asc push default", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+  const renderer = new ExportRenderer();
+  beforeAll(() => renderer.start(), 60_000);
+  afterAll(() => renderer.close());
+
+  beforeEach(() => {
+    fx = tempFixture();
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+      c.locales = ["en-US"];
+      c.targets = ["iphone-6.9-1320x2868", "iphone-duo-1398x2034"];
+    });
+  });
+  afterEach(() => fx.cleanup());
+
+  const push = (api: ReturnType<typeof statefulApi>, apply: boolean) => {
+    const v = validateProject(load());
+    return pushDefaultPage(load(), new AscClient(() => "tok", api.fetchImpl), v.manifest!, v.content, { apply });
+  };
+
+  it("uploads the page's screenshots, Duo screenshots and previews to the version that takes edits", async () => {
+    await generateProject(load(), { renderer });
+    const previews = path.join(fx.root, "store", "previews", "en-US");
+    fs.mkdirSync(previews, { recursive: true });
+    fs.writeFileSync(path.join(previews, "1-tour.mp4"), mp4({ width: 886, height: 1920, seconds: 20, fps: 30 }));
+    const api = statefulApi();
+    const plan = await push(api, false);
+    expect(api.writes).toEqual([]);
+    expect(plan.steps[0]).toEqual({ action: "keep", what: "version 2.0 (PREPARE_FOR_SUBMISSION)" });
+
+    await push(api, true);
+    const loc = api.db.locs.get("vloc1")!;
+    const sets = loc.sets.map((x) => api.db.sets.get(x)!);
+    expect(sets.map((x) => [x.type, x.shots.length])).toEqual([
+      ["APP_IPHONE_67", 2],
+      ["IPHONE_67", 1],
+    ]);
+    expect([...api.db.placements.values()].filter((x) => x.loc === "vloc1").map((x) => x.group)).toEqual([
+      "IPHONE_DUO_PROFILE",
+      "IPHONE_DUO_PROFILE",
+    ]);
+
+    api.writes.length = 0;
+    await push(api, true);
+    expect(api.writes).toEqual([]);
+  }, 120_000);
+
+  it("takes a version added for review but not yet sent, and ignores Play errors", async () => {
+    await generateProject(load(), { renderer });
+    const plan = await push(statefulApi({ versionState: "READY_FOR_REVIEW" }), false);
+    expect(plan.steps[0]).toEqual({ action: "keep", what: "version 2.0 (READY_FOR_REVIEW)" });
+    const issues = [
+      { level: "error" as const, code: "plan.too-few", message: "play", key: "play-phone-1080x1920/en-US" },
+      { level: "error" as const, code: "sets.x", message: "set", key: "sets/planners" },
+      { level: "error" as const, code: "plan.too-few", message: "ios", key: "iphone-6.9-1320x2868/en-US" },
+    ];
+    expect(pushBlockers(issues, "default").map((i) => i.message)).toEqual(["ios"]);
+  }, 120_000);
+
+  it("stops when no version takes edits, and says why", async () => {
+    await generateProject(load(), { renderer });
+    await expect(push(statefulApi({ versionState: "READY_FOR_DISTRIBUTION" }), false)).rejects.toThrow(
+      /No version takes edits \(2\.0 is READY_FOR_DISTRIBUTION\); create the next version/,
+    );
+    await expect(push(statefulApi({ versionState: "WAITING_FOR_REVIEW" }), false)).rejects.toThrow(/until review ends/);
+  }, 120_000);
 });

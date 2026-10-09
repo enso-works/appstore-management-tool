@@ -2,7 +2,7 @@ import { handle, json, requireSameOrigin } from "@/lib/server/http";
 import { HttpError, requireProject } from "@/lib/server/projects";
 import { AscAuthError, tokenSource } from "@/lib/asc/auth";
 import { AscApiError, AscClient } from "@/lib/asc/client";
-import { AscPushError, pushBlockers, pushSet } from "@/lib/asc/push";
+import { AscPushError, pushBlockers, pushPage } from "@/lib/asc/push";
 import { validateProject } from "@/lib/validate";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +12,8 @@ type Ctx = { params: Promise<{ name: string }> };
 
 /**
  * POST { set, apply? } -> the plan (apply false) or the result of uploading
- * the set as a draft custom product page or treatment. Never submits.
+ * the set as a draft custom product page or treatment, or with set "default"
+ * the product page's media to the editable version. Never submits.
  */
 export async function POST(req: Request, ctx: Ctx) {
   return handle(async () => {
@@ -32,7 +33,7 @@ export async function POST(req: Request, ctx: Ctx) {
     }
     const log: string[] = [];
     try {
-      const result = await pushSet(project, new AscClient(tokenSource(project)), v.manifest, v.content, body.set, {
+      const result = await pushPage(project, new AscClient(tokenSource(project)), v.manifest, v.content, body.set, {
         apply: body.apply === true,
         log: (l) => log.push(l),
       });

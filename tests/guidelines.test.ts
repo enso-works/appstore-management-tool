@@ -372,6 +372,13 @@ describe("Apple guideline checks", () => {
     });
   });
 
+  it('keeps "default" for the default product page', () => {
+    editJson(manifest(), (m) => {
+      m.sets = [{ id: "default", kind: "custom", screens: ["home"] }];
+    });
+    expect(validateProject(load()).issues.items.map((i) => i.code)).toContain("sets.reserved-id");
+  });
+
   describe("creative assets", () => {
     it("are App Store Connect's header and search results sizes, the universal one filling both", () => {
       expect(["header-3840x1646", "search-3840x2560", "universal-5244x2950"].map((id) => getTarget(id)!)).toEqual([
