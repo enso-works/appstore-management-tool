@@ -7,7 +7,7 @@
  * https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/
  */
 export type Platform = "ios" | "android";
-export type DeviceFamily = "iphone" | "ipad" | "phone" | "tablet" | "feature-graphic";
+export type DeviceFamily = "iphone" | "ipad" | "phone" | "tablet" | "feature-graphic" | "event";
 export type Orientation = "portrait" | "landscape";
 
 export interface TargetProfile {
@@ -124,6 +124,30 @@ export const targetProfiles = {
     height: 1920,
     fileToken: "APP_PREVIEW_69",
   },
+  // In-app event media (App Store Connect, verified 2026-10-09): the event card
+  // is 16:9 from 1920x1080, the event details page 9:16 from 1080x1920. Both
+  // render from the iPhone captures and are uploaded by hand in App Store
+  // Connect, so they go to store/generated/events/<locale>/.
+  "event-card-1920x1080": {
+    id: "event-card-1920x1080",
+    platform: "ios",
+    family: "event",
+    displayClass: "event card",
+    orientation: "landscape",
+    width: 1920,
+    height: 1080,
+    fileToken: "EVENT_CARD",
+  },
+  "event-detail-1080x1920": {
+    id: "event-detail-1080x1920",
+    platform: "ios",
+    family: "event",
+    displayClass: "event details",
+    orientation: "portrait",
+    width: 1080,
+    height: 1920,
+    fileToken: "EVENT_DETAIL",
+  },
 } as const satisfies Record<string, TargetProfile>;
 
 export type TargetId = keyof typeof targetProfiles;
@@ -139,6 +163,20 @@ export function isTargetId(id: string): id is TargetId {
 }
 
 /**
+ * A screenshot set the store shows on the product page (and deliver or supply
+ * uploads), as opposed to App Preview posters and in-app event media.
+ */
+export function isScreenshotSet(target: TargetProfile | string): boolean {
+  const t = typeof target === "string" ? getTarget(target) : target;
+  return !!t && !t.id.startsWith("appreview-") && t.family !== "event";
+}
+
+/** The device a target shows: event media show the iPhone app, everything else its own family. */
+export function deviceFamilyOf(target: TargetProfile): DeviceFamily {
+  return target.family === "event" ? "iphone" : target.family;
+}
+
+/**
  * Store targets for an app: the iPhone sets Apple asks for (6.9" and 6.1"),
  * iPad 13" for iPad apps and the Play phone set for Play apps, all in one
  * orientation. App Preview posters and the Play feature graphic stay opt-in.
@@ -146,7 +184,7 @@ export function isTargetId(id: string): id is TargetId {
 export function targetsFor(choice: { orientation: Orientation; ipad: boolean; play: boolean }): string[] {
   return targetIds.filter((id) => {
     const t = getTarget(id)!;
-    if (id.startsWith("appreview-") || t.family === "feature-graphic") return false;
+    if (!isScreenshotSet(t) || t.family === "feature-graphic") return false;
     if (t.platform === "android") return choice.play && t.family === "phone";
     if (t.orientation !== choice.orientation) return false;
     return t.family === "iphone" || (choice.ipad && t.family === "ipad");
@@ -177,6 +215,9 @@ export function outputDirFor(
   // Posters are working assets for App Preview videos, not deliver screenshots.
   if (target.id.startsWith("appreview-")) {
     return `${paths.generated ?? "store/generated"}/posters/${locale}`;
+  }
+  if (target.family === "event") {
+    return `${paths.generated ?? "store/generated"}/events/${locale}`;
   }
   if (target.platform === "android") {
     const kind =

@@ -9,6 +9,7 @@ import { fontFaceCss, fontFamilyCss, resolveFontStack, type ResolvedFont } from 
 import { frameNameFromShell, getFrame, resolveShell } from "../frames";
 import type { RenderJob } from "../render-plan";
 import type { LocaleContent } from "../schema";
+import { deviceFamilyOf } from "../targets";
 
 export interface ArtworkUrls {
   /** URL of the raw capture as the page will load it. */
@@ -56,7 +57,7 @@ export function templateInputFor(
   if (!mod) throw new Error(`Unknown template "${job.screen.template}"`);
   const overrides = mod.overridesSchema.parse(job.screen.overrides) as Record<string, unknown>;
   // Templates always see one concrete shell value for the target being rendered.
-  overrides.shell = resolveShell(overrides.shell, job.target.family) ?? "";
+  overrides.shell = resolveShell(overrides.shell, deviceFamilyOf(job.target)) ?? "";
   if (overrides.shell === "") delete overrides.shell;
   const fields = content.screens[job.screen.id] ?? {};
   const layers: ResolvedLayer[] = layersFor(job.screen.layers ?? [], job.target.id).map((layer) =>
@@ -117,7 +118,7 @@ export function renderArtworkHtml(
   // Frames are portrait artwork; landscape sets fall back to the neutral shell (validation reports it).
   const frameName =
     job.target.orientation === "portrait"
-      ? frameNameFromShell(resolveShell(job.screen.overrides.shell, job.target.family))
+      ? frameNameFromShell(resolveShell(job.screen.overrides.shell, deviceFamilyOf(job.target)))
       : undefined;
   if (frameName) {
     const frame = getFrame(frameName);

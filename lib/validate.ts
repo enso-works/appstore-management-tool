@@ -6,7 +6,7 @@ import { displayRelative, fileExists, resolveWithin } from "./paths";
 import { readImageInfo } from "./image";
 import { buildRenderPlan, ordersOf, type RenderJob } from "./render-plan";
 import type { LocaleContent, Manifest } from "./schema";
-import { getTarget } from "./targets";
+import { deviceFamilyOf, getTarget, isScreenshotSet } from "./targets";
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
 import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
@@ -124,10 +124,21 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
             `Template "${template.id}" does not support target "${targetId}" (${target.family}/${target.orientation})`,
             { key, file },
           );
+        } else if (
+          target.family === "event" &&
+          target.orientation === "landscape" &&
+          template.id !== "feature-graphic"
+        ) {
+          // The card is landscape but the captures are portrait iPhone ones; only the banner layout fits both.
+          issues.error(
+            "manifest.template-unsupported-target",
+            `Screen "${screen.id}" renders the event card with "${template.id}"; use the feature-graphic template, which fits a portrait phone into a wide card`,
+            { key, file },
+          );
         }
         if (
           target.orientation === "landscape" &&
-          frameNameFromShell(resolveShell(screen.overrides.shell, target.family))
+          frameNameFromShell(resolveShell(screen.overrides.shell, deviceFamilyOf(target)))
         ) {
           issues.error(
             "manifest.frame-landscape",
@@ -410,12 +421,12 @@ function validateCounts(project: Project, plan: RenderJob[], issues: IssueList) 
   const { min, max } = project.config.validation.screensPerTarget;
   const counts = new Map<string, number>();
   for (const job of plan) {
-    if (job.target.id.startsWith("appreview-")) continue;
+    if (!isScreenshotSet(job.target)) continue;
     const k = `${job.target.id}/${job.locale}`;
     counts.set(k, (counts.get(k) ?? 0) + job.slices);
   }
   for (const targetId of project.config.targets) {
-    if (targetId.startsWith("appreview-")) continue; // posters are not store screenshot sets
+    if (!isScreenshotSet(targetId)) continue; // posters and event media are not store screenshot sets
     for (const locale of project.config.locales) {
       const k = `${targetId}/${locale}`;
       const n = counts.get(k) ?? 0;

@@ -5,7 +5,7 @@ import { CONFIG_FILENAME, loadProject, readJsonFile, validateConfigSemantics } f
 import { APP_LANGUAGE_TO_STORE_LOCALES, type AppStoreLocale } from "./locales";
 import { dirExists, displayRelative, fileExists } from "./paths";
 import { formatZodError, projectConfigSchema, type ProjectConfigInput } from "./schema";
-import { targetsFor, type Orientation } from "./targets";
+import { isScreenshotSet, targetsFor, type Orientation } from "./targets";
 
 export interface InitOptions {
   /** Absolute app root. */
@@ -111,9 +111,7 @@ export function initProject(opts: InitOptions): InitResult {
   );
   // One raw-capture folder per device the targets render from (the target id's first token).
   const devices = new Set(
-    config.targets
-      .filter((t) => !t.startsWith("appreview-") && t !== "play-feature-1024x500")
-      .map((t) => t.split("-")[0]),
+    config.targets.filter((t) => isScreenshotSet(t) && t !== "play-feature-1024x500").map((t) => t.split("-")[0]),
   );
   for (const device of devices) {
     for (const locale of locales) keep(path.join(storeDir, "raw", device, locale));

@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactElement } from "react";
 import { z } from "zod";
 import { BACKGROUND_IMAGE_RE } from "../lib/schema";
-import { typeUnit } from "../lib/targets";
+import { deviceFamilyOf, typeUnit } from "../lib/targets";
 import { ARTWORK_ATTR, type TemplateRenderInput } from "./types";
 
 const shellValueSchema = z.union([
@@ -421,7 +421,7 @@ export function DeviceShell({ input, width, height, left, top }: DeviceShellProp
   const landscape = width > height;
   // Proportions follow the display's short side, so a landscape device keeps a real one's look.
   const short = Math.min(width, height);
-  const family = input.target.family;
+  const family = deviceFamilyOf(input.target);
   const iphone = family === "iphone";
   const tablet = family === "ipad" || family === "tablet";
   // Titanium band, then the black glass border around the display.

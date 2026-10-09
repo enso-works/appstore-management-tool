@@ -86,7 +86,9 @@ export function buildJob(
     device,
     target: targetId,
   });
-  const slices = target.family === "feature-graphic" ? 1 : (screen.panorama?.slices ?? 1);
+  // A banner or an event image is one picture, never a panorama.
+  const single = target.family === "feature-graphic" || target.family === "event";
+  const slices = single ? 1 : (screen.panorama?.slices ?? 1);
   const dir = outputDirFor(target, locale, project.paths);
   const outputPaths =
     target.family === "feature-graphic"

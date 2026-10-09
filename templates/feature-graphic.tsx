@@ -24,7 +24,7 @@ export const descriptor = {
   name: "Feature Graphic",
   requiredFields: ["headline"],
   optionalFields: ["caption"],
-  families: ["feature-graphic"] as "feature-graphic"[],
+  families: ["feature-graphic", "event"] as ("feature-graphic" | "event")[],
   orientations: ["landscape"] as "landscape"[],
   overrideKeys: COMMON_OVERRIDE_KEYS,
   fieldBudget: (field: string) => (field === "headline" ? 30 : field === "caption" ? 60 : undefined),

@@ -7,7 +7,7 @@ import { dirExists, displayRelative, fileExists, resolveWithin } from "./paths";
 import { isJpegFile, readImageInfo, type ImageInfo } from "./image";
 import { isPngFile, readPngInfo, type PngInfo } from "./png";
 import { METADATA_FIELDS } from "./schema";
-import { getTarget, outputDirFor, targetIds, type DeviceFamily, type Orientation } from "./targets";
+import { getTarget, isScreenshotSet, outputDirFor, targetIds, type DeviceFamily, type Orientation } from "./targets";
 
 export type CheckStatus = "pass" | "warn" | "fail" | "skip";
 
@@ -237,7 +237,7 @@ function scanScreenshots(project: Project): ScreenshotSet[] {
   const targets = project.config.targets
     .map((id) => getTarget(id)!)
     .filter(Boolean)
-    .filter((t) => !t.id.startsWith("appreview-"));
+    .filter((t) => isScreenshotSet(t));
   for (const locale of project.config.locales) {
     const set: ScreenshotSet = {
       locale,
@@ -308,7 +308,7 @@ function checkRequiredSizes(project: Project): ReadinessCheck {
   const ios = project.config.targets
     .map((t) => getTarget(t))
     .filter((t) => t !== undefined)
-    .filter((t) => t.platform === "ios" && !t.id.startsWith("appreview-"));
+    .filter((t) => t.platform === "ios" && isScreenshotSet(t));
   if (ios.length === 0) return skipped(id, title, "no App Store screenshot targets configured");
   const f = new Findings();
   const iphone = ios.filter((t) => t.family === "iphone");

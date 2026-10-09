@@ -67,7 +67,7 @@ export const descriptor = {
   name: "Hero Top",
   requiredFields: ["headline"],
   optionalFields: ["eyebrow", "caption"],
-  families: ["iphone", "ipad", "phone"] as ("iphone" | "ipad" | "phone")[],
+  families: ["iphone", "ipad", "phone", "event"] as ("iphone" | "ipad" | "phone" | "event")[],
   orientations: ["portrait", "landscape"] as Orientation[],
   overrideKeys: COMMON_OVERRIDE_KEYS,
   fieldBudget: (

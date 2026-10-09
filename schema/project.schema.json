@@ -86,7 +86,9 @@
           "ipad-13-2752x2064",
           "play-phone-1080x1920",
           "play-feature-1024x500",
-          "appreview-6.9-886x1920"
+          "appreview-6.9-886x1920",
+          "event-card-1920x1080",
+          "event-detail-1080x1920"
         ]
       }
     },

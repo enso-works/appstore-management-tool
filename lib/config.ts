@@ -163,7 +163,8 @@ export function sourceDeviceFor(project: Project, targetId: string): string {
 }
 
 function defaultSourceDevice(targetId: string): string {
-  // family is the first dash-separated token of every registry id.
+  // Event media show the iPhone app; every other id starts with its device family.
+  if (targetId.startsWith("event-")) return "iphone";
   return targetId.split("-")[0];
 }
 
