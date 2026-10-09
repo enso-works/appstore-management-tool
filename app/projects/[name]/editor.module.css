@@ -886,6 +886,16 @@
   color: inherit;
 }
 
+.searchTag {
+  margin-left: 0.5em;
+  padding: 0.05em 0.45em;
+  border-radius: 0.4em;
+  font-size: 0.8em;
+  font-weight: 600;
+  color: #0b0d10;
+  background: var(--accent);
+}
+
 .layerRowOff .layerRowMain {
   color: var(--muted);
 }

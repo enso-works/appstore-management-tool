@@ -39,6 +39,8 @@ export interface PreviewCanvasProps {
   /** Draw layout guides (safe padding, centres, thirds) inside the single-mode preview. */
   guides?: boolean;
   onToggleGuides?: () => void;
+  /** Strip mode: how many leading frames App Store search results show (0 for none). */
+  searchCount?: number;
 }
 
 type Zoom = "fit" | number;
@@ -69,6 +71,7 @@ export default function PreviewCanvas({
   onOpen,
   guides = false,
   onToggleGuides,
+  searchCount = 0,
 }: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -76,6 +79,14 @@ export default function PreviewCanvas({
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
   const [dragging, setDragging] = useState(false);
+  // Wrap the strip into rows. On by default for landscape sets: eight wide
+  // screens in one row only fit at a few percent zoom.
+  const [wrap, setWrap] = useState(target.width > target.height);
+  const [wrapFor, setWrapFor] = useState(target.orientation);
+  if (wrapFor !== target.orientation) {
+    setWrapFor(target.orientation);
+    setWrap(target.width > target.height);
+  }
 
   const W = target.width;
   const H = target.height;
@@ -86,10 +97,39 @@ export default function PreviewCanvas({
   );
   const gap = Math.round(W * (storeLook ? 0.06 : 0.04));
   const pad = Math.round(W * 0.06);
-  const cols = Math.max(frames.length, belowRow ? belowRow.images.length : 0);
   const rowGap = Math.round(W * 0.12);
-  const contentW = cols * W + Math.max(0, cols - 1) * gap + (storeLook ? 2 * pad : 0);
-  const contentH = H + (storeLook ? 2 * pad : 0) + (belowRow ? rowGap + H : 0);
+  const outer = storeLook ? 2 * pad : 0;
+  const canWrap = mode !== "single" && !belowRow && frames.length > 1;
+  const extent = (perRow: number) => {
+    const rows = Math.ceil(frames.length / perRow) + (belowRow ? 1 : 0);
+    const cols = Math.max(perRow, belowRow ? belowRow.images.length : 0);
+    return {
+      w: cols * W + Math.max(0, cols - 1) * gap + outer,
+      h: rows * H + Math.max(0, rows - 1) * rowGap + outer,
+    };
+  };
+  // Frames per row: all of them, or when wrapping, the count that shows them largest in the viewport.
+  const perRow = useMemo(() => {
+    const all = Math.max(1, frames.length);
+    if (!(canWrap && wrap) || !size.w || !size.h) return all;
+    let best = all;
+    let bestScale = 0;
+    for (let c = all; c >= 1; c--) {
+      const e = extent(c);
+      const fit = Math.min((size.w - 32) / e.w, (size.h - 72) / e.h);
+      if (fit > bestScale * 1.001) {
+        best = c;
+        bestScale = fit;
+      }
+    }
+    return best;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canWrap, wrap, frames.length, size.w, size.h, W, H, gap, rowGap, outer]);
+  const rows = Array.from({ length: Math.ceil(frames.length / perRow) }, (_, r) =>
+    frames.slice(r * perRow, (r + 1) * perRow),
+  );
+  const cols = Math.max(perRow, belowRow ? belowRow.images.length : 0);
+  const { w: contentW, h: contentH } = extent(perRow);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -118,11 +158,12 @@ export default function PreviewCanvas({
   const sPad = storeLook ? Math.round(pad * effS) : 0;
   const sRowGap = Math.round(rowGap * effS);
   const sRadius = storeLook ? Math.round(W * 0.045 * effS) : 0;
+  const rowCount = rows.length + (belowRow ? 1 : 0);
   const worldW = cols * sW + Math.max(0, cols - 1) * sGap + 2 * sPad;
-  const worldH = sH + 2 * sPad + (belowRow ? sRowGap + sH : 0);
+  const worldH = rowCount * sH + Math.max(0, rowCount - 1) * sRowGap + 2 * sPad;
 
   // Reset to fit when the layout (mode/target/count) changes (derived-state reset during render).
-  const layoutKey = `${mode}/${target.id}/${frames.length}/${storeLook}/${belowRow ? belowRow.images.length : 0}`;
+  const layoutKey = `${mode}/${target.id}/${frames.length}/${storeLook}/${belowRow ? belowRow.images.length : 0}/${perRow}`;
   const [lastLayoutKey, setLastLayoutKey] = useState(layoutKey);
   if (layoutKey !== lastLayoutKey) {
     setLastLayoutKey(layoutKey);
@@ -288,58 +329,71 @@ export default function PreviewCanvas({
           borderRadius: storeLook ? Math.round(W * 0.02 * effS) : 0,
         }}
       >
-        <div className={styles.worldRow} style={{ gap: sGap }}>
-          {frames.map(({ item, slice, key }) => {
-            const slices = item.slices ?? 1;
-            return (
-              <div
-                key={key}
-                data-frame-id={item.id}
-                className={`${styles.frameWrap} ${item.id === selectedId && mode !== "single" ? styles.frameSelected : ""}`}
-                style={{ width: sW, height: sH, borderRadius: sRadius }}
-              >
-                {item.html ? (
-                  <iframe
-                    title={`${item.id} ${slice + 1}/${slices}`}
-                    srcDoc={item.html}
-                    sandbox="allow-scripts allow-same-origin"
-                    style={{
-                      width: W * slices,
-                      height: H,
-                      border: 0,
-                      background: "#000",
-                      // Single mode: the one shown frame is editable. Strip mode:
-                      // only the selected frame takes the pointer, so every other
-                      // frame stays click-to-select and drag-to-pan.
-                      pointerEvents:
-                        interactive && (mode === "single" || (mode === "strip" && item.id === selectedId))
-                          ? "auto"
-                          : "none",
-                      display: "block",
-                      transform: `translateX(${-slice * sW}px) scale(${effS})`,
-                      transformOrigin: "0 0",
-                    }}
-                  />
-                ) : (
-                  <div className={styles.framePlaceholder} style={{ fontSize: Math.max(10, Math.round(sW * 0.06)) }}>
-                    rendering…
-                  </div>
-                )}
-                {mode !== "single" && (
-                  <div
-                    className={styles.frameLabel}
-                    style={{ fontSize: labelFont, bottom: Math.round(sW * 0.03), left: Math.round(sW * 0.03) }}
-                  >
-                    <span className={`${styles.dot} ${styles[item.status ?? "ok"]}`} />{" "}
-                    {item.label ?? `${String(item.order + slice).padStart(2, "0")} ${item.id}`}
-                    {slices > 1 ? ` (${slice + 1}/${slices})` : ""}
-                    {item.statusText && slice === 0 ? <span className={styles.muted}> — {item.statusText}</span> : null}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {rows.map((row, r) => (
+          <div key={r} className={styles.worldRow} style={{ gap: sGap }}>
+            {row.map(({ item, slice, key }, i) => {
+              const slices = item.slices ?? 1;
+              const inSearch = r * perRow + i < searchCount;
+              return (
+                <div
+                  key={key}
+                  data-frame-id={item.id}
+                  className={`${styles.frameWrap} ${item.id === selectedId && mode !== "single" ? styles.frameSelected : ""}`}
+                  style={{ width: sW, height: sH, borderRadius: sRadius }}
+                >
+                  {item.html ? (
+                    <iframe
+                      title={`${item.id} ${slice + 1}/${slices}`}
+                      srcDoc={item.html}
+                      sandbox="allow-scripts allow-same-origin"
+                      style={{
+                        width: W * slices,
+                        height: H,
+                        border: 0,
+                        background: "#000",
+                        // Single mode: the one shown frame is editable. Strip mode:
+                        // only the selected frame takes the pointer, so every other
+                        // frame stays click-to-select and drag-to-pan.
+                        pointerEvents:
+                          interactive && (mode === "single" || (mode === "strip" && item.id === selectedId))
+                            ? "auto"
+                            : "none",
+                        display: "block",
+                        transform: `translateX(${-slice * sW}px) scale(${effS})`,
+                        transformOrigin: "0 0",
+                      }}
+                    />
+                  ) : (
+                    <div className={styles.framePlaceholder} style={{ fontSize: Math.max(10, Math.round(sW * 0.06)) }}>
+                      rendering…
+                    </div>
+                  )}
+                  {mode !== "single" && (
+                    <div
+                      className={styles.frameLabel}
+                      style={{ fontSize: labelFont, bottom: Math.round(sW * 0.03), left: Math.round(sW * 0.03) }}
+                    >
+                      <span className={`${styles.dot} ${styles[item.status ?? "ok"]}`} />{" "}
+                      {item.label ?? `${String(item.order + slice).padStart(2, "0")} ${item.id}`}
+                      {slices > 1 ? ` (${slice + 1}/${slices})` : ""}
+                      {inSearch && (
+                        <span
+                          className={styles.searchTag}
+                          title="App Store search results show this screenshot when there is no app preview"
+                        >
+                          search
+                        </span>
+                      )}
+                      {item.statusText && slice === 0 ? (
+                        <span className={styles.muted}> — {item.statusText}</span>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
         {belowRow && (
           <div className={styles.worldRow} style={{ gap: sGap }}>
             {belowRow.images.map((src, i) => (
@@ -379,6 +433,19 @@ export default function PreviewCanvas({
         <button className={styles.btnSmall} onClick={() => zoomTo(1)} title="actual pixels (1)">
           100%
         </button>
+        {canWrap && (
+          <button
+            className={`${styles.btnSmall} ${wrap ? styles.chipActive : ""}`}
+            onClick={() => setWrap((w) => !w)}
+            title={
+              wrap
+                ? "show every screen in one row, as the store does"
+                : "wrap the screens into rows that fit the window"
+            }
+          >
+            Wrap
+          </button>
+        )}
         {mode === "single" && onToggleGuides && (
           <button
             className={`${styles.btnSmall} ${guides ? styles.chipActive : ""}`}

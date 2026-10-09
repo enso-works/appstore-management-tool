@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Issue } from "@/lib/issues";
 import type { LocaleContent, Manifest, ProjectConfig, ScreenDefinition } from "@/lib/schema";
-import type { TargetProfile } from "@/lib/targets";
+import { isScreenshotSet, type TargetProfile } from "@/lib/targets";
 import type { TemplateDescriptor } from "@/templates/types";
 import type { InPageResult } from "@/lib/render/checks";
 import type { FitResult } from "@/lib/render/fit";
@@ -1424,6 +1424,15 @@ export default function Editor({ name }: { name: string }) {
               <PreviewCanvas
                 target={target}
                 items={canvasItems}
+                searchCount={
+                  // Apple: "depending on the orientation of your screenshots, the first one to three
+                  // images will appear in search results when no app preview is available".
+                  canvasMode === "strip" && target && target.platform === "ios" && isScreenshotSet(target)
+                    ? target.orientation === "portrait"
+                      ? 3
+                      : 1
+                    : 0
+                }
                 selectedId={canvasSelectedId}
                 onSelect={onCanvasSelect}
                 onOpen={(id) => {
@@ -1510,6 +1519,16 @@ export default function Editor({ name }: { name: string }) {
                       type="checkbox"
                       checked={screen.enabled}
                       onChange={(e) => updateScreen({ enabled: e.target.checked })}
+                    />
+                  </label>
+                  <label className={styles.row}>
+                    <span title="what the capture shows; readiness asks for one dark screenshot when the app has Dark Mode">
+                      Dark Mode
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={screen.appearance === "dark"}
+                      onChange={(e) => updateScreen({ appearance: e.target.checked ? "dark" : undefined })}
                     />
                   </label>
                   <label className={styles.row}>
