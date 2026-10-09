@@ -49,6 +49,41 @@ describe("editor server helpers", () => {
     expect(fs.readdirSync(path.dirname(file)).some((f) => f.endsWith(".tmp"))).toBe(false);
   });
 
+  it("keeps named sets and their copy when the editor saves", () => {
+    const p = load();
+    const manifestFile = p.paths.manifest;
+    const manifest = readJson<Record<string, unknown>>(manifestFile);
+    manifest.sets = [{ id: "planners", kind: "custom", deepLink: "demo://plan", screens: ["planning", "home"] }];
+    saveManifest(p, manifest, etagOf(manifestFile));
+    expect(readJson<{ sets?: unknown[] }>(manifestFile).sets).toHaveLength(1);
+
+    const file = contentFileFor(p, "en-US");
+    const content = readJson<Record<string, unknown>>(file);
+    content.sets = { planners: { promotionalText: "Plan it", screens: { home: { headline: "Plan your week" } } } };
+    saveContent(p, "en-US", content, etagOf(file));
+    expect(readJson<{ sets?: Record<string, unknown> }>(file).sets?.planners).toEqual({
+      promotionalText: "Plan it",
+      screens: { home: { headline: "Plan your week" } },
+    });
+
+    // An id `asc push` stored survives a save from an editor that loaded the manifest earlier.
+    const stored = readJson<{ sets: Record<string, unknown>[] }>(manifestFile);
+    stored.sets[0].ascId = "cpp-123";
+    fs.writeFileSync(manifestFile, JSON.stringify(stored, null, 2));
+    saveManifest(p, manifest, etagOf(manifestFile));
+    expect(readJson<{ sets: { ascId?: string }[] }>(manifestFile).sets[0].ascId).toBe("cpp-123");
+    // ...unless the editor unlinks it on purpose.
+    const unlinked = structuredClone(manifest) as { sets: Record<string, unknown>[] };
+    unlinked.sets[0].ascId = "";
+    saveManifest(p, unlinked, etagOf(manifestFile));
+    expect("ascId" in readJson<{ sets: object[] }>(manifestFile).sets[0]).toBe(false);
+
+    // Without sets, neither file gets an empty key.
+    delete manifest.sets;
+    saveManifest(p, manifest, etagOf(manifestFile));
+    expect("sets" in readJson<object>(manifestFile)).toBe(false);
+  });
+
   it("rejects stale etags with 409 and bad bodies with 422", () => {
     const p = load();
     const content = readJson<Record<string, unknown>>(contentFileFor(p, "en-US"));
@@ -246,4 +281,5 @@ describe("bootstrapLocaleContent", () => {
       fx.cleanup();
     }
   });
+
 });

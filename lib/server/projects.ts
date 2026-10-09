@@ -87,8 +87,14 @@ export function saveContent(project: Project, locale: string, body: unknown, ifM
 }
 
 function orderContent(c: LocaleContent & { $schema?: string }) {
-  const { $schema, locale, direction, screens } = c;
-  return { ...($schema ? { $schema } : {}), locale, ...(direction ? { direction } : {}), screens };
+  const { $schema, locale, direction, screens, sets } = c;
+  return {
+    ...($schema ? { $schema } : {}),
+    locale,
+    ...(direction ? { direction } : {}),
+    screens,
+    ...(sets && Object.keys(sets).length ? { sets } : {}),
+  };
 }
 
 export function saveManifest(project: Project, body: unknown, ifMatch: string | undefined): SaveResult {
@@ -100,15 +106,32 @@ export function saveManifest(project: Project, body: unknown, ifMatch: string | 
     throw new HttpError(409, "manifest.json changed on disk since it was loaded; reload before saving");
   }
   const out: Manifest & { $schema?: string } = { ...parsed.data };
-  if (!out.$schema && fileExists(file)) {
+  if (fileExists(file)) {
     try {
-      const prev = JSON.parse(fs.readFileSync(file, "utf8")) as { $schema?: string };
-      if (prev.$schema) out.$schema = prev.$schema;
+      const prev = JSON.parse(fs.readFileSync(file, "utf8")) as Manifest & { $schema?: string };
+      if (!out.$schema && prev.$schema) out.$schema = prev.$schema;
+      // `asc push` stores App Store Connect's id in the file; an editor that loaded the
+      // manifest before that must not drop it, or the next push would make a second page.
+      // An empty ascId is an explicit unlink and leaves the file without one.
+      out.sets = out.sets?.map((set) => {
+        if (set.ascId === "") {
+          const unlinked = { ...set };
+          delete unlinked.ascId;
+          return unlinked;
+        }
+        const stored = set.ascId ? undefined : prev.sets?.find((p) => p.id === set.id && p.kind === set.kind)?.ascId;
+        return stored ? { ...set, ascId: stored } : set;
+      });
     } catch {
       // ignore
     }
   }
-  const ordered = { ...(out.$schema ? { $schema: out.$schema } : {}), screens: out.screens };
+  // Named sets (custom product pages, treatments) follow the screens; a manifest without any keeps no key.
+  const ordered = {
+    ...(out.$schema ? { $schema: out.$schema } : {}),
+    screens: out.screens,
+    ...(out.sets?.length ? { sets: out.sets } : {}),
+  };
   return { etag: writeJsonAtomic(file, ordered) };
 }
 
