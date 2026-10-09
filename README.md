@@ -50,7 +50,9 @@ The status pill at the top runs the same checks a build does, as you edit: text 
 the minimum font scale, text over the device, missing glyphs, missing copy in a locale.
 
 - **Single**: one screen at a time.
-- **Strip**: every screen side by side, the way the store shows them.
+- **Strip**: every screen side by side, the way the store shows them, wrapped into rows when
+  that shows them larger (landscape sets start wrapped). The screens App Store search shows are
+  tagged: the first three in portrait, the first one in landscape.
 - **Locales**: one screen in every language at once.
 
 ## A phone that looks like one
@@ -66,12 +68,29 @@ capture keeps its full size. Official device frames from `fastlane frameit` work
 ## Art on top
 
 Any screen can carry image and text layers above the template: a badge, a logo, or a character
-standing in front of the phone. Layers can be limited to some targets, because a wide iPhone
-canvas and a squarer iPad canvas want different positions.
+standing in front of the phone. Pick art from `store/assets` by thumbnail, drag it like the
+phone, and limit it to some targets: a wide iPhone canvas and a squarer iPad canvas want
+different positions. The Elements panel shows which targets each layer draws on, dims the ones
+the current target does not show, and **Own copy here** splits a shared layer so this target's
+copy moves on its own.
 
 Rallo's players are rendered in Blender from the game's own rigged model and animations, the
 backdrop is an equirectangular render of the game's stadium, and the scripts that make them live
-in the app (`store/scenes/`), so the art is rebuilt the same way after the game changes.
+in the app (`store/scenes/`). `scenes` in the config lists them as steps, and `store-shots scenes
+render` runs the ones whose scripts or inputs changed, Blender headless, then the Python
+post-processing. `--quick` renders a quarter-size draft into `store/generated/scenes/` and leaves
+`store/assets` alone.
+
+```json
+"scenes": {
+  "steps": [
+    { "id": "characters", "blender": "store/scenes/characters.py", "args": ["{work}/chars"],
+      "inputs": ["public/models/nole.glb"] },
+    { "id": "post", "python": "store/scenes/post.py", "needs": ["characters"],
+      "outputs": ["store/assets/characters/serve.png"] }
+  ]
+}
+```
 
 ## Store metadata and readiness
 
@@ -87,9 +106,29 @@ Readiness follows Apple's own guidance, checked against Apple's pages:
   no "app", no repeated words, nothing under three characters
 - **Screenshot copy**: no prices, discounts, URLs, ©, other platforms or stores, or Apple awards
 - **Files**: PNG or JPEG, exact sizes, no alpha, the same count in every locale
+- **Dark Mode**: a screen marked as dark when the app follows the system appearance
+- **Icons**: dark and tinted variants (Expo `ios.icon`, an Icon Composer file, or the asset
+  catalog)
+- **App previews** in `store/previews/<locale>/`: 886x1920 or 1200x1600 either way round,
+  15-30 seconds, at most 30 fps and 500 MB, three per device
 
 It never reads credential files (`*.p8`, `asc_api_key.json`); it only checks that they exist. It
 never runs a lane that builds or submits.
+
+## Product page variants and events
+
+Custom product pages (up to 70) and product page optimization treatments (up to 3) get their
+own screenshot sets in the manifest. A set picks screens in its own order, including screens
+the default page leaves out, and `generate` renders it into
+`store/generated/sets/<id>/<locale>/`, numbered from 01:
+
+```json
+"sets": [{ "id": "runners", "kind": "custom", "name": "Runners", "screens": ["run", "home", "stats"] }]
+```
+
+In-app event media render from the same captures: `event-card-1920x1080` (with the
+`feature-graphic` layout) and `event-detail-1080x1920`, into `store/generated/events/`. App
+Store Connect takes sets and event media by hand; deliver does not upload them.
 
 ## Mac app
 
@@ -118,6 +157,7 @@ Every target renders at the exact pixel size the store accepts, as an opaque PNG
 | `play-phone-1080x1920`                                              | Google Play, phone                                     | 1080 × 1920 |
 | `play-feature-1024x500`                                             | Google Play, feature graphic                           | 1024 × 500  |
 | `appreview-6.9-886x1920`                                            | App Preview poster                                     | 886 × 1920  |
+| `event-card-1920x1080`, `event-detail-1080x1920`                    | In-app event card and details page                     |             |
 
 `generate` renders every target × locale × screen, checks the size of each file before writing
 it, and skips anything whose inputs have not changed.
@@ -135,7 +175,7 @@ npx store-shots projects | remove <name> | prune
 npx store-shots validate  [--project <app>] [--dry-run] [--json]
 npx store-shots readiness [--project <app>] [--json]
 npx store-shots generate  [--project <app>] [--locale de-DE] [--screen home] [--target <id>]
-                          [--strict] [--force] [--dry-run] [--json]
+                          [--set <id>] [--strict] [--force] [--dry-run] [--json]
 npx store-shots check     [--project <app>]   # CI gate: validate + readiness + metadata limits
 npx store-shots capture   --screen home --device iphone [--locale de-DE] [--clean-status-bar]
 npx store-shots fonts     add "Space Grotesk" | list | check
@@ -143,6 +183,7 @@ npx store-shots metadata  validate | show --locale de-DE
 npx store-shots lane      validate | metadata | screenshots [--yes] [--override "<reason>"]
 npx store-shots sheet                         # contact sheets
 npx store-shots frames    setup | list        # official device frames
+npx store-shots scenes    list | render [step...] [--force] [--quick]   # the app's Blender art
 npx store-shots clean     [--project <app>]   # removes only files the tool wrote
 ```
 
@@ -156,6 +197,9 @@ store/manifest.json                            screens, order, template, layers
 store/content/<locale>.json                    copy per locale
 store/raw/<device>/<locale>/<order>-<id>.png   captures (never written by the tool)
 store/assets/                                  fonts, logos, backgrounds, layer art
+store/scenes/                                  optional: the scripts behind the art
+store/previews/<locale>/                       optional: App Preview videos, checked by readiness
+store/generated/                               sets, event media, posters, scene renders (gitignored)
 fastlane/metadata/<locale>/*.txt               store text, read and edited by the Store tab
 fastlane/screenshots/<locale>/                 iOS output, uploaded by deliver
 fastlane/metadata/android/<locale>/images/     Play output, uploaded by supply
