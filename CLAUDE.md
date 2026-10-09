@@ -24,8 +24,13 @@ The tool discovers apps by scanning the workspace root (three levels up from `li
   `store/`, `fastlane/metadata/`, `fastlane/screenshots/` and `fastlane/Deliverfile` inside
   that app, and only when the plan phase says so. Never commit inside an app as a side
   effect of tool work.
-- Never read, copy or log `fastlane/*.p8`, `asc_api_key.json`, `play_service_account.json`.
-  Existence checks only.
+- Credentials (`fastlane/*.p8`, `asc_api_key.json`, `play_service_account.json`): Claude
+  never opens, prints, copies or logs them. Since 2026-10-09 (the user's decision) the tool's
+  App Store Connect client may read the App Store Connect key at runtime, only to sign API
+  tokens in memory; it never writes, logs or returns the key or a token. Everything else
+  stays an existence check.
+- The App Store Connect client uploads drafts only (custom product pages, optimization
+  treatments, Asset Library items). It never submits anything for review.
 - Never add or run fastlane lanes that build (`beta`, `internal`) or submit.
   `submit_for_review` stays `false` everywhere.
 - After a phase: run `npm test`, `npm run typecheck`, `npm run lint`, then `/code-review`;

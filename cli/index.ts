@@ -21,6 +21,10 @@ import { LANE_KEYS, preflightLane, runLane, type LaneKey } from "../lib/fastlane
 import { captureAll, captureLocales, captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
 import { writeContactSheets } from "../lib/sheet";
 import { downloadFrames, framesAvailable, framesDir, listFrames } from "../lib/frames";
+import { AscAuthError, tokenSource } from "../lib/asc/auth";
+import { AscApiError, AscClient } from "../lib/asc/client";
+import { ascStatus, AscStatusError } from "../lib/asc/status";
+import { loadManifest } from "../lib/content";
 import { expandArgs, findBlender, planScenes, renderScenes, sceneDirs, ScenesError } from "../lib/scenes";
 
 const program = new Command();
@@ -677,6 +681,48 @@ program
     }
     for (const r of results)
       console.log(`${displayRelative(project.root, r.file)}  (${r.locale}, ${r.target}, ${r.count} screenshots)`);
+  });
+
+const asc = program
+  .command("asc")
+  .description("App Store Connect, with the app's own API key: custom product pages, experiments, versions");
+
+asc
+  .command("status")
+  .description("What App Store Connect has for the app, matched to the manifest's named sets (read-only)")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--json", "machine-readable output")
+  .action(async (opts: { project?: string; json?: boolean }) => {
+    const project = openProject(opts.project);
+    const { manifest } = loadManifest(project);
+    try {
+      const s = await ascStatus(project, new AscClient(tokenSource(project)), manifest);
+      if (opts.json) {
+        console.log(JSON.stringify(s, null, 2));
+        return;
+      }
+      console.log(`${s.app.name} (${s.app.bundleId})`);
+      for (const v of s.versions) console.log(`  version ${v.version.padEnd(8)} ${v.state ?? ""}`);
+      console.log(`\nCustom product pages (${s.pages.length}/70):`);
+      for (const p of s.pages) {
+        const v = p.versions.at(-1);
+        console.log(
+          `  ${p.name.padEnd(28)} ${p.visible ? "visible" : "hidden "}  ${v?.state ?? ""}${p.set ? `  = set "${p.set}"` : ""}`,
+        );
+      }
+      console.log(`\nOptimization experiments (${s.experiments.length}):`);
+      for (const e of s.experiments) {
+        console.log(`  ${e.name.padEnd(28)} ${e.state ?? ""}`);
+        for (const t of e.treatments) console.log(`    ${t.name}${t.set ? `  = set "${t.set}"` : ""}`);
+      }
+      if (s.notUploaded.length) console.log(`\nNot in App Store Connect yet: ${s.notUploaded.join(", ")}`);
+    } catch (err) {
+      if (err instanceof AscAuthError || err instanceof AscStatusError || err instanceof AscApiError) {
+        console.error(err.message);
+        process.exit(err instanceof AscApiError ? 1 : 2);
+      }
+      throw err;
+    }
   });
 
 const scenes = program
