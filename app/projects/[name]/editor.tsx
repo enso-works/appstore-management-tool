@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Issue } from "@/lib/issues";
 import type { LocaleContent, Manifest, ProjectConfig, ScreenDefinition, ScreenSet, SetContent } from "@/lib/schema";
-import { isScreenshotSet, type TargetProfile } from "@/lib/targets";
+import { isScreenshotSet, pageCreative, type TargetProfile } from "@/lib/targets";
 import type { TemplateDescriptor } from "@/templates/types";
 import type { InPageResult } from "@/lib/render/checks";
 import type { FitResult } from "@/lib/render/fit";
@@ -1745,6 +1745,10 @@ export default function Editor({ name }: { name: string }) {
                 text={content[locale]?.sets?.[page.id]}
                 locale={locale}
                 appKeywords={appKeywords[locale] ?? []}
+                creative={pageCreative(
+                  page.screens.flatMap((id) => manifest.screens.filter((s) => s.id === id)),
+                  snap.config.targets,
+                )}
                 onChange={patchPage}
                 onTextChange={patchPageText}
                 onDelete={deletePage}

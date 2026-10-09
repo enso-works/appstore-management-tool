@@ -14,6 +14,8 @@ interface Props {
   locale: string;
   /** The app's keywords in this locale (keywords.txt), which a custom page picks from. */
   appKeywords: string[];
+  /** The page's screens that give its header and search results images, if any. */
+  creative: { header?: string; search?: string };
   onChange: (patch: Partial<ScreenSet>) => void;
   onTextChange: (patch: Partial<SetContent>) => void;
   onDelete: () => void;
@@ -42,6 +44,7 @@ export default function PagePanel({
   text,
   locale,
   appKeywords,
+  creative,
   onChange,
   onTextChange,
   onDelete,
@@ -220,6 +223,13 @@ export default function PagePanel({
               </li>
             ))}
           </ul>
+        )}
+      </div>
+      <div className={styles.small}>
+        Header image: {creative.header ? <code>{creative.header}</code> : "none"} · Search results image:{" "}
+        {creative.search ? <code>{creative.search}</code> : "none"}
+        {!creative.header && !creative.search && (
+          <> (add a screen with the Header, Search results or Header + search target; they show on iOS 27 and later)</>
         )}
       </div>
       <div className={styles.inline}>
