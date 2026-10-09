@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import type { ScreenSet, SetContent } from "@/lib/schema";
+import AscPushBox from "./asc-push-box";
 import styles from "./editor.module.css";
 
 interface Props {
@@ -29,14 +29,6 @@ const PROMO_LIMIT = 170;
  * shows are picked in the sidebar; their copy is edited below as usual and
  * applies to this page only.
  */
-interface PushReply {
-  steps?: { action: string; what: string }[];
-  ascId?: string;
-  applied?: boolean;
-  error?: string;
-  details?: string[];
-}
-
 export default function PagePanel({
   projectName,
   dirty,
@@ -50,31 +42,6 @@ export default function PagePanel({
   onDelete,
 }: Props) {
   const custom = page.kind === "custom";
-  const [push, setPush] = useState<{ busy: boolean; reply?: PushReply }>({ busy: false });
-
-  async function runPush(apply: boolean) {
-    if (
-      apply &&
-      !confirm(`Upload "${page.name ?? page.id}" to App Store Connect as a draft? Nothing is submitted for review.`)
-    )
-      return;
-    setPush({ busy: true });
-    try {
-      const res = await fetch(`/api/projects/${encodeURIComponent(projectName)}/asc/push`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ set: page.id, apply }),
-      });
-      const reply = (await res.json()) as PushReply;
-      setPush({ busy: false, reply });
-      // The tool stored App Store Connect's id in the manifest; keep it in the editor's copy too,
-      // or the next autosave would drop it and the next upload would make a second page.
-      if (reply.applied && reply.ascId && reply.ascId !== page.ascId) onChange({ ascId: reply.ascId });
-    } catch (err) {
-      setPush({ busy: false, reply: { error: (err as Error).message } });
-    }
-  }
-  const changes = push.reply?.steps?.filter((s) => s.action !== "keep" && s.action !== "skip").length ?? 0;
   const promo = text?.promotionalText ?? "";
   const chosen = new Set((text?.keywords ?? []).map((k) => k.toLowerCase()));
   return (
@@ -175,63 +142,16 @@ export default function PagePanel({
           </div>
         </>
       )}
-      <div className={styles.field}>
-        <div className={styles.fieldHead}>
-          <span title="uploads drafts with the app's API key; never submits">App Store Connect</span>
-          {page.ascId && (
-            <span className={styles.muted}>
-              {page.ascId}{" "}
-              <button
-                className={styles.linkBtn}
-                title="forget this link, e.g. after deleting the page or ending the test in App Store Connect; the next upload matches by name"
-                onClick={() => onChange({ ascId: "" })}
-              >
-                unlink
-              </button>
-            </span>
-          )}
-        </div>
-        <div className={styles.inline}>
-          <button
-            className={styles.btnSmall}
-            disabled={push.busy || dirty}
-            title={dirty ? "waiting for your edits to save" : "compare with App Store Connect; changes nothing"}
-            onClick={() => void runPush(false)}
-          >
-            {push.busy ? "Working…" : "Check"}
-          </button>
-          {push.reply?.steps && !push.reply.applied && changes > 0 && (
-            <button className={styles.btnSmall} disabled={push.busy || dirty} onClick={() => void runPush(true)}>
-              Upload draft ({changes} change{changes === 1 ? "" : "s"})
-            </button>
-          )}
-          <span className={styles.small}>Generate the page first; the upload sends its rendered files.</span>
-        </div>
-        {push.reply?.error && (
-          <p className={styles.error}>
-            {push.reply.error}
-            {push.reply.details?.length ? `: ${push.reply.details.join("; ")}` : ""}
-          </p>
-        )}
-        {push.reply?.steps && (
-          <ul className={styles.pushSteps}>
-            {push.reply.applied && <li>Uploaded. Submit it for review in App Store Connect when ready.</li>}
-            {!push.reply.applied && changes === 0 && <li>App Store Connect is up to date.</li>}
-            {push.reply.steps.map((s, i) => (
-              <li key={i}>
-                <span className={styles.muted}>{s.action}</span> {s.what}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className={styles.small}>
-        Header image: {creative.header ? <code>{creative.header}</code> : "none"} · Search results image:{" "}
-        {creative.search ? <code>{creative.search}</code> : "none"}
-        {!creative.header && !creative.search && (
-          <> (add a screen with the Header, Search results or Header + search target; they show on iOS 27 and later)</>
-        )}
-      </div>
+      <AscPushBox
+        projectName={projectName}
+        dirty={dirty}
+        set={page.id}
+        label={page.name ?? page.id}
+        ascId={page.ascId}
+        onLinked={(ascId) => onChange({ ascId })}
+        hint="Generate the page first; the upload sends its rendered files."
+      />
+      <PageCreative creative={creative} />
       <div className={styles.inline}>
         <span className={styles.small}>
           Screens: pick them in the sidebar. Copy you edit now applies to this {custom ? "page" : "treatment"} only.
@@ -241,6 +161,19 @@ export default function PagePanel({
           Delete {custom ? "page" : "treatment"}
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Which screens give a page its header and search results images (shown on iOS 27 and later). */
+export function PageCreative({ creative }: { creative: { header?: string; search?: string } }) {
+  return (
+    <div className={styles.small}>
+      Header image: {creative.header ? <code>{creative.header}</code> : "none"} · Search results image:{" "}
+      {creative.search ? <code>{creative.search}</code> : "none"}
+      {!creative.header && !creative.search && (
+        <> (add a screen with the Header, Search results or Header + search target; they show on iOS 27 and later)</>
+      )}
     </div>
   );
 }

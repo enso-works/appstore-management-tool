@@ -15,7 +15,8 @@ import ReleasePanel from "./release-panel";
 import BackgroundEditor from "./background-editor";
 import ColorField from "./color-field";
 import LayerInspector from "./layer-inspector";
-import PagePanel from "./page-panel";
+import PagePanel, { PageCreative } from "./page-panel";
+import AscPushBox from "./asc-push-box";
 import PreviewCanvas, { type CanvasItem } from "./preview-canvas";
 import { liveImageUrl } from "@/lib/live";
 import styles from "./editor.module.css";
@@ -1753,6 +1754,24 @@ export default function Editor({ name }: { name: string }) {
                 onTextChange={patchPageText}
                 onDelete={deletePage}
               />
+            )}
+            {!page && snap.config.targets.some((t) => t.startsWith("iphone-") || t.startsWith("ipad-")) && (
+              <details className={styles.pagePanel}>
+                <summary className={styles.sectionTitle}>Default page in App Store Connect</summary>
+                <PageCreative
+                  creative={pageCreative(
+                    manifest.screens.filter((s) => s.enabled),
+                    snap.config.targets,
+                  )}
+                />
+                <AscPushBox
+                  projectName={name}
+                  dirty={isDirty}
+                  set="default"
+                  label="the default page's screenshots and previews"
+                  hint="Uploads screenshots, iPhone Duo, header, search and previews to the version that takes edits; deliver keeps the text."
+                />
+              </details>
             )}
             {screen && (
               <>
