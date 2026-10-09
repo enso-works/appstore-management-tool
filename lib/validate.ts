@@ -10,6 +10,7 @@ import { deviceFamilyOf, getTarget, isOptInTarget, isScreenshotSet } from "./tar
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
 import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
+import { readMetadataLocale } from "./metadata";
 import { requiredFontFamilies, resolveFontStack } from "./fonts";
 import { GlyphChecker, suggestFamilyFor } from "./glyphs";
 import { frameNameFromShell, framesAvailable, getFrame, resolveShell, shellValues } from "./frames";
@@ -52,6 +53,7 @@ export function validateProject(project: Project): ValidationResult {
   validateSets(project, manifest, issues);
   validateContent(project, manifest, content, issues);
   validateStoreClaims(project, manifest, content, issues);
+  validateSetContent(project, manifest, content, issues);
   validateGlyphs(project, manifest, content, issues);
 
   const plan = buildRenderPlan(project, manifest);
@@ -98,19 +100,150 @@ function validateSets(project: Project, manifest: Manifest, issues: IssueList) {
     if (count > max) {
       issues.error("sets.too-many", `Set "${set.id}" has ${count} screenshots; maximum is ${max}`, { key, file });
     }
+    // A treatment tests screenshots, previews and the icon; a custom page has its own link.
+    if (set.kind === "ppo" && set.deepLink) {
+      issues.error("sets.field-kind", `Treatment "${set.id}" has a deepLink; only custom product pages have one`, {
+        key,
+        file,
+      });
+    }
+    if (set.kind === "custom" && set.experiment) {
+      issues.error(
+        "sets.field-kind",
+        `Custom product page "${set.id}" names an experiment; only optimization treatments belong to one`,
+        { key, file },
+      );
+    }
+    if (set.kind === "custom" && set.appIconName) {
+      issues.error(
+        "sets.field-kind",
+        `Custom product page "${set.id}" has an appIconName; only optimization treatments test icons`,
+        { key, file },
+      );
+    }
   }
-  for (const kind of ["custom", "ppo"] as const) {
-    const n = sets.filter((s) => s.kind === kind).length;
-    if (n > SET_LIMITS[kind]) {
+  const custom = sets.filter((s) => s.kind === "custom").length;
+  if (custom > SET_LIMITS.custom) {
+    issues.error(
+      "sets.too-many-sets",
+      `${custom} custom product pages; App Store Connect allows ${SET_LIMITS.custom} per app`,
+      { file },
+    );
+  }
+  // Treatments are counted per experiment: each test takes up to three.
+  const byExperiment = new Map<string, number>();
+  for (const s of sets.filter((x) => x.kind === "ppo")) {
+    const name = s.experiment ?? "store-shots";
+    byExperiment.set(name, (byExperiment.get(name) ?? 0) + 1);
+  }
+  for (const [name, n] of byExperiment) {
+    if (n > SET_LIMITS.ppo) {
       issues.error(
         "sets.too-many-sets",
-        kind === "custom"
-          ? `${n} custom product pages; App Store Connect allows ${SET_LIMITS.custom} per app`
-          : `${n} optimization treatments; a test has at most ${SET_LIMITS.ppo}`,
+        `${n} treatments in experiment "${name}"; a test has at most ${SET_LIMITS.ppo}`,
         { file },
       );
     }
   }
+}
+
+/** App Store Connect's limit for promotional text, on the default page and on custom product pages. */
+const PROMOTIONAL_TEXT_LIMIT = 170;
+
+/**
+ * Each locale's text for the named sets: promotional text within its limit,
+ * keywords only on custom pages and only from the app's own keyword field,
+ * screen copy only for screens the set shows.
+ */
+function validateSetContent(
+  project: Project,
+  manifest: Manifest,
+  content: Map<string, LocaleContent>,
+  issues: IssueList,
+) {
+  const sets = new Map((manifest.sets ?? []).map((s) => [s.id, s]));
+  for (const [locale, lc] of content) {
+    const file = displayRelative(project.root, `${project.paths.content}/${locale}.json`);
+    let appKeywords: Set<string> | undefined;
+    for (const [setId, text] of Object.entries(lc.sets ?? {})) {
+      const set = sets.get(setId);
+      const key = `sets/${setId}`;
+      if (!set) {
+        issues.warn("sets.content-unknown", `${locale} has text for "${setId}", which is not a set in the manifest`, {
+          file,
+        });
+        continue;
+      }
+      const promo = text.promotionalText ?? "";
+      if (set.kind === "ppo" && (promo || text.keywords?.length)) {
+        issues.error(
+          "sets.field-kind",
+          `Treatment "${setId}" has promotional text or keywords in ${locale}; treatments only change screenshots, previews and the icon`,
+          { key, file },
+        );
+      }
+      if ([...promo].length > PROMOTIONAL_TEXT_LIMIT) {
+        issues.error(
+          "sets.promotional-text",
+          `"${setId}" promotional text is ${[...promo].length}/${PROMOTIONAL_TEXT_LIMIT} characters in ${locale}`,
+          { key, file },
+        );
+      }
+      if (set.kind === "custom" && text.keywords?.length) {
+        appKeywords ??= new Set(
+          (readMetadataLocale(project, locale, ["keywords"]).fields[0]?.value ?? "")
+            .split(",")
+            .map((k) => k.trim().toLowerCase())
+            .filter(Boolean),
+        );
+        const outside = text.keywords.filter((k) => !appKeywords!.has(k.trim().toLowerCase()));
+        if (outside.length) {
+          issues.warn(
+            "sets.keyword-not-in-app",
+            `"${setId}" uses ${outside.map((k) => `"${k}"`).join(", ")} in ${locale}, which the app's keywords do not have`,
+            { key, file, hint: "a custom page's keywords are picked from the app's keyword field (keywords.txt)" },
+          );
+        }
+      }
+      const extra = Object.keys(text.screens).filter((id) => !set.screens.includes(id));
+      if (extra.length) {
+        issues.warn(
+          "sets.content-screen",
+          `"${setId}" has ${locale} copy for ${extra.join(", ")}, which it does not show`,
+          {
+            key,
+            file,
+          },
+        );
+      }
+    }
+  }
+}
+
+/**
+ * A screen's copy in the default page and in every set that changes it, for
+ * checks that read all of it. `key` scopes an issue to the copy it is about:
+ * the default page's screen, or the one set.
+ */
+function copiesOf(
+  lc: LocaleContent,
+  screenId: string,
+  manifest: Manifest,
+): { key: string; where: string; fields: Record<string, string | null> }[] {
+  // Only copy that renders: sets the manifest has, for screens they show. Leftovers are
+  // reported by validateSetContent and must not block anything.
+  const shownBy = new Set((manifest.sets ?? []).filter((s) => s.screens.includes(screenId)).map((s) => s.id));
+  return [
+    { key: `${lc.locale}/${screenId}`, where: "", fields: lc.screens[screenId] ?? {} },
+    ...Object.entries(lc.sets ?? {})
+      .filter(([id]) => shownBy.has(id))
+      .map(([id, s]) => ({
+        // One locale's problem blocks that locale's renders of the set, not all of them.
+        key: `sets/${id}/${lc.locale}`,
+        where: ` (set "${id}")`,
+        fields: s.screens[screenId] ?? {},
+      })),
+  ];
 }
 
 function validateManifest(project: Project, manifest: Manifest, issues: IssueList) {
@@ -412,20 +545,22 @@ function validateStoreClaims(
     if (!lc) continue;
     const file = displayRelative(project.root, `${project.paths.content}/${locale}.json`);
     for (const screen of forAppStore) {
-      for (const [field, value] of Object.entries(lc.screens[screen.id] ?? {})) {
-        if (typeof value !== "string") continue;
-        for (const { pattern, what } of STORE_CLAIMS) {
-          const match = pattern.exec(value);
-          if (!match) continue;
-          issues.warn(
-            "content.store-claims",
-            `Screen "${screen.id}" ${field} shows ${what} ("${match[0].trim()}") in ${locale}`,
-            {
-              key: `${locale}/${screen.id}`,
-              file,
-              hint: "Apple's screenshot guidelines rule out prices, discounts, URLs, ©, other platforms and Apple recognitions",
-            },
-          );
+      for (const copy of copiesOf(lc, screen.id, manifest)) {
+        for (const [field, value] of Object.entries(copy.fields)) {
+          if (typeof value !== "string") continue;
+          for (const { pattern, what } of STORE_CLAIMS) {
+            const match = pattern.exec(value);
+            if (!match) continue;
+            issues.warn(
+              "content.store-claims",
+              `Screen "${screen.id}" ${field}${copy.where} shows ${what} ("${match[0].trim()}") in ${locale}`,
+              {
+                key: copy.key,
+                file,
+                hint: "Apple's screenshot guidelines rule out prices, discounts, URLs, ©, other platforms and Apple recognitions",
+              },
+            );
+          }
         }
       }
     }
@@ -532,20 +667,22 @@ function validateGlyphs(project: Project, manifest: Manifest, content: Map<strin
   for (const [locale, lc] of content) {
     const file = displayRelative(project.root, `${project.paths.content}/${locale}.json`);
     for (const screen of enabled) {
-      const fields = lc.screens[screen.id] ?? {};
-      for (const [field, value] of Object.entries(fields)) {
-        if (typeof value !== "string") continue;
-        const miss = checker.missing(value);
-        if (miss.length) {
-          issues.error(
-            "content.glyph-missing",
-            `${locale} ${screen.id}.${field} uses characters no local font covers: ${miss.map((c) => `"${c}"`).join(" ")}`,
-            {
-              key: `${locale}/${screen.id}`,
-              file,
-              hint: `store-shots fonts add "${suggestFamilyFor(miss[0])}" and add it to brand.font.fallbacks`,
-            },
-          );
+      for (const copy of copiesOf(lc, screen.id, manifest)) {
+        for (const [field, value] of Object.entries(copy.fields)) {
+          if (typeof value !== "string") continue;
+          const miss = checker.missing(value);
+          if (miss.length) {
+            issues.error(
+              "content.glyph-missing",
+              `${locale} ${screen.id}.${field}${copy.where} uses characters no local font covers: ${miss.map((c) => `"${c}"`).join(" ")}`,
+              {
+                // A set's own copy blocks only that set's renders.
+                key: copy.key,
+                file,
+                hint: `store-shots fonts add "${suggestFamilyFor(miss[0])}" and add it to brand.font.fallbacks`,
+              },
+            );
+          }
         }
       }
     }

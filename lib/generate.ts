@@ -13,6 +13,7 @@ import { ExportRenderer, inspectPng, slicePng } from "./render/export";
 import { renderArtworkHtml } from "./render/html";
 import { buildRenderPlan, buildSetPlan, type PlanFilter, type RenderJob } from "./render-plan";
 import type { GeneratedManifest, LocaleContent } from "./schema";
+import { withSetCopy } from "./content";
 import { validateProject } from "./validate";
 
 export interface GenerateOptions {
@@ -66,7 +67,9 @@ export function issueBlocksJob(issue: Issue, job: RenderJob): boolean {
     issue.key === `${job.locale}/${job.screen.id}` ||
     issue.key === job.locale ||
     // A set's own errors block its jobs; the default page's per-set counts do not.
-    (job.set ? issue.key === `sets/${job.set}` : issue.key === `${job.target.id}/${job.locale}`)
+    (job.set
+      ? issue.key === `sets/${job.set}` || issue.key === `sets/${job.set}/${job.locale}`
+      : issue.key === `${job.target.id}/${job.locale}`)
   );
 }
 
@@ -229,7 +232,8 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
         log(`SKIP ${job.key}: ${blocking[0].message}`);
         continue;
       }
-      const content = validation.content.get(job.locale)!;
+      // A named set renders with its own copy over the default page's.
+      const content = withSetCopy(validation.content.get(job.locale)!, job.set);
       const hash = inputsHash(project, job, content, toolVersion, fontHashes, templatesHash);
       if (
         !opts.force &&

@@ -294,6 +294,20 @@ export const screenSetSchema = z.strictObject({
   name: z.string().min(1).optional(),
   /** Screen ids, in the order the set shows them. */
   screens: z.array(screenId).min(1),
+  /** Custom product pages: where the app opens when installed from this page (a URL or the app's own scheme). */
+  deepLink: z
+    .string()
+    .regex(/^[a-z][a-z0-9+.-]*:\/\/\S+$/i, "a URL such as rallo://tour or https://...")
+    .optional(),
+  /** Optimization treatments: an alternate app icon in the shipped binary (its name in the asset catalog). */
+  appIconName: z.string().min(1).optional(),
+  /** Optimization treatments: the experiment (test) it belongs to; treatments with one name share it. */
+  experiment: z.string().min(1).optional(),
+  /**
+   * App Store Connect's id for this page or treatment, written when the tool first uploads it.
+   * An editor sends "" to unlink it (the page was deleted there, or the test ended).
+   */
+  ascId: z.string().optional(),
 });
 
 export type ScreenSet = z.infer<typeof screenSetSchema>;
@@ -309,12 +323,26 @@ export type ScreenDefinition = z.infer<typeof screenSchema>;
 
 const fieldValue = z.union([z.string(), z.null()]);
 
+/** A named set's text in one locale: what differs from the default page. */
+export const setContentSchema = z.strictObject({
+  /** Shown above the description on this page (custom product pages; 170 characters). */
+  promotionalText: z.string().optional(),
+  /** Keywords from the app's keyword field that lead search to this page (custom product pages). */
+  keywords: z.array(z.string().min(1)).optional(),
+  /** screen id -> field -> text, over the default page's copy for that screen. */
+  screens: z.record(screenId, z.record(z.string(), fieldValue)).prefault({}),
+});
+
+export type SetContent = z.infer<typeof setContentSchema>;
+
 export const localeContentSchema = z.strictObject({
   $schema: z.string().optional(),
   locale: localeCode,
   direction: z.enum(["ltr", "rtl"]).optional(),
   /** screen id -> field -> text (null = intentionally empty) */
   screens: z.record(screenId, z.record(z.string(), fieldValue)).prefault({}),
+  /** set id -> that page's or treatment's own text in this locale. */
+  sets: z.record(z.string(), setContentSchema).optional(),
 });
 
 export type LocaleContent = z.infer<typeof localeContentSchema>;

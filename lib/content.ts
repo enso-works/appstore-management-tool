@@ -96,3 +96,15 @@ export function loadContent(project: Project): LoadedContent {
   }
   return { byLocale, issues };
 }
+
+/**
+ * The copy a named set renders with: each screen's default-page fields with
+ * the set's own fields for that screen on top. Without a set, the content as is.
+ */
+export function withSetCopy(content: LocaleContent, setId: string | undefined): LocaleContent {
+  const set = setId ? content.sets?.[setId] : undefined;
+  if (!set) return content;
+  const screens = { ...content.screens };
+  for (const [id, fields] of Object.entries(set.screens)) screens[id] = { ...screens[id], ...fields };
+  return { ...content, screens };
+}
