@@ -11,8 +11,7 @@ import { IssueList, type Issue } from "./issues";
 import { displayRelative, resolveWithin } from "./paths";
 import { ExportRenderer, inspectPng, slicePng } from "./render/export";
 import { renderArtworkHtml } from "./render/html";
-import type { RenderJob, PlanFilter } from "./render-plan";
-import { buildRenderPlan } from "./render-plan";
+import { buildRenderPlan, buildSetPlan, type PlanFilter, type RenderJob } from "./render-plan";
 import type { GeneratedManifest, LocaleContent } from "./schema";
 import { validateProject } from "./validate";
 
@@ -66,7 +65,8 @@ export function issueBlocksJob(issue: Issue, job: RenderJob): boolean {
     issue.key === job.key ||
     issue.key === `${job.locale}/${job.screen.id}` ||
     issue.key === job.locale ||
-    issue.key === `${job.target.id}/${job.locale}`
+    // A set's own errors block its jobs; the default page's per-set counts do not.
+    (job.set ? issue.key === `sets/${job.set}` : issue.key === `${job.target.id}/${job.locale}`)
   );
 }
 
@@ -124,12 +124,16 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
     summary.durationMs = Date.now() - started;
     return summary;
   }
-  const plan = buildRenderPlan(project, validation.manifest, opts.filter);
+  const planFor = (filter?: PlanFilter) => [
+    ...buildRenderPlan(project, validation.manifest!, filter),
+    ...buildSetPlan(project, validation.manifest!, filter),
+  ];
+  const plan = planFor(opts.filter);
   summary.planned = plan.length;
 
   // Classify against the unfiltered plan: an error that belongs to a job outside
   // the filter is irrelevant to this run, not a reason to abort it.
-  const fullPlan = opts.filter ? buildRenderPlan(project, validation.manifest) : plan;
+  const fullPlan = opts.filter ? planFor() : plan;
   const globalErrors = issues.items.filter((i) => isGlobalError(i, fullPlan));
   // Issues that matter for THIS run: global ones, ones blocking a planned job,
   // and keyless/warning ones. Errors scoped to jobs outside the filter are dropped.

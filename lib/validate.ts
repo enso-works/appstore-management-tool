@@ -4,8 +4,8 @@ import { IssueList } from "./issues";
 import { isAppStoreLocale } from "./locales";
 import { displayRelative, fileExists, resolveWithin } from "./paths";
 import { readImageInfo } from "./image";
-import { buildRenderPlan, ordersOf, type RenderJob } from "./render-plan";
-import type { LocaleContent, Manifest } from "./schema";
+import { buildRenderPlan, buildSetPlan, ordersOf, type RenderJob } from "./render-plan";
+import type { LocaleContent, Manifest, ScreenDefinition } from "./schema";
 import { deviceFamilyOf, getTarget, isScreenshotSet } from "./targets";
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
 import { getTemplateModule } from "../templates";
@@ -49,15 +49,68 @@ export function validateProject(project: Project): ValidationResult {
   if (!manifest) return { issues, content, plan: [] };
 
   validateManifest(project, manifest, issues);
+  validateSets(project, manifest, issues);
   validateContent(project, manifest, content, issues);
   validateStoreClaims(project, manifest, content, issues);
   validateGlyphs(project, manifest, content, issues);
 
   const plan = buildRenderPlan(project, manifest);
-  validateSources(project, plan, issues);
+  // Screens only a named set shows need their captures too; set counts are checked in validateSets.
+  validateSources(project, [...plan, ...buildSetPlan(project, manifest)], issues);
   validateCounts(project, plan, issues);
 
   return { issues, manifest, content, plan };
+}
+
+/** On the default page, or in a named set: either way its copy and glyphs are checked. */
+function isShown(manifest: Manifest, screen: ScreenDefinition): boolean {
+  return screen.enabled || (manifest.sets ?? []).some((set) => set.screens.includes(screen.id));
+}
+
+function shownScreens(manifest: Manifest): ScreenDefinition[] {
+  return manifest.screens.filter((s) => isShown(manifest, s));
+}
+
+/** App Store Connect allows 70 custom product pages per app and 3 treatments per optimization test (verified 2026-10-09). */
+export const SET_LIMITS = { custom: 70, ppo: 3 } as const;
+
+function validateSets(project: Project, manifest: Manifest, issues: IssueList) {
+  const file = displayRelative(project.root, project.paths.manifest);
+  const sets = manifest.sets ?? [];
+  const ids = new Set<string>();
+  for (const set of sets) {
+    const key = `sets/${set.id}`;
+    if (ids.has(set.id)) issues.error("sets.duplicate-id", `Two sets are called "${set.id}"`, { key, file });
+    ids.add(set.id);
+    let count = 0;
+    for (const id of set.screens) {
+      const screen = manifest.screens.find((s) => s.id === id);
+      if (!screen) {
+        issues.error("sets.unknown-screen", `Set "${set.id}" lists unknown screen "${id}"`, { key, file });
+        continue;
+      }
+      count += screen.panorama?.slices ?? 1;
+    }
+    if (new Set(set.screens).size !== set.screens.length) {
+      issues.error("sets.duplicate-screen", `Set "${set.id}" lists a screen twice`, { key, file });
+    }
+    const { max } = project.config.validation.screensPerTarget;
+    if (count > max) {
+      issues.error("sets.too-many", `Set "${set.id}" has ${count} screenshots; maximum is ${max}`, { key, file });
+    }
+  }
+  for (const kind of ["custom", "ppo"] as const) {
+    const n = sets.filter((s) => s.kind === kind).length;
+    if (n > SET_LIMITS[kind]) {
+      issues.error(
+        "sets.too-many-sets",
+        kind === "custom"
+          ? `${n} custom product pages; App Store Connect allows ${SET_LIMITS.custom} per app`
+          : `${n} optimization treatments; a test has at most ${SET_LIMITS.ppo}`,
+        { file },
+      );
+    }
+  }
 }
 
 function validateManifest(project: Project, manifest: Manifest, issues: IssueList) {
@@ -245,7 +298,7 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
 function validateContent(project: Project, manifest: Manifest, content: Map<string, LocaleContent>, issues: IssueList) {
   const strict = project.config.validation.strictTranslations;
   const defaultLocale = project.config.defaultLocale;
-  const enabled = manifest.screens.filter((s) => s.enabled);
+  const enabled = shownScreens(manifest);
 
   for (const locale of project.config.locales) {
     const lc = content.get(locale);
@@ -352,7 +405,7 @@ function validateStoreClaims(
 ) {
   // Apple's guidance: screens that only render for Google Play are not held to it.
   const forAppStore = manifest.screens.filter(
-    (s) => s.enabled && (s.targets ?? project.config.targets).some((t) => getTarget(t)?.platform === "ios"),
+    (s) => isShown(manifest, s) && (s.targets ?? project.config.targets).some((t) => getTarget(t)?.platform === "ios"),
   );
   for (const locale of project.config.locales) {
     const lc = content.get(locale);
@@ -468,7 +521,7 @@ function validateGlyphs(project: Project, manifest: Manifest, content: Map<strin
     issues.warn("font.unreadable", `Could not read font files for glyph check: ${(err as Error).message}`);
     return;
   }
-  const enabled = manifest.screens.filter((s) => s.enabled);
+  const enabled = shownScreens(manifest);
   for (const [locale, lc] of content) {
     const file = displayRelative(project.root, `${project.paths.content}/${locale}.json`);
     for (const screen of enabled) {

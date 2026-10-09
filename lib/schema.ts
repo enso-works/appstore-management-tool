@@ -277,9 +277,27 @@ export const screenSchema = z.strictObject({
   layers: z.array(layerSchema).prefault([]),
 });
 
+/**
+ * A named screenshot set besides the default product page: a custom product
+ * page (up to 70 per app) or a product page optimization treatment (up to 3
+ * per test). Its screens may be disabled on the default page. Rendered to
+ * <generated>/sets/<id>/<locale>/ and uploaded by hand in App Store Connect.
+ */
+export const screenSetSchema = z.strictObject({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "set id: lowercase letters, digits, dashes"),
+  kind: z.enum(["custom", "ppo"]),
+  /** The page's or treatment's name in App Store Connect, for your reference. */
+  name: z.string().min(1).optional(),
+  /** Screen ids, in the order the set shows them. */
+  screens: z.array(screenId).min(1),
+});
+
+export type ScreenSet = z.infer<typeof screenSetSchema>;
+
 export const manifestSchema = z.strictObject({
   $schema: z.string().optional(),
   screens: z.array(screenSchema),
+  sets: z.array(screenSetSchema).optional(),
 });
 
 export type Manifest = z.infer<typeof manifestSchema>;

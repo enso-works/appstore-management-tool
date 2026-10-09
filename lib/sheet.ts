@@ -35,7 +35,10 @@ export async function writeContactSheets(project: Project, opts: SheetOptions = 
   fs.mkdirSync(outDir, { recursive: true });
 
   const groups = new Map<string, typeof manifest.files>();
+  // Named sets (custom product pages, PPO treatments) are not the listing a sheet reviews.
+  const sets = path.relative(project.root, path.join(project.paths.generated, "sets")).split(path.sep).join("/") + "/";
   for (const f of manifest.files) {
+    if (f.path.startsWith(sets)) continue;
     if (opts.locales && !opts.locales.includes(f.locale)) continue;
     if (opts.targets && !opts.targets.includes(f.target)) continue;
     const k = `${f.target}|${f.locale}`;

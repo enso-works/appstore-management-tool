@@ -1,7 +1,7 @@
 import path from "node:path";
 import { sourceDeviceFor, type Project } from "./config";
 import type { Manifest, ScreenDefinition } from "./schema";
-import { getTarget, outputDirFor, type TargetProfile } from "./targets";
+import { getTarget, isScreenshotSet, outputDirFor, type TargetProfile } from "./targets";
 import { displayRelative, PathEscapeError, resolveWithin } from "./paths";
 
 export interface RenderJob {
@@ -27,6 +27,8 @@ export interface RenderJob {
   canvasWidth: number;
   /** This screen's window into the full strip (for backgrounds that span all screens). */
   strip?: { offsetX: number; width: number };
+  /** The named set (custom product page or PPO treatment) this job renders for; unset for the default page. */
+  set?: string;
 }
 
 export function padOrder(order: number): string {
@@ -65,6 +67,8 @@ export interface PlanFilter {
   locales?: string[];
   screens?: string[];
   targets?: string[];
+  /** Only these named sets, and not the default page. */
+  sets?: string[];
 }
 
 /** One job for a screen x target x locale; `undefined` when the target is unknown or excluded by the screen. */
@@ -137,6 +141,7 @@ export function stripWindowFor(
 /** Deterministic job list: targets in config order, locales in config order, screens by order. */
 export function buildRenderPlan(project: Project, manifest: Manifest, filter: PlanFilter = {}): RenderJob[] {
   const jobs: RenderJob[] = [];
+  if (filter.sets) return jobs;
   const screens = [...manifest.screens]
     .filter((s) => s.enabled)
     .filter((s) => !filter.screens || filter.screens.includes(s.id))
@@ -160,4 +165,51 @@ export function buildRenderPlan(project: Project, manifest: Manifest, filter: Pl
 
 export function describeJob(project: Project, job: RenderJob): string {
   return `${job.key}: ${displayRelative(project.root, job.sourcePath)} -> ${displayRelative(project.root, job.outputPath)}`;
+}
+
+/**
+ * Jobs for the named sets: App Store screenshot targets only (custom product
+ * pages and PPO treatments are App Store features), each set's screens
+ * renumbered from 01 in the set's order, written under
+ * <generated>/sets/<id>/<locale>/. Unknown screen ids are left to validation.
+ */
+export function buildSetPlan(project: Project, manifest: Manifest, filter: PlanFilter = {}): RenderJob[] {
+  const jobs: RenderJob[] = [];
+  for (const set of manifest.sets ?? []) {
+    if (filter.sets && !filter.sets.includes(set.id)) continue;
+    const screens = set.screens
+      .map((id) => manifest.screens.find((s) => s.id === id))
+      .filter((s): s is ScreenDefinition => s !== undefined);
+    // Positions in the set, panorama slices taking consecutive ones. Only the
+    // output names use them: the raw capture is still found by the screen's own order.
+    let next = 1;
+    const placed = screens.map((s) => {
+      const order = next;
+      next += s.panorama?.slices ?? 1;
+      return { ...s, order, enabled: true };
+    });
+    for (const targetId of project.config.targets) {
+      const target = getTarget(targetId);
+      if (!target || target.platform !== "ios" || !isScreenshotSet(target)) continue;
+      if (filter.targets && !filter.targets.includes(targetId)) continue;
+      for (const locale of project.config.locales) {
+        if (filter.locales && !filter.locales.includes(locale)) continue;
+        for (const [i, screen] of placed.entries()) {
+          if (filter.screens && !filter.screens.includes(screen.id)) continue;
+          const job = buildJob(project, { ...screens[i], enabled: true }, targetId, locale);
+          if (!job) continue;
+          const dir = path.join(project.paths.generated, "sets", set.id, locale);
+          job.outputPaths = job.outputPaths.map((_, i) =>
+            path.join(dir, outputFileName(screen, target, project.config.output.format, i)),
+          );
+          job.outputPath = job.outputPaths[0];
+          job.key = `sets/${set.id}/${job.key}`;
+          job.set = set.id;
+          job.strip = stripWindowFor(placed, screen.id, target.width);
+          jobs.push(job);
+        }
+      }
+    }
+  }
+  return jobs;
 }

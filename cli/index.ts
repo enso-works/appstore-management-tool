@@ -322,6 +322,7 @@ program
   .option("--locale <list>", "only these locales (comma-separated)")
   .option("--screen <list>", "only these screen ids")
   .option("--target <list>", "only these target ids")
+  .option("--set <list>", "only these named sets from the manifest (custom product pages, PPO treatments)")
   .option("--strict", "any error or warning blocks all output")
   .option("--no-clean", "do not delete stale previously generated files")
   .option("--force", "re-render even when inputs are unchanged since the last run")
@@ -333,6 +334,7 @@ program
       locale?: string;
       screen?: string;
       target?: string;
+      set?: string;
       strict?: boolean;
       clean: boolean;
       force?: boolean;
@@ -344,8 +346,9 @@ program
         locales: splitList(opts.locale),
         screens: splitList(opts.screen),
         targets: splitList(opts.target),
+        sets: splitList(opts.set),
       };
-      const filter = filterAll.locales || filterAll.screens || filterAll.targets ? filterAll : undefined;
+      const filter = Object.values(filterAll).some(Boolean) ? filterAll : undefined;
       const summary = await generateProject(project, {
         filter,
         strict: opts.strict,
