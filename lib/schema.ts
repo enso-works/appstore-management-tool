@@ -64,6 +64,30 @@ export const fontConfigSchema = z.strictObject({
   fallbacks: z.array(z.string().min(1)).default([]),
 });
 
+/**
+ * One step of the app's art pipeline (`store-shots scenes render`): a Blender
+ * script run headless, or a Python script for the post-processing.
+ */
+export const sceneStepSchema = z
+  .strictObject({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "step id: lowercase letters, digits, dashes"),
+    /** Run as `blender -b --factory-startup` with this script; its arguments follow `--`. */
+    blender: relativePath.optional(),
+    /** Run with `python3 -I`; its arguments are the usual sys.argv[1:]. */
+    python: relativePath.optional(),
+    /** `{root}`, `{work}` and `{assets}` are replaced with absolute paths. */
+    args: z.array(z.string()).default([]),
+    /** Files or folders that re-run the step when they change (the script's folder always does). */
+    inputs: z.array(relativePath).default([]),
+    /** Files the step writes; a missing one re-runs it. */
+    outputs: z.array(relativePath).default([]),
+    /** Earlier steps whose output it reads: when one runs, so does this. Default: every earlier step. */
+    needs: z.array(z.string()).optional(),
+  })
+  .refine((s) => Boolean(s.blender) !== Boolean(s.python), "a step has either `blender` or `python`");
+
+export type SceneStep = z.infer<typeof sceneStepSchema>;
+
 export const projectConfigSchema = z.strictObject({
   $schema: z.string().optional(),
   projectName: z.string().min(1),
@@ -151,6 +175,14 @@ export const projectConfigSchema = z.strictObject({
       languageSettleSeconds: z.number().min(0).max(120).default(8),
     })
     .prefault({}),
+  /** The art pipeline behind store/assets: Blender renders and their post-processing, in order. */
+  scenes: z
+    .strictObject({
+      /** Path to the Blender binary (default: $BLENDER, /Applications/Blender.app, or `blender` on PATH). */
+      blender: z.string().min(1).optional(),
+      steps: z.array(sceneStepSchema).min(1),
+    })
+    .optional(),
   fastlane: z
     .strictObject({
       enabled: z.boolean().default(true),

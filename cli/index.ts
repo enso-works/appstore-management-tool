@@ -21,6 +21,7 @@ import { LANE_KEYS, preflightLane, runLane, type LaneKey } from "../lib/fastlane
 import { captureAll, captureLocales, captureScreen, listBootedSimulators, localeSwitchHint } from "../lib/capture";
 import { writeContactSheets } from "../lib/sheet";
 import { downloadFrames, framesAvailable, framesDir, listFrames } from "../lib/frames";
+import { expandArgs, findBlender, planScenes, renderScenes, sceneDirs, ScenesError } from "../lib/scenes";
 
 const program = new Command();
 
@@ -673,6 +674,71 @@ program
     }
     for (const r of results)
       console.log(`${displayRelative(project.root, r.file)}  (${r.locale}, ${r.target}, ${r.count} screenshots)`);
+  });
+
+const scenes = program
+  .command("scenes")
+  .description('The app\'s art pipeline ("scenes" in the config): Blender renders and their post-processing');
+
+scenes
+  .command("list")
+  .description("Show the steps, what each runs, and which would run now")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .action((opts: { project?: string }) => {
+    const project = openProject(opts.project);
+    try {
+      const plan = planScenes(project);
+      const blender = plan.some((p) => p.step.blender) ? findBlender(project) : undefined;
+      const dirs = sceneDirs(project);
+      for (const p of plan) {
+        const kind = p.step.blender ? "blender" : "python";
+        console.log(`${p.step.id.padEnd(16)} ${kind.padEnd(8)} ${p.step.blender ?? p.step.python}  (${p.reason})`);
+        if (p.step.args.length) console.log(`${"".padEnd(26)}args: ${expandArgs(p.step.args, dirs).join(" ")}`);
+      }
+      if (plan.some((p) => p.step.blender))
+        console.log(`\nBlender: ${blender ?? "not found (set scenes.blender or $BLENDER)"}`);
+      console.log(`Work folder: ${displayRelative(project.root, dirs.work)}`);
+    } catch (err) {
+      if (!(err instanceof ScenesError)) throw err;
+      console.error(err.message);
+      process.exit(2);
+    }
+  });
+
+scenes
+  .command("render [steps...]")
+  .description("Run the steps whose scripts or inputs changed (or the named ones), in order")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--force", "run the selected steps even when nothing changed")
+  .option("--quick", "STORE_SHOTS_QUICK=1 for the scripts; art goes to the work folder, store/assets is untouched")
+  .option("--verbose", "show each step's output as it runs (it is always in <step>.log)")
+  .action(async (steps: string[], opts: { project?: string; force?: boolean; quick?: boolean; verbose?: boolean }) => {
+    const project = openProject(opts.project);
+    try {
+      const results = await renderScenes(project, {
+        only: steps,
+        force: opts.force,
+        quick: opts.quick,
+        verbose: opts.verbose,
+        onStep: (p) => console.log(p.run ? `run   ${p.step.id}  (${p.reason})` : `skip  ${p.step.id}  (up to date)`),
+        onLine: (l) => console.log(`      ${l}`),
+      });
+      for (const r of results) {
+        if (r.skipped) continue;
+        if (r.ok) console.log(`ok    ${r.id}  ${r.seconds}s`);
+        else {
+          console.log(`FAIL  ${r.id}  ${r.seconds}s\n`);
+          for (const l of r.tail ?? []) console.log(`      ${l}`);
+          console.log(`\nFull log: ${displayRelative(project.root, r.log!)}`);
+        }
+      }
+      if (opts.quick) console.log(`\nQuick art: ${displayRelative(project.root, sceneDirs(project, true).assets)}`);
+      process.exit(results.every((r) => r.ok) ? 0 : 1);
+    } catch (err) {
+      if (!(err instanceof ScenesError)) throw err;
+      console.error(err.message);
+      process.exit(2);
+    }
   });
 
 const frames = program
