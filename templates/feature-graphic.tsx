@@ -9,14 +9,17 @@ import {
   backgroundStyle,
   type CommonOverrides,
 } from "./shared";
+import { safeAreaOf, showsIphoneCapture } from "../lib/targets";
 import { ARTWORK_ATTR } from "./types";
 import type { TemplateModule, TemplateRenderInput } from "./types";
 
 /**
  * Google Play feature graphic (1024x500, landscape): headline (+ caption) on
  * the start side, the capture in a rounded card running off the end side.
- * Only meaningful for the play-feature target; one screen in the manifest
- * restricted to that target drives it.
+ * The same banner serves the in-app event card and the App Store creative
+ * assets (header, search results, universal); a universal image keeps its
+ * text and device inside the part both of its crops show. One screen
+ * restricted to the target drives each.
  */
 export const overridesSchema = commonOverridesSchema;
 
@@ -25,7 +28,7 @@ export const descriptor = {
   name: "Feature Graphic",
   requiredFields: ["headline"],
   optionalFields: ["caption"],
-  families: ["feature-graphic", "event"] as ("feature-graphic" | "event")[],
+  families: ["feature-graphic", "event", "creative"] as ("feature-graphic" | "event" | "creative")[],
   orientations: ["landscape"] as "landscape"[],
   overrideKeys: COMMON_OVERRIDE_KEYS,
   fieldBudget: (field: string) => (field === "headline" ? 30 : field === "caption" ? 60 : undefined),
@@ -33,25 +36,30 @@ export const descriptor = {
 
 export function render(input: TemplateRenderInput<CommonOverrides>): ReactElement {
   const { target, fields, brand, direction } = input;
-  const W = target.width;
-  const H = target.height;
+  // Text and device are laid out in the safe area; the background fills the canvas.
+  const box = safeAreaOf(target);
+  const W = box.width;
+  const H = box.height;
   const pad = Math.round(H * 0.12);
   const align = textAlignOf(input, "start");
   const headlineSize = Math.round(H * 0.16);
   const captionSize = Math.round(H * 0.08);
-  // An event card shows the app's own capture: a landscape game gets a sideways phone.
-  const aspect = target.family === "event" ? (input.sourceAspect ?? 1320 / 2868) : 1320 / 2868;
+  // Event and creative media show the app's own capture: a landscape game gets a sideways phone.
+  const aspect = showsIphoneCapture(target) ? (input.sourceAspect ?? 1320 / 2868) : 1320 / 2868;
   const wide = aspect > 1;
   const scale = input.overrides.screenshotScale ?? (wide ? 0.6 : 0.34);
   const devW = Math.round(W * scale);
   const devH = Math.round(devW / aspect);
   const short = Math.min(devW, devH);
   const tilt = input.overrides.deviceTilt ?? (wide ? -4 : -8);
-  const offX = Math.round(W * (input.overrides.screenshotOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));
-  const offY = Math.round(W * (input.overrides.screenshotOffsetY ?? 0));
+  // Offsets are fractions of the canvas width, the unit the editor's drag uses.
+  const offX = Math.round(target.width * (input.overrides.screenshotOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));
+  const offY = Math.round(target.width * (input.overrides.screenshotOffsetY ?? 0));
   const devLeft =
-    (direction === "rtl" ? Math.round(W * (wide ? -0.06 : 0.06)) : Math.round(W * (wide ? 0.46 : 0.62))) + offX;
-  const devTop = (wide ? Math.round((H - devH) / 2) : Math.round(H * 0.12)) + offY;
+    box.left +
+    (direction === "rtl" ? Math.round(W * (wide ? -0.06 : 0.06)) : Math.round(W * (wide ? 0.46 : 0.62))) +
+    offX;
+  const devTop = box.top + (wide ? Math.round((H - devH) / 2) : Math.round(H * 0.12)) + offY;
 
   return (
     <div
@@ -60,7 +68,7 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
       style={{
         position: "relative",
         width: input.canvasWidth,
-        height: H,
+        height: target.height,
         overflow: "hidden",
         ...backgroundStyle(input),
         color: input.overrides.textColor ?? brand.onPrimary,
@@ -72,9 +80,9 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
       <div
         style={{
           position: "absolute",
-          insetInlineStart: pad,
-          top: 0,
-          bottom: 0,
+          insetInlineStart: box.left + pad,
+          top: box.top,
+          height: H,
           // A sideways phone starts at 46% of the width; the text keeps clear of it.
           width: Math.round(W * (wide ? 0.4 : 0.52)),
           display: "flex",

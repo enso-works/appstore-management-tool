@@ -7,7 +7,7 @@
  * https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/
  */
 export type Platform = "ios" | "android";
-export type DeviceFamily = "iphone" | "ipad" | "phone" | "tablet" | "feature-graphic" | "event";
+export type DeviceFamily = "iphone" | "ipad" | "phone" | "tablet" | "feature-graphic" | "event" | "creative";
 export type Orientation = "portrait" | "landscape";
 
 export interface TargetProfile {
@@ -148,6 +148,42 @@ export const targetProfiles = {
     height: 1920,
     fileToken: "EVENT_DETAIL",
   },
+  // App Store creative assets (Asset Library, live 2026-10-05, iOS 27 and later;
+  // sizes from Apple's reference data, verified 2026-10-09): one product page
+  // header and one search results image per page and locale. The 16:9 image is
+  // "universal": App Store Connect crops it to 21:9 for the header and 3:2 for
+  // search results, so it can serve both. All render from the iPhone captures
+  // into store/generated/creative/<locale>/ and go up with `asc push`.
+  "header-3840x1646": {
+    id: "header-3840x1646",
+    platform: "ios",
+    family: "creative",
+    displayClass: "product page header",
+    orientation: "landscape",
+    width: 3840,
+    height: 1646,
+    fileToken: "HEADER",
+  },
+  "search-3840x2560": {
+    id: "search-3840x2560",
+    platform: "ios",
+    family: "creative",
+    displayClass: "search results",
+    orientation: "landscape",
+    width: 3840,
+    height: 2560,
+    fileToken: "SEARCH",
+  },
+  "universal-5244x2950": {
+    id: "universal-5244x2950",
+    platform: "ios",
+    family: "creative",
+    displayClass: "header and search results",
+    orientation: "landscape",
+    width: 5244,
+    height: 2950,
+    fileToken: "UNIVERSAL",
+  },
 } as const satisfies Record<string, TargetProfile>;
 
 export type TargetId = keyof typeof targetProfiles;
@@ -164,26 +200,84 @@ export function isTargetId(id: string): id is TargetId {
 
 /**
  * A screenshot set the store shows on the product page (and deliver or supply
- * uploads), as opposed to App Preview posters and in-app event media.
+ * uploads), as opposed to App Preview posters, in-app event media and
+ * creative assets.
  */
 export function isScreenshotSet(target: TargetProfile | string): boolean {
   const t = typeof target === "string" ? getTarget(target) : target;
-  return !!t && !t.id.startsWith("appreview-") && t.family !== "event";
+  return !!t && !t.id.startsWith("appreview-") && t.family !== "event" && t.family !== "creative";
+}
+
+/** Which creative placements a target's image fills: the universal one fills both. */
+export type CreativePlacement = "header" | "search";
+
+export function creativePlacementsOf(target: TargetProfile | string): CreativePlacement[] {
+  const t = typeof target === "string" ? getTarget(target) : target;
+  if (!t || t.family !== "creative") return [];
+  return t.id.startsWith("header-") ? ["header"] : t.id.startsWith("search-") ? ["search"] : ["header", "search"];
+}
+
+/**
+ * Which of a page's screens give its header and search results images: a
+ * dedicated image wins over the universal one for its placement.
+ */
+export function pageCreative(
+  screens: readonly { id: string; targets?: readonly string[] }[],
+  configured: readonly string[],
+): Partial<Record<CreativePlacement, string>> {
+  const out: Partial<Record<CreativePlacement, string>> = {};
+  for (const screen of screens) {
+    for (const t of screen.targets ?? []) {
+      if (!configured.includes(t)) continue;
+      const placements = creativePlacementsOf(t);
+      for (const p of placements) if (placements.length === 1 || !out[p]) out[p] = screen.id;
+    }
+  }
+  return out;
+}
+
+/**
+ * The part of a creative asset every placement shows, in canvas pixels. App
+ * Store Connect crops the universal 16:9 image to 21:9 for the header and to
+ * 3:2 for search results, both centred, so only their overlap is safe. Other
+ * targets show the whole canvas.
+ */
+export function safeAreaOf(target: { id: string; width: number; height: number }): {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+} {
+  if (!target.id.startsWith("universal-")) return { left: 0, top: 0, width: target.width, height: target.height };
+  const width = Math.min(target.width, Math.round((target.height * 3) / 2));
+  const height = Math.min(target.height, Math.round((target.width * 9) / 21));
+  return {
+    left: Math.round((target.width - width) / 2),
+    top: Math.round((target.height - height) / 2),
+    width,
+    height,
+  };
 }
 
 /**
  * One picture made for a purpose, not a screen of the listing: the Play feature
- * graphic and in-app event media. A screen renders for them only when it names
- * them in `targets`; screens without a list stay on the screenshot sets.
+ * graphic, in-app event media and App Store creative assets. A screen renders
+ * for them only when it names them in `targets`; screens without a list stay
+ * on the screenshot sets.
  */
 export function isOptInTarget(target: TargetProfile | string): boolean {
   const t = typeof target === "string" ? getTarget(target) : target;
-  return !!t && (t.family === "event" || t.family === "feature-graphic");
+  return !!t && (t.family === "event" || t.family === "feature-graphic" || t.family === "creative");
 }
 
-/** The device a target shows: event media show the iPhone app, everything else its own family. */
+/** One wide or tall picture that shows the app's own iPhone capture: event media and creative assets. */
+export function showsIphoneCapture(target: TargetProfile): boolean {
+  return target.family === "event" || target.family === "creative";
+}
+
+/** The device a target shows: event media and creative assets show the iPhone app, everything else its own family. */
 export function deviceFamilyOf(target: TargetProfile): DeviceFamily {
-  return target.family === "event" ? "iphone" : target.family;
+  return showsIphoneCapture(target) ? "iphone" : target.family;
 }
 
 /**
@@ -199,13 +293,19 @@ export function shortLabel(target: TargetProfile, alongside: readonly TargetProf
       ? target.displayClass === "event card"
         ? "Event card"
         : "Event details"
-      : target.family === "iphone"
-        ? `iPhone ${inches}"`
-        : target.family === "ipad"
-          ? `iPad ${inches}"`
-          : target.family === "feature-graphic"
-            ? "Feature graphic"
-            : `Play ${target.family}`;
+      : target.family === "creative"
+        ? target.id.startsWith("header-")
+          ? "Header"
+          : target.id.startsWith("search-")
+            ? "Search results"
+            : "Header + search"
+        : target.family === "iphone"
+          ? `iPhone ${inches}"`
+          : target.family === "ipad"
+            ? `iPad ${inches}"`
+            : target.family === "feature-graphic"
+              ? "Feature graphic"
+              : `Play ${target.family}`;
   const twin = alongside.some(
     (t) => t.id !== target.id && t.family === target.family && t.displayClass === target.displayClass,
   );
@@ -254,6 +354,9 @@ export function outputDirFor(
   }
   if (target.family === "event") {
     return `${paths.generated ?? "store/generated"}/events/${locale}`;
+  }
+  if (target.family === "creative") {
+    return `${paths.generated ?? "store/generated"}/creative/${locale}`;
   }
   if (target.platform === "android") {
     const kind =

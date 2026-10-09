@@ -90,8 +90,8 @@ export function buildJob(
     device,
     target: targetId,
   });
-  // A banner or an event image is one picture, never a panorama.
-  const single = target.family === "feature-graphic" || target.family === "event";
+  // A banner, an event image or a creative asset is one picture, never a panorama.
+  const single = target.family === "feature-graphic" || target.family === "event" || target.family === "creative";
   const slices = single ? 1 : (screen.panorama?.slices ?? 1);
   const dir = outputDirFor(target, locale, project.paths);
   const outputPaths =
@@ -122,13 +122,19 @@ export function buildJob(
   return job;
 }
 
-/** A screen's horizontal window into the strip of all enabled screens (offset and total width in px). */
+/**
+ * A screen's horizontal window into the strip of all enabled screens (offset
+ * and total width in px). Screens made only for opt-in targets (a header, an
+ * event card) are single pictures outside the strip.
+ */
 export function stripWindowFor(
   screens: ScreenDefinition[],
   screenId: string,
   targetWidth: number,
 ): { offsetX: number; width: number } {
-  const ordered = [...screens].filter((s) => s.enabled).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+  const ordered = [...screens]
+    .filter((s) => s.enabled && !s.targets?.every(isOptInTarget))
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
   let acc = 0;
   let offsetX = 0;
   for (const s of ordered) {
@@ -154,7 +160,7 @@ export function buildRenderPlan(project: Project, manifest: Manifest, filter: Pl
       for (const screen of screens) {
         const job = buildJob(project, screen, targetId, locale);
         if (job) {
-          job.strip = stripWindowFor(screens, screen.id, job.target.width);
+          if (!isOptInTarget(job.target)) job.strip = stripWindowFor(screens, screen.id, job.target.width);
           jobs.push(job);
         }
       }
@@ -168,10 +174,12 @@ export function describeJob(project: Project, job: RenderJob): string {
 }
 
 /**
- * Jobs for the named sets: App Store screenshot targets only (custom product
- * pages and PPO treatments are App Store features), each set's screens
- * renumbered from 01 in the set's order, written under
- * <generated>/sets/<id>/<locale>/. Unknown screen ids are left to validation.
+ * Jobs for the named sets: App Store screenshot targets and creative assets
+ * only (custom product pages and PPO treatments are App Store features), each
+ * set's screens renumbered from 01 in the set's order, written under
+ * <generated>/sets/<id>/<locale>/. A screen made only for opt-in targets (a
+ * header, say) takes no screenshot position. Unknown screen ids are left to
+ * validation.
  */
 export function buildSetPlan(project: Project, manifest: Manifest, filter: PlanFilter = {}): RenderJob[] {
   const jobs: RenderJob[] = [];
@@ -185,12 +193,12 @@ export function buildSetPlan(project: Project, manifest: Manifest, filter: PlanF
     let next = 1;
     const placed = screens.map((s) => {
       const order = next;
-      next += s.panorama?.slices ?? 1;
+      if (!s.targets?.every(isOptInTarget)) next += s.panorama?.slices ?? 1;
       return { ...s, order, enabled: true };
     });
     for (const targetId of project.config.targets) {
       const target = getTarget(targetId);
-      if (!target || target.platform !== "ios" || !isScreenshotSet(target)) continue;
+      if (!target || target.platform !== "ios" || !(isScreenshotSet(target) || target.family === "creative")) continue;
       if (filter.targets && !filter.targets.includes(targetId)) continue;
       for (const locale of project.config.locales) {
         if (filter.locales && !filter.locales.includes(locale)) continue;
@@ -205,7 +213,7 @@ export function buildSetPlan(project: Project, manifest: Manifest, filter: PlanF
           job.outputPath = job.outputPaths[0];
           job.key = `sets/${set.id}/${job.key}`;
           job.set = set.id;
-          job.strip = stripWindowFor(placed, screen.id, target.width);
+          if (!isOptInTarget(target)) job.strip = stripWindowFor(placed, screen.id, target.width);
           jobs.push(job);
         }
       }

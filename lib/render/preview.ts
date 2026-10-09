@@ -3,6 +3,7 @@ import type { Project } from "../config";
 import { directionForLocale } from "../locales";
 import { fileExists } from "../paths";
 import { buildJob } from "../render-plan";
+import { safeAreaOf } from "../targets";
 import { formatZodError, screenSchema, type LocaleContent, type ScreenDefinition } from "../schema";
 import { IN_PAGE_CHECKS_SOURCE } from "./checks";
 import { FIT_SOURCE } from "./fit";
@@ -76,7 +77,9 @@ export function previewHtml(
 })();
 </script>`;
   const dragScript = req.interactive
-    ? DRAG_SCRIPT.replace("__KEY__", JSON.stringify(job.key)).replace("__SLICE_W__", String(job.target.width))
+    ? DRAG_SCRIPT.replace("__KEY__", JSON.stringify(job.key))
+        .replace("__SLICE_W__", String(job.target.width))
+        .replace("__CROPS__", JSON.stringify(cropGuides(job.target)))
     : "";
   const mod = getTemplateModule(screen.template);
   const budgets: Record<string, number> = {};
@@ -280,6 +283,16 @@ const DRAG_SCRIPT = `<script>
     // thirds
     line(0, H / 3, W, lw, "rgba(59,110,246,0.22)");
     line(0, (2 * H) / 3, W, lw, "rgba(59,110,246,0.22)");
+    // What App Store Connect crops a universal creative asset to.
+    __CROPS__.forEach(function (c) {
+      var d = document.createElement("div");
+      d.style.cssText = "position:absolute;left:" + c.left + "px;top:" + c.top + "px;width:" + c.width + "px;height:" + c.height + "px;outline:" + lw * 3 + "px dashed rgba(245,158,11,0.85);outline-offset:-" + lw * 3 + "px;";
+      var t = document.createElement("span");
+      t.textContent = c.label;
+      t.style.cssText = "position:absolute;left:" + lw * 8 + "px;top:" + lw * 6 + "px;font:600 " + Math.round(H / 40) + "px system-ui;color:rgba(245,158,11,0.95);";
+      d.appendChild(t);
+      g.appendChild(d);
+    });
     art.appendChild(g);
     guidesEl = g;
   }
@@ -309,3 +322,13 @@ const DRAG_SCRIPT = `<script>
   document.querySelectorAll("[data-text-stack],[data-layer]").forEach(function (el) { el.style.cursor = "move"; });
 })();
 </script>`;
+
+/** The crops App Store Connect makes of a universal creative asset: 21:9 for the header, 3:2 for search results. */
+function cropGuides(target: { id: string; width: number; height: number }) {
+  if (!target.id.startsWith("universal-")) return [];
+  const safe = safeAreaOf(target);
+  return [
+    { label: "header 21:9", left: 0, top: safe.top, width: target.width, height: safe.height },
+    { label: "search 3:2", left: safe.left, top: 0, width: safe.width, height: target.height },
+  ];
+}
