@@ -386,6 +386,8 @@ describe("feature graphic target", () => {
             order: 1,
             enabled: true,
             template: "feature-graphic",
+            // A banner is opt-in: only screens that name it render for it.
+            targets: ["play-feature-1024x500"],
             source: { filePattern: "01-home.png", localized: false },
             overrides: {},
           },

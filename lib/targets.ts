@@ -171,6 +171,16 @@ export function isScreenshotSet(target: TargetProfile | string): boolean {
   return !!t && !t.id.startsWith("appreview-") && t.family !== "event";
 }
 
+/**
+ * One picture made for a purpose, not a screen of the listing: the Play feature
+ * graphic and in-app event media. A screen renders for them only when it names
+ * them in `targets`; screens without a list stay on the screenshot sets.
+ */
+export function isOptInTarget(target: TargetProfile | string): boolean {
+  const t = typeof target === "string" ? getTarget(target) : target;
+  return !!t && (t.family === "event" || t.family === "feature-graphic");
+}
+
 /** The device a target shows: event media show the iPhone app, everything else its own family. */
 export function deviceFamilyOf(target: TargetProfile): DeviceFamily {
   return target.family === "event" ? "iphone" : target.family;

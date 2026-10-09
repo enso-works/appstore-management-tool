@@ -1,7 +1,7 @@
 import path from "node:path";
 import { sourceDeviceFor, type Project } from "./config";
 import type { Manifest, ScreenDefinition } from "./schema";
-import { getTarget, isScreenshotSet, outputDirFor, type TargetProfile } from "./targets";
+import { getTarget, isOptInTarget, isScreenshotSet, outputDirFor, type TargetProfile } from "./targets";
 import { displayRelative, PathEscapeError, resolveWithin } from "./paths";
 
 export interface RenderJob {
@@ -80,7 +80,7 @@ export function buildJob(
 ): RenderJob | undefined {
   const target = getTarget(targetId);
   if (!target) return undefined;
-  if (screen.targets && !screen.targets.includes(targetId)) return undefined;
+  if (screen.targets ? !screen.targets.includes(targetId) : isOptInTarget(target)) return undefined;
   const device = sourceDeviceFor(project, targetId);
   const sourceLocale = screen.source.localized ? locale : project.config.defaultLocale;
   const file = interpolatePattern(screen.source.filePattern, {

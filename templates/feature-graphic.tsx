@@ -3,6 +3,7 @@ import {
   accentOf,
   COMMON_OVERRIDE_KEYS,
   commonOverridesSchema,
+  LayerElements,
   TextBlock,
   textAlignOf,
   backgroundStyle,
@@ -38,13 +39,19 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
   const align = textAlignOf(input, "start");
   const headlineSize = Math.round(H * 0.16);
   const captionSize = Math.round(H * 0.08);
-  const scale = input.overrides.screenshotScale ?? 0.34;
+  // An event card shows the app's own capture: a landscape game gets a sideways phone.
+  const aspect = target.family === "event" ? (input.sourceAspect ?? 1320 / 2868) : 1320 / 2868;
+  const wide = aspect > 1;
+  const scale = input.overrides.screenshotScale ?? (wide ? 0.6 : 0.34);
   const devW = Math.round(W * scale);
-  const devH = Math.round(devW * (2868 / 1320));
-  const tilt = input.overrides.deviceTilt ?? -8;
+  const devH = Math.round(devW / aspect);
+  const short = Math.min(devW, devH);
+  const tilt = input.overrides.deviceTilt ?? (wide ? -4 : -8);
   const offX = Math.round(W * (input.overrides.screenshotOffsetX ?? 0) * (direction === "rtl" ? -1 : 1));
   const offY = Math.round(W * (input.overrides.screenshotOffsetY ?? 0));
-  const devLeft = (direction === "rtl" ? Math.round(W * 0.06) : Math.round(W * 0.62)) + offX;
+  const devLeft =
+    (direction === "rtl" ? Math.round(W * (wide ? -0.06 : 0.06)) : Math.round(W * (wide ? 0.46 : 0.62))) + offX;
+  const devTop = (wide ? Math.round((H - devH) / 2) : Math.round(H * 0.12)) + offY;
 
   return (
     <div
@@ -68,7 +75,8 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
           insetInlineStart: pad,
           top: 0,
           bottom: 0,
-          width: Math.round(W * 0.52),
+          // A sideways phone starts at 46% of the width; the text keeps clear of it.
+          width: Math.round(W * (wide ? 0.4 : 0.52)),
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
@@ -105,14 +113,14 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
         style={{
           position: "absolute",
           left: devLeft,
-          top: Math.round(H * 0.12) + offY,
+          top: devTop,
           width: devW,
           height: devH,
-          borderRadius: Math.round(devW * 0.11),
+          borderRadius: Math.round(short * 0.11),
           background: "#0b0c0f",
-          padding: Math.round(devW * 0.018),
+          padding: Math.round(short * 0.018),
           boxSizing: "border-box",
-          boxShadow: `0 ${Math.round(devW * 0.04)}px ${Math.round(devW * 0.1)}px rgba(0,0,0,0.35)`,
+          boxShadow: `0 ${Math.round(short * 0.04)}px ${Math.round(short * 0.1)}px rgba(0,0,0,0.35)`,
           transform: tilt ? `rotate(${tilt}deg)` : undefined,
           transformOrigin: "50% 50%",
         }}
@@ -121,7 +129,7 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
           style={{
             width: "100%",
             height: "100%",
-            borderRadius: Math.round(devW * 0.09),
+            borderRadius: Math.round(short * 0.09),
             overflow: "hidden",
             background: "#000",
           }}
@@ -141,6 +149,7 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
           />
         </div>
       </div>
+      <LayerElements input={input} />
     </div>
   );
 }

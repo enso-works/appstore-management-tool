@@ -10,6 +10,7 @@ import { frameNameFromShell, getFrame, resolveShell } from "../frames";
 import type { RenderJob } from "../render-plan";
 import type { LocaleContent } from "../schema";
 import { deviceFamilyOf } from "../targets";
+import { readImageInfo } from "../image";
 
 export interface ArtworkUrls {
   /** URL of the raw capture as the page will load it. */
@@ -65,9 +66,17 @@ export function templateInputFor(
       ? { ...layer, url: assetUrl(layer.asset) }
       : { ...layer, text: (fields[layer.id] ?? "") as string },
   );
+  let sourceAspect: number | undefined;
+  try {
+    const info = readImageInfo(job.sourcePath);
+    sourceAspect = info.width / info.height;
+  } catch {
+    // no capture yet: templates fall back to a portrait phone
+  }
   return {
     target: job.target,
     canvasWidth: job.canvasWidth,
+    sourceAspect,
     locale: job.locale,
     direction: content.direction ?? "ltr",
     fields,

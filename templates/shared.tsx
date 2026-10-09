@@ -755,10 +755,13 @@ export function stackLayout(
   const textTop = baseTextTop + Math.round(W * (overrides.textOffsetY ?? 0));
 
   // Phone shells keep a phone aspect even on a 9:16 Play canvas; tablets and landscape sets use the canvas aspect.
+  // Event media show the app's own iPhone capture, whichever way round the app runs.
   const devAspect =
-    target.family === "ipad" || target.family === "tablet" || target.orientation === "landscape"
-      ? target.width / target.height
-      : 1320 / 2868;
+    target.family === "event"
+      ? (input.sourceAspect ?? 1320 / 2868)
+      : target.family === "ipad" || target.family === "tablet" || target.orientation === "landscape"
+        ? target.width / target.height
+        : 1320 / 2868;
   const landscape = target.orientation === "landscape";
   const stackedTop = baseTextTop + textHeight + Math.round(U * defaults.gap);
   // Landscape: by default the whole device fits on the canvas (a sideways

@@ -6,7 +6,7 @@ import { displayRelative, fileExists, resolveWithin } from "./paths";
 import { readImageInfo } from "./image";
 import { buildRenderPlan, buildSetPlan, ordersOf, type RenderJob } from "./render-plan";
 import type { LocaleContent, Manifest, ScreenDefinition } from "./schema";
-import { deviceFamilyOf, getTarget, isScreenshotSet } from "./targets";
+import { deviceFamilyOf, getTarget, isOptInTarget, isScreenshotSet } from "./targets";
 import { getTemplate, templateFields, templateIds } from "./templates/registry";
 import { getTemplateModule } from "../templates";
 import { formatZodError } from "./schema";
@@ -151,7 +151,7 @@ function validateManifest(project: Project, manifest: Manifest, issues: IssueLis
         hint: `known templates: ${templateIds.join(", ")}`,
       });
     } else {
-      for (const targetId of screen.targets ?? project.config.targets) {
+      for (const targetId of screen.targets ?? project.config.targets.filter((t) => !isOptInTarget(t))) {
         const target = getTarget(targetId);
         if (!target) {
           issues.error("manifest.unknown-target", `Screen "${screen.id}" lists unknown target "${targetId}"`, {
@@ -455,7 +455,14 @@ function validateSources(project: Project, plan: RenderJob[], issues: IssueList)
     }
     try {
       const info = readImageInfo(job.sourcePath);
-      const expected = job.target.width / job.target.height;
+      // Event media use the iPhone captures as they are; compare them with the app's iPhone sets.
+      const iphone = project.config.targets.map((t) => getTarget(t)).find((t) => t?.family === "iphone");
+      const expected =
+        job.target.family === "event"
+          ? iphone
+            ? iphone.width / iphone.height
+            : 1320 / 2868
+          : job.target.width / job.target.height;
       const actual = info.width / info.height;
       if (Math.abs(expected - actual) > 0.01) {
         issues.warn(

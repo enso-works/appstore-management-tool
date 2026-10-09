@@ -53,6 +53,8 @@ export interface TemplateRenderInput<O = Record<string, unknown>> {
   fields: Record<string, string | null | undefined>;
   /** URL the page can load: file:// for export, /api/... for the UI. */
   sourceImageUrl: string;
+  /** The capture's width / height, when it could be read: event media show whatever way round the app runs. */
+  sourceAspect?: number;
   brand: BrandTheme;
   overrides: O;
   mode: "preview" | "export";
