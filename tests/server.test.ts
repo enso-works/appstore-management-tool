@@ -17,6 +17,7 @@ import {
   saveManifest,
   savePresets,
 } from "../lib/server/projects";
+import { requireSameOrigin } from "../lib/server/http";
 import { editJson, readJson, tempFixture } from "./helpers";
 
 describe("editor server helpers", () => {
@@ -282,4 +283,16 @@ describe("bootstrapLocaleContent", () => {
     }
   });
 
+  it("lets only the editor itself call routes that act outside the app", () => {
+    const req = (headers: Record<string, string>) =>
+      new Request("http://localhost:3000/api/projects/x/asc/push", { method: "POST", headers });
+    const json = { "content-type": "application/json" };
+    expect(() => requireSameOrigin(req({ ...json, origin: "http://localhost:3000" }))).not.toThrow();
+    expect(() => requireSameOrigin(req(json))).not.toThrow(); // same-origin fetches may omit it
+    expect(() => requireSameOrigin(req({ ...json, origin: "https://evil.example" }))).toThrow(/cross-site/);
+    expect(() => requireSameOrigin(req({ ...json, origin: "null" }))).toThrow(/cross-site/);
+    expect(() => requireSameOrigin(req({ "content-type": "text/plain", origin: "http://localhost:3000" }))).toThrow(
+      /application\/json/,
+    );
+  });
 });

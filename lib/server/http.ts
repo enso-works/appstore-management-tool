@@ -14,6 +14,21 @@ export async function handle(fn: () => Promise<Response> | Response): Promise<Re
   }
 }
 
+/**
+ * For routes that act outside the app (App Store Connect uploads, fastlane
+ * lanes): only the editor itself may call them. A page on another site can
+ * POST to localhost without a CORS preflight only with a "simple" content
+ * type and its own Origin, so both are refused here.
+ */
+export function requireSameOrigin(req: Request): void {
+  const type = req.headers.get("content-type") ?? "";
+  if (!type.startsWith("application/json")) throw new HttpError(415, "send application/json");
+  const origin = req.headers.get("origin");
+  if (origin !== null && (origin === "null" || new URL(origin).host !== new URL(req.url).host)) {
+    throw new HttpError(403, "cross-site request refused");
+  }
+}
+
 export function json(data: unknown, init?: ResponseInit): Response {
   return NextResponse.json(data, init);
 }

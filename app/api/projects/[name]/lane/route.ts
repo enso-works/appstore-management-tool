@@ -1,4 +1,4 @@
-import { handle, json } from "@/lib/server/http";
+import { handle, json, requireSameOrigin } from "@/lib/server/http";
 import { HttpError, requireProject } from "@/lib/server/projects";
 import { LANE_KEYS, preflightLane, runLane, type LaneKey } from "@/lib/fastlane";
 
@@ -36,6 +36,7 @@ export async function GET(req: Request, ctx: Ctx) {
  */
 export async function POST(req: Request, ctx: Ctx) {
   return handle(async () => {
+    requireSameOrigin(req);
     const { name } = await ctx.params;
     const project = requireProject(name);
     const body = (await req.json()) as { key: string; confirmed?: boolean; overrideReason?: string };
