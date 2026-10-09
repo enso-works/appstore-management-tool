@@ -307,21 +307,30 @@ function statefulApi(opts: { pageState?: string } = {}) {
       string,
       { id: string; fileName?: string; checksum?: string; uploaded?: boolean; parts: number; processing?: boolean }
     >(),
+    images: new Map<
+      string,
+      { id: string; referenceName: string; fileName: string; uploaded?: boolean; parts: number }
+    >(),
+    placements: new Map<string, { id: string; type: string; image: string; loc: string }>(),
   };
   let n = 0;
   const id = (p: string) => `${p}${++n}`;
   const writes: string[] = [];
+  const reads: string[] = [];
   const res = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
   const fetchImpl = async (url: string, init: RequestInit) => {
     const u = new URL(url);
     const method = init.method ?? "GET";
     if (u.host === "upload.example") {
-      db.shots.get(u.searchParams.get("shot")!)!.parts++;
+      const image = u.searchParams.get("image");
+      if (image) db.images.get(image)!.parts++;
+      else db.shots.get(u.searchParams.get("shot")!)!.parts++;
       return new Response("", { status: 200 });
     }
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     const p = u.pathname;
     if (method !== "GET") writes.push(`${method} ${p}`);
+    else reads.push(p);
     let m: RegExpMatchArray | null;
     if (p === "/v1/apps")
       return res({ data: [{ type: "apps", id: "app1", attributes: { bundleId: "com.example.demo" } }] });
@@ -454,9 +463,95 @@ function statefulApi(opts: { pageState?: string } = {}) {
       });
       return res({ data: { type: "appScreenshots", id: m[1] } });
     }
+    // Asset Library: images, and placements tying them to a page localization.
+    const imageJson = (i: { id: string; referenceName: string; fileName: string; uploaded?: boolean }) => ({
+      type: "appAssetLibraryImages",
+      id: i.id,
+      attributes: {
+        referenceName: i.referenceName,
+        fileName: i.fileName,
+        state: i.uploaded ? "COMPLETE" : "AWAITING_UPLOAD",
+      },
+    });
+    if ((m = p.match(/^\/v1\/appCustomProductPageLocalizations\/(\w+)\/placements$/))) {
+      const mine = [...db.placements.values()].filter((x) => x.loc === m![1]);
+      return res({
+        data: mine.map((x) => ({
+          type: "appAssetLibraryPlacements",
+          id: x.id,
+          attributes: { placementType: x.type, placementGroup: "DEFAULT_PROFILE" },
+          relationships: { image: { data: { type: "appAssetLibraryImages", id: x.image } } },
+        })),
+        included: [...new Set(mine.map((x) => x.image))].map((i) => imageJson(db.images.get(i)!)),
+      });
+    }
+    if (p === "/v1/apps/app1/assetLibrary") return res({ data: { type: "appAssetLibraries", id: "lib1" } });
+    if (p === "/v1/appAssetLibraries/lib1/images") {
+      const name = u.searchParams.get("filter[referenceName]");
+      return res({ data: [...db.images.values()].filter((i) => !name || i.referenceName === name).map(imageJson) });
+    }
+    if (p === "/v1/appAssetLibraryImages" && method === "POST") {
+      expect(body.data.attributes.category).toBe("CREATIVE_ASSETS");
+      expect(body.data.relationships.assetLibrary.data.id).toBe("lib1");
+      const image = {
+        id: id("img"),
+        referenceName: body.data.attributes.referenceName,
+        fileName: body.data.attributes.fileName,
+        parts: 0,
+      };
+      db.images.set(image.id, image);
+      const size = body.data.attributes.fileSize;
+      return res(
+        {
+          data: {
+            type: "appAssetLibraryImages",
+            id: image.id,
+            attributes: {
+              uploadOperations: [
+                { method: "PUT", url: `https://upload.example/x?image=${image.id}`, offset: 0, length: size },
+              ],
+            },
+          },
+        },
+        201,
+      );
+    }
+    if ((m = p.match(/^\/v1\/appAssetLibraryImages\/(\w+)$/))) {
+      if (method === "PATCH") {
+        db.images.get(m[1])!.uploaded = body.data.attributes.uploaded;
+        return res({ data: imageJson(db.images.get(m[1])!) });
+      }
+      if (method === "DELETE") {
+        db.images.delete(m[1]);
+        return new Response(null, { status: 204 });
+      }
+      if (method === "GET") return res({ data: imageJson(db.images.get(m[1])!) });
+    }
+    if ((m = p.match(/^\/v1\/appAssetLibraryImages\/(\w+)\/relationships\/placements$/))) {
+      return res({
+        data: [...db.placements.values()]
+          .filter((x) => x.image === m![1])
+          .map((x) => ({ type: "appAssetLibraryPlacements", id: x.id })),
+      });
+    }
+    if (p === "/v1/appAssetLibraryPlacements" && method === "POST") {
+      const loc = body.data.relationships.appCustomProductPageLocalization.data.id;
+      const type = body.data.attributes.placementType;
+      expect(body.data.attributes.placementGroup).toBe("DEFAULT_PROFILE");
+      // One image per placement type and localization, as App Store Connect allows.
+      if ([...db.placements.values()].some((x) => x.loc === loc && x.type === type))
+        return res({ errors: [{ status: "409", detail: "placement limit reached" }] }, 409);
+      const placement = { id: id("pl"), type, image: body.data.relationships.image.data.id, loc };
+      db.placements.set(placement.id, placement);
+      return res({ data: { type: "appAssetLibraryPlacements", id: placement.id } }, 201);
+    }
+    if ((m = p.match(/^\/v1\/appAssetLibraryPlacements\/(\w+)$/)) && method === "DELETE") {
+      db.placements.delete(m[1]);
+      return new Response(null, { status: 204 });
+    }
     return res({ errors: [{ detail: `no route ${method} ${p}` }] }, 404);
   };
-  return { fetchImpl, db, writes };
+  return { fetchImpl, db, writes, reads };
 }
 
 describe("asc push for treatments", () => {
@@ -561,6 +656,8 @@ describe("asc push", () => {
     const again = await push(api, true);
     expect(api.writes).toEqual([]);
     expect(again.steps.map((s) => s.action)).toEqual(["keep"]);
+    // Without creative targets the push never asks about the Asset Library.
+    expect(api.reads.filter((r) => /placements|assetLibrary/i.test(r))).toEqual([]);
 
     // Right after an upload Apple may not have filled in the checksum yet: the file name stands in.
     const pendingShot = api.db.shots.get(set.shots[1])!;
@@ -571,6 +668,85 @@ describe("asc push", () => {
       { action: "keep", what: "en-US APP_IPHONE_67: 2 screenshot(s) unchanged (1 still processing at Apple)" },
     ]);
   });
+
+  it("puts the page's universal image in the Asset Library as its header and search results asset", async () => {
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+      c.targets = ["iphone-6.9-1320x2868", "universal-5244x2950"];
+    });
+    editJson(path.join(fx.root, "store", "manifest.json"), (m) => {
+      // Only the page shows it, and it takes no screenshot position.
+      m.screens.push({
+        id: "banner",
+        order: 3,
+        enabled: false,
+        template: "feature-graphic",
+        targets: ["universal-5244x2950"],
+        source: { filePattern: "01-home.png", localized: true },
+        overrides: {},
+      });
+      m.sets[0].screens = ["banner", "planning", "home"];
+    });
+    editJson(path.join(fx.root, "store", "content", "en-US.json"), (c) => {
+      c.screens.banner = { headline: "Plan the week" };
+    });
+    await render();
+    const out = path.join(fx.root, "store/generated/sets/planners/en-US");
+    expect(fs.readdirSync(out).sort()).toEqual([
+      "01_banner_UNIVERSAL.png",
+      "01_planning_IPHONE_69.png",
+      "02_home_IPHONE_69.png",
+    ]);
+
+    const api = statefulApi();
+    const plan = await push(api, false);
+    expect(plan.steps).toContainEqual({
+      action: "upload",
+      what: "en-US header: 01_banner_UNIVERSAL.png to the new page",
+    });
+    expect(plan.steps).toContainEqual({
+      action: "upload",
+      what: "en-US search results: 01_banner_UNIVERSAL.png to the new page",
+    });
+
+    await push(api, true);
+    // One upload fills both placements.
+    expect([...api.db.images.values()]).toEqual([
+      expect.objectContaining({ fileName: "01_banner_UNIVERSAL.png", uploaded: true, parts: 1 }),
+    ]);
+    const [image] = api.db.images.values();
+    expect(image.referenceName).toMatch(/^store-shots planners en-US 01_banner_UNIVERSAL [0-9a-f]{12}$/);
+    expect([...api.db.placements.values()].map((x) => [x.type, x.image]).sort()).toEqual([
+      ["APP_STORE_SEARCH_RESULTS_ASSET", image.id],
+      ["PRODUCT_PAGE_HEADER_ASSET", image.id],
+    ]);
+
+    api.writes.length = 0;
+    const again = await push(api, true);
+    expect(api.writes).toEqual([]);
+    expect(again.steps.filter((s) => / header| search/.test(s.what))).toEqual([
+      { action: "keep", what: "en-US header: 01_banner_UNIVERSAL.png unchanged" },
+      { action: "keep", what: "en-US search results: 01_banner_UNIVERSAL.png unchanged" },
+    ]);
+
+    // New copy: a new image replaces the old in both places, and the old one leaves the library.
+    editJson(path.join(fx.root, "store", "content", "en-US.json"), (c) => {
+      c.screens.banner = { headline: "Plan the month" };
+    });
+    await render();
+    await push(api, true);
+    const images = [...api.db.images.values()];
+    expect(images).toHaveLength(1);
+    expect(images[0].id).not.toBe(image.id);
+    expect(new Set([...api.db.placements.values()].map((x) => x.image))).toEqual(new Set([images[0].id]));
+
+    // Off the page: the placements this tool made go, and so does the image.
+    editJson(path.join(fx.root, "store", "manifest.json"), (m) => {
+      m.sets[0].screens = ["planning", "home"];
+    });
+    await push(api, true);
+    expect(api.db.placements.size).toBe(0);
+    expect(api.db.images.size).toBe(0);
+  }, 120_000);
 
   it("refuses to touch a page that is in review", async () => {
     await render();
