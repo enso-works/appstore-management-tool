@@ -112,23 +112,53 @@ Readiness follows Apple's own guidance, checked against Apple's pages:
 - **App previews** in `store/previews/<locale>/`: 886x1920 or 1200x1600 either way round,
   15-30 seconds, at most 30 fps and 500 MB, three per device
 
-It never reads credential files (`*.p8`, `asc_api_key.json`); it only checks that they exist. It
-never runs a lane that builds or submits.
+Readiness only checks that credential files exist. It never runs a lane that builds or submits.
 
-## Product page variants and events
+## Product page variants
 
-Custom product pages (up to 70) and product page optimization treatments (up to 3) get their
-own screenshot sets in the manifest. A set picks screens in its own order, including screens
-the default page leaves out, and `generate` renders it into
-`store/generated/sets/<id>/<locale>/`, numbered from 01:
+Custom product pages (up to 70) and optimization treatments (up to 3 per test) are pages in the
+editor: pick one from the page menu next to the locale, or make a new one there.
+
+- The sidebar shows the page's screens in its own order (move them, take them off, add any
+  screen, including ones the default page leaves out).
+- Copy you edit while a page is shown belongs to that page; everything else comes from the
+  default page.
+- A custom page has a deep link, and per locale its promotional text (170 characters) and the
+  keywords it answers to, picked from the app's own keyword field. A treatment can test an
+  alternate app icon.
+- Strip mode shows the page as the store would, and Generate renders it into
+  `store/generated/sets/<id>/<locale>/`, numbered from 01.
 
 ```json
-"sets": [{ "id": "runners", "kind": "custom", "name": "Runners", "screens": ["run", "home", "stats"] }]
+"sets": [{ "id": "runners", "kind": "custom", "name": "Runners", "deepLink": "rallo://tour",
+           "screens": ["tour", "rally", "home"] }]
 ```
 
-In-app event media render from the same captures: `event-card-1920x1080` (with the
-`feature-graphic` layout) and `event-detail-1080x1920`, into `store/generated/events/`. App
-Store Connect takes sets and event media by hand; deliver does not upload them.
+The page's own text lives in each locale's content file under `sets.<id>`.
+
+### App Store Connect
+
+`asc status` lists the app's versions, custom product pages and experiments and matches them to
+the manifest. `asc push <set>` uploads a page or treatment as a draft: it creates or updates the
+page, its version, localizations, promotional text, keywords and screenshots, and stores App
+Store Connect's id in the manifest. It shows its plan first and changes nothing without `--yes`;
+the editor's page panel does the same with **Check** and **Upload draft**. It never submits for
+review: that stays a click in App Store Connect. It refuses stale renders, and leaves a page that
+is in review alone.
+
+It signs its requests with the app's App Store Connect key, found the way fastlane and Apple's
+tools find it: `APP_STORE_CONNECT_API_KEY_PATH`, `fastlane/asc_api_key.json`, or
+`AuthKey_<KEY_ID>.p8` in `fastlane/` or `~/.appstoreconnect/private_keys` with the ids from the
+Fastfile. The key is read in memory only to sign a token, and never written or logged.
+Treatments with the same `experiment` name are tested together; **unlink** in the page panel
+forgets a page's App Store Connect id after you delete the page or end the test there.
+
+### In-app events
+
+Event media render from the same captures, whichever way round the app runs: `event-card-1920x1080`
+(with the `feature-graphic` layout) and `event-detail-1080x1920`, into `store/generated/events/`.
+Like the Play feature graphic, they are opt-in per screen: only screens that list them in
+`targets` render for them.
 
 ## Mac app
 
@@ -184,6 +214,7 @@ npx store-shots lane      validate | metadata | screenshots [--yes] [--override 
 npx store-shots sheet                         # contact sheets
 npx store-shots frames    setup | list        # official device frames
 npx store-shots scenes    list | render [step...] [--force] [--quick]   # the app's Blender art
+npx store-shots asc       status | push <set> [--yes]                   # App Store Connect drafts
 npx store-shots clean     [--project <app>]   # removes only files the tool wrote
 ```
 

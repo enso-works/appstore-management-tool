@@ -102,3 +102,17 @@ and [product page](https://developer.apple.com/app-store/product-page/) guidance
 | 3   | Layers per target     | The Elements panel shows the targets each layer draws on, toggles them, dims layers not on the shown target, and splits a layer into its own copy for one target; art picker with thumbnails | done 2026-10-09 |
 | 4   | Strip wrap            | Strip mode wraps screens into the rows that show them largest (on by default for landscape sets), with a Wrap toggle                                                                         | done 2026-10-09 |
 | 5   | Scenes                | `store-shots scenes list`, `scenes render [steps] [--force] [--quick]`: the config's Blender and Python steps, skipped while unchanged, `needs` for re-runs, a log per step                  | done 2026-10-09 |
+
+## App Store Connect: product pages, Asset Library, Duo (agreed 2026-10-09)
+
+The tool talks to the App Store Connect API itself with the app's key (user decision
+2026-10-09; rule in `CLAUDE.md`): drafts only, never a submission.
+
+| #   | Item                      | What lands                                                                                                                                                                                                  | Status          |
+| --- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| 1   | Product page variants     | Pages in the editor (page menu, page screens in the sidebar, page-only copy, deep link, promotional text, keywords from the app's field, treatment icon); `sets.<id>` in content files; validation per kind | done 2026-10-09 |
+| 2   | `asc status`              | Versions, custom product pages and experiments, matched to the manifest's sets (read-only)                                                                                                                  | done 2026-10-09 |
+| 3   | `asc push`                | A set as a draft custom page or treatment: page, version, localizations, promotional text, keywords, screenshots by checksum; plan first, `--yes` to apply; editor Check / Upload draft                     | done 2026-10-09 |
+| 4   | Creative assets           | Product page header (21:9 3840x1646, or 16:9 5244x2950) and search results (3:2 1920x1280 to 3840x2560) targets and a wide template, readiness for them, upload to the Asset Library                        | next            |
+| 5   | iPhone Duo                | 1398x2034 (outer) and 2007x2853 (inner) targets, either way round; required from April 2027, App Store Connect upload later in 2026                                                                         | open            |
+| 6   | Default page and previews | `asc push` for the default product page's screenshots and for app previews (deliver does both today)                                                                                                        | open            |
