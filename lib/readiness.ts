@@ -9,6 +9,9 @@ import { isJpegFile, readImageInfo, type ImageInfo } from "./image";
 import { isPngFile, readPngInfo, type PngInfo } from "./png";
 import { METADATA_FIELDS } from "./schema";
 import { readVideoInfo, type VideoInfo } from "./video";
+import { PREVIEW_LIMITS, previewClass, VIDEO_MIME } from "./previews";
+
+export { PREVIEW_LIMITS };
 import {
   getTarget,
   isScreenshotSet,
@@ -467,28 +470,6 @@ function checkCreativeAssets(project: Project): ReadinessCheck {
 }
 
 /**
- * Accepted App Preview sizes per display class (verified 2026-10-09), either
- * way round: 886x1920 for every iPhone with Face ID or Dynamic Island,
- * 1080x1920 and 750x1334 for the Home-button iPhones, 1200x1600 for iPads
- * from 10.5" up, 900x1200 for 9.7" and older 12.9".
- */
-const PREVIEW_CLASSES: { device: string; width: number; height: number }[] = [
-  { device: "iPhone", width: 886, height: 1920 },
-  { device: 'iPhone 5.5"', width: 1080, height: 1920 },
-  { device: 'iPhone 4.7"', width: 750, height: 1334 },
-  { device: "iPad", width: 1200, height: 1600 },
-  { device: 'iPad 9.7"', width: 900, height: 1200 },
-];
-
-function previewClass(width: number, height: number) {
-  return PREVIEW_CLASSES.find(
-    (c) => (c.width === width && c.height === height) || (c.width === height && c.height === width),
-  );
-}
-
-export const PREVIEW_LIMITS = { minSeconds: 15, maxSeconds: 30, maxFps: 30, maxBytes: 500 * 1024 * 1024, perSet: 3 };
-
-/**
  * App previews are optional; when <previews>/<locale>/ has videos, each must
  * be one of Apple's accepted sizes, 15-30 seconds, at most 30 fps and 500 MB,
  * with at most three per device and locale.
@@ -511,7 +492,7 @@ function checkAppPreviews(project: Project): ReadinessCheck {
     for (const name of fs.readdirSync(path.join(project.paths.previews, d.name)).sort()) {
       if (name.startsWith(".")) continue;
       const rel = `${d.name}/${name}`;
-      if (!/\.(mov|m4v|mp4)$/i.test(name)) {
+      if (!VIDEO_MIME[path.extname(name).toLowerCase()]) {
         f.warn(`${rel}: App Store Connect takes .mov, .m4v or .mp4`);
         continue;
       }
