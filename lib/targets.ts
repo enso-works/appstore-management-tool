@@ -46,6 +46,52 @@ export const targetProfiles = {
     height: 2622,
     fileToken: "IPHONE_61",
   },
+  // iPhone Duo (the foldable iPhone; App Store Connect reference data, verified
+  // 2026-10-09): the outer screen 1398x2034 and the inner one 2007x2853, either
+  // way round, required from April 2027. deliver has no display type for them;
+  // they render into store/generated/duo/<locale>/ and go up with `asc push`
+  // through the Asset Library. They use the iPhone captures unless
+  // sourceDevices maps them to captures from a Duo simulator.
+  "iphone-duo-1398x2034": {
+    id: "iphone-duo-1398x2034",
+    platform: "ios",
+    family: "iphone",
+    displayClass: "Duo outer",
+    orientation: "portrait",
+    width: 1398,
+    height: 2034,
+    fileToken: "IPHONE_DUO_OUTER",
+  },
+  "iphone-duo-2007x2853": {
+    id: "iphone-duo-2007x2853",
+    platform: "ios",
+    family: "iphone",
+    displayClass: "Duo inner",
+    orientation: "portrait",
+    width: 2007,
+    height: 2853,
+    fileToken: "IPHONE_DUO_INNER",
+  },
+  "iphone-duo-2034x1398": {
+    id: "iphone-duo-2034x1398",
+    platform: "ios",
+    family: "iphone",
+    displayClass: "Duo outer",
+    orientation: "landscape",
+    width: 2034,
+    height: 1398,
+    fileToken: "IPHONE_DUO_OUTER_LANDSCAPE",
+  },
+  "iphone-duo-2853x2007": {
+    id: "iphone-duo-2853x2007",
+    platform: "ios",
+    family: "iphone",
+    displayClass: "Duo inner",
+    orientation: "landscape",
+    width: 2853,
+    height: 2007,
+    fileToken: "IPHONE_DUO_INNER_LANDSCAPE",
+  },
   "ipad-13-2064x2752": {
     id: "ipad-13-2064x2752",
     platform: "ios",
@@ -208,6 +254,12 @@ export function isScreenshotSet(target: TargetProfile | string): boolean {
   return !!t && !t.id.startsWith("appreview-") && t.family !== "event" && t.family !== "creative";
 }
 
+/** An iPhone Duo set: App Store Connect takes it only through the Asset Library. */
+export function isDuo(target: TargetProfile | string): boolean {
+  const id = typeof target === "string" ? target : target.id;
+  return id.startsWith("iphone-duo-");
+}
+
 /** Which creative placements a target's image fills: the universal one fills both. */
 export type CreativePlacement = "header" | "search";
 
@@ -287,25 +339,27 @@ export function deviceFamilyOf(target: TargetProfile): DeviceFamily {
  */
 export function shortLabel(target: TargetProfile, alongside: readonly TargetProfile[] = []): string {
   const inches = target.displayClass.match(/^[\d.]+/)?.[0];
-  const base = target.id.startsWith("appreview-")
-    ? `Preview ${inches}"`
-    : target.family === "event"
-      ? target.displayClass === "event card"
-        ? "Event card"
-        : "Event details"
-      : target.family === "creative"
-        ? target.id.startsWith("header-")
-          ? "Header"
-          : target.id.startsWith("search-")
-            ? "Search results"
-            : "Header + search"
-        : target.family === "iphone"
-          ? `iPhone ${inches}"`
-          : target.family === "ipad"
-            ? `iPad ${inches}"`
-            : target.family === "feature-graphic"
-              ? "Feature graphic"
-              : `Play ${target.family}`;
+  const base = isDuo(target)
+    ? `iPhone ${target.displayClass}`
+    : target.id.startsWith("appreview-")
+      ? `Preview ${inches}"`
+      : target.family === "event"
+        ? target.displayClass === "event card"
+          ? "Event card"
+          : "Event details"
+        : target.family === "creative"
+          ? target.id.startsWith("header-")
+            ? "Header"
+            : target.id.startsWith("search-")
+              ? "Search results"
+              : "Header + search"
+          : target.family === "iphone"
+            ? `iPhone ${inches}"`
+            : target.family === "ipad"
+              ? `iPad ${inches}"`
+              : target.family === "feature-graphic"
+                ? "Feature graphic"
+                : `Play ${target.family}`;
   const twin = alongside.some(
     (t) => t.id !== target.id && t.family === target.family && t.displayClass === target.displayClass,
   );
@@ -320,7 +374,8 @@ export function shortLabel(target: TargetProfile, alongside: readonly TargetProf
 export function targetsFor(choice: { orientation: Orientation; ipad: boolean; play: boolean }): string[] {
   return targetIds.filter((id) => {
     const t = getTarget(id)!;
-    if (!isScreenshotSet(t) || t.family === "feature-graphic") return false;
+    // Duo sets stay opt-in until Apple requires them (April 2027).
+    if (!isScreenshotSet(t) || t.family === "feature-graphic" || isDuo(t)) return false;
     if (t.platform === "android") return choice.play && t.family === "phone";
     if (t.orientation !== choice.orientation) return false;
     return t.family === "iphone" || (choice.ipad && t.family === "ipad");
@@ -357,6 +412,10 @@ export function outputDirFor(
   }
   if (target.family === "creative") {
     return `${paths.generated ?? "store/generated"}/creative/${locale}`;
+  }
+  // deliver knows no Duo display type; asc push uploads these.
+  if (isDuo(target)) {
+    return `${paths.generated ?? "store/generated"}/duo/${locale}`;
   }
   if (target.platform === "android") {
     const kind =

@@ -3,7 +3,7 @@ import path from "node:path";
 import { formatZodError, projectConfigSchema, type ProjectConfig } from "./schema";
 import { fileExists, resolveWithin } from "./paths";
 import { IssueList } from "./issues";
-import { getTarget, showsIphoneCapture } from "./targets";
+import { getTarget, isDuo, showsIphoneCapture } from "./targets";
 
 export const CONFIG_FILENAME = "store-shots.config.json";
 
@@ -168,7 +168,8 @@ export function sourceDeviceFor(project: Project, targetId: string): string {
 function defaultSourceDevice(targetId: string): string {
   // Event media and creative assets show the iPhone app; every other id starts with its device family.
   const target = getTarget(targetId);
-  if (target && showsIphoneCapture(target)) return "iphone";
+  // Duo sets show the iPhone captures too until sourceDevices names Duo ones.
+  if (target && (showsIphoneCapture(target) || isDuo(target))) return "iphone";
   return targetId.split("-")[0];
 }
 

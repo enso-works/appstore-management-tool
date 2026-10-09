@@ -1,7 +1,7 @@
 import type { CSSProperties, ReactElement } from "react";
 import { z } from "zod";
 import { BACKGROUND_IMAGE_RE } from "../lib/schema";
-import { deviceFamilyOf, typeUnit } from "../lib/targets";
+import { deviceFamilyOf, isDuo, typeUnit } from "../lib/targets";
 import { ARTWORK_ATTR, type TemplateRenderInput } from "./types";
 
 const shellValueSchema = z.union([
@@ -756,8 +756,9 @@ export function stackLayout(
 
   // Phone shells keep a phone aspect even on a 9:16 Play canvas; tablets and landscape sets use the canvas aspect.
   // Event media show the app's own iPhone capture, whichever way round the app runs.
+  // A Duo set shows whatever device its captures come from: an iPhone, or the Duo itself.
   const devAspect =
-    target.family === "event"
+    target.family === "event" || isDuo(target)
       ? (input.sourceAspect ?? 1320 / 2868)
       : target.family === "ipad" || target.family === "tablet" || target.orientation === "landscape"
         ? target.width / target.height

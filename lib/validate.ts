@@ -1,4 +1,4 @@
-import { type Project, CONFIG_FILENAME, validateConfigSemantics } from "./config";
+import { type Project, CONFIG_FILENAME, sourceDeviceFor, validateConfigSemantics } from "./config";
 import { loadContent, loadManifest } from "./content";
 import { IssueList } from "./issues";
 import { isAppStoreLocale } from "./locales";
@@ -10,6 +10,7 @@ import {
   creativePlacementsOf,
   deviceFamilyOf,
   getTarget,
+  isDuo,
   isOptInTarget,
   isScreenshotSet,
   showsIphoneCapture,
@@ -59,6 +60,7 @@ export function validateProject(project: Project): ValidationResult {
   validateManifest(project, manifest, issues);
   validateSets(project, manifest, issues);
   validateCreative(project, manifest, issues);
+  validateDuo(project, manifest, issues);
   validateContent(project, manifest, content, issues);
   validateStoreClaims(project, manifest, content, issues);
   validateSetContent(project, manifest, content, issues);
@@ -200,6 +202,38 @@ function validateCreative(project: Project, manifest: Manifest, issues: IssueLis
         `${page.name} has ${by.search.length} search results images (${by.search.join(", ")}); a page shows one`,
         { key: page.key, file },
       );
+    }
+  }
+}
+
+/**
+ * App Store Connect shows one iPhone Duo set per page, in one order, so an
+ * app renders one Duo size; and a Duo capture is no iPhone, so an iPhone
+ * frame cannot hold it.
+ */
+function validateDuo(project: Project, manifest: Manifest, issues: IssueList) {
+  const file = CONFIG_FILENAME;
+  const duo = project.config.targets.filter((t) => isDuo(t));
+  if (duo.length > 1) {
+    issues.error("config.duo-targets", `${duo.join(" and ")}: App Store Connect shows one iPhone Duo set; keep one`, {
+      file,
+      hint: "the inner screen (2007x2853) shows the most",
+    });
+  }
+  for (const t of duo) {
+    if (sourceDeviceFor(project, t) === "iphone") continue;
+    for (const screen of manifest.screens) {
+      if (frameNameFromShell(resolveShell(screen.overrides.shell, "iphone"))) {
+        issues.error(
+          "manifest.frame-duo",
+          `Screen "${screen.id}" puts an iPhone frame around the Duo captures of ${t}`,
+          {
+            key: `${t}`,
+            file: displayRelative(project.root, project.paths.manifest),
+            hint: 'use shell "dark", "light" or "none"',
+          },
+        );
+      }
     }
   }
 }
@@ -648,11 +682,19 @@ function validateSources(project: Project, plan: RenderJob[], issues: IssueList)
     try {
       const info = readImageInfo(job.sourcePath);
       // Event and creative media use the iPhone captures as they are; compare them with the app's iPhone sets.
-      const iphone = project.config.targets.map((t) => getTarget(t)).find((t) => t?.family === "iphone");
-      const expected = showsIphoneCapture(job.target)
+      // So do Duo sets that render from the iPhone captures, in their own orientation.
+      const iphones = project.config.targets
+        .map((t) => getTarget(t))
+        .filter((t): t is NonNullable<typeof t> => t?.family === "iphone" && !isDuo(t));
+      const duo = isDuo(job.target);
+      const fromIphone = showsIphoneCapture(job.target) || (duo && job.sourceDevice === "iphone");
+      const iphone = duo ? iphones.find((t) => t.orientation === job.target.orientation) : iphones[0];
+      const expected = fromIphone
         ? iphone
           ? iphone.width / iphone.height
-          : 1320 / 2868
+          : duo && job.target.orientation === "landscape"
+            ? 2868 / 1320
+            : 1320 / 2868
         : job.target.width / job.target.height;
       const actual = info.width / info.height;
       if (Math.abs(expected - actual) > 0.01) {

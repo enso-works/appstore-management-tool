@@ -5,48 +5,11 @@ import { loadProject } from "../lib/config";
 import { withSetCopy } from "../lib/content";
 import { readinessReport, type ReadinessReport } from "../lib/readiness";
 import { buildJob, buildRenderPlan, buildSetPlan } from "../lib/render-plan";
-import { creativePlacementsOf, getTarget, isScreenshotSet, safeAreaOf, shortLabel } from "../lib/targets";
+import { creativePlacementsOf, getTarget, isScreenshotSet, safeAreaOf, shortLabel, targetsFor } from "../lib/targets";
 import { generateProject } from "../lib/generate";
 import { validateProject } from "../lib/validate";
 import { readVideoInfo } from "../lib/video";
-import { editJson, tempFixture } from "./helpers";
-
-/** A minimal MP4: ftyp, then a moov with one video track of `frames` samples. */
-function mp4(opts: {
-  width: number;
-  height: number;
-  seconds: number;
-  fps: number;
-  /** Variable frame rate: [frames, fps] runs instead of one constant rate. */
-  runs?: [number, number][];
-}): Buffer {
-  const box = (type: string, ...parts: Buffer[]) => {
-    const body = Buffer.concat(parts);
-    const head = Buffer.alloc(8);
-    head.writeUInt32BE(8 + body.length, 0);
-    head.write(type, 4, "latin1");
-    return Buffer.concat([head, body]);
-  };
-  const u32 = (...values: number[]) => {
-    const b = Buffer.alloc(4 * values.length);
-    values.forEach((v, i) => b.writeUInt32BE(v, i * 4));
-    return b;
-  };
-  const scale = 600;
-  const runs = opts.runs ?? [[Math.round(opts.seconds * opts.fps), opts.fps]];
-  // version/flags, creation, modification, timescale, duration, then fields the reader skips
-  const mvhd = box("mvhd", u32(0, 0, 0, scale, Math.round(opts.seconds * scale)), Buffer.alloc(80));
-  const tkhd = box("tkhd", Buffer.alloc(76), u32(opts.width * 65536, opts.height * 65536));
-  const mdhd = box("mdhd", u32(0, 0, 0, scale, Math.round(opts.seconds * scale), 0));
-  const hdlr = box("hdlr", u32(0, 0), Buffer.from("vide"), Buffer.alloc(13));
-  const stts = box("stts", u32(0, runs.length, ...runs.flatMap(([n, fps]) => [n, Math.round(scale / fps)])));
-  const trak = box("trak", tkhd, box("mdia", mdhd, hdlr, box("minf", box("stbl", stts))));
-  return Buffer.concat([
-    box("ftyp", Buffer.from("isom"), u32(0)),
-    box("mdat", Buffer.alloc(32)),
-    box("moov", mvhd, trak),
-  ]);
-}
+import { editJson, mp4, tempFixture } from "./helpers";
 
 const byId = (r: ReadinessReport, id: string) => r.checks.find((c) => c.id === id)!;
 
@@ -368,6 +331,44 @@ describe("Apple guideline checks", () => {
       expect(
         issues.some((i) => i.code === "manifest.template-unsupported-target" && /feature-graphic/.test(i.message)),
       ).toBe(true);
+    });
+  });
+
+  describe("iPhone Duo", () => {
+    it("renders from the iPhone captures into store/generated/duo, outside deliver's folder, and stays opt-in", () => {
+      editJson(config(), (c) => {
+        c.targets.push("iphone-duo-2007x2853");
+      });
+      const project = load();
+      const v = validateProject(project);
+      const job = buildJob(project, v.manifest!.screens[0], "iphone-duo-2007x2853", "en-US")!;
+      expect(job.sourceDevice).toBe("iphone");
+      expect(path.relative(fx.root, job.outputPath)).toBe(
+        path.join("store", "generated", "duo", "en-US", "01_home_IPHONE_DUO_INNER.png"),
+      );
+      expect(isScreenshotSet("iphone-duo-2007x2853")).toBe(true);
+      expect(shortLabel(getTarget("iphone-duo-1398x2034")!)).toBe("iPhone Duo outer");
+      // An iPhone capture on a Duo canvas is expected, not an aspect mismatch.
+      expect(v.issues.items.filter((i) => i.code === "source.aspect" && i.key?.includes("duo"))).toEqual([]);
+      expect(targetsFor({ orientation: "portrait", ipad: false, play: false }).some((t) => t.includes("duo"))).toBe(
+        false,
+      );
+    });
+
+    it("takes one Duo size: App Store Connect shows one Duo set", () => {
+      editJson(config(), (c) => {
+        c.targets.push("iphone-duo-2007x2853", "iphone-duo-1398x2034");
+      });
+      expect(validateProject(load()).issues.items.map((i) => i.code)).toContain("config.duo-targets");
+    });
+
+    it("is named in readiness until the app has a Duo set", () => {
+      const text = () => byId(readinessReport(load()), "required-sizes").details.join("\n");
+      expect(text()).toMatch(/no iPhone Duo set yet; App Store Connect requires one from April 2027/);
+      editJson(config(), (c) => {
+        c.targets.push("iphone-duo-2007x2853");
+      });
+      expect(text()).not.toMatch(/Duo/);
     });
   });
 

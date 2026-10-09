@@ -14,6 +14,7 @@ import { PREVIEW_LIMITS, previewClass, VIDEO_MIME } from "./previews";
 export { PREVIEW_LIMITS };
 import {
   getTarget,
+  isDuo,
   isScreenshotSet,
   outputDirFor,
   targetIds,
@@ -343,7 +344,7 @@ function checkRequiredSizes(project: Project): ReadinessCheck {
     .filter((t) => t.platform === "ios" && isScreenshotSet(t));
   if (ios.length === 0) return skipped(id, title, "no App Store screenshot targets configured");
   const f = new Findings();
-  const iphone = ios.filter((t) => t.family === "iphone");
+  const iphone = ios.filter((t) => t.family === "iphone" && !isDuo(t));
   const orientation = iphone[0]?.orientation ?? ios[0].orientation;
   const sixOne = requiredTargetId("iphone", "6.1-inch", orientation);
   if (iphone.length === 0) {
@@ -351,6 +352,15 @@ function checkRequiredSizes(project: Project): ReadinessCheck {
   } else if (!iphone.some((t) => t.displayClass === "6.1-inch")) {
     f.warn(
       `no 6.1" iPhone set: Apple names it the required iPhone size, and without it App Store Connect shows a scaled larger set; add ${sixOne}`,
+    );
+  }
+  // Apple requires an iPhone Duo set from April 2027 (announced 2026-10).
+  if (iphone.length && !ios.some(isDuo)) {
+    const duo = targetIds.find(
+      (t) => isDuo(t) && getTarget(t)!.displayClass === "Duo inner" && getTarget(t)!.orientation === orientation,
+    );
+    f.info(
+      `no iPhone Duo set yet; App Store Connect requires one from April 2027 (add ${duo}, uploaded with asc push)`,
     );
   }
   const hasIpad13 = ios.some((t) => t.family === "ipad" && t.displayClass === "13-inch");

@@ -85,6 +85,10 @@
         "enum": [
           "iphone-6.9-1320x2868",
           "iphone-6.1-1206x2622",
+          "iphone-duo-1398x2034",
+          "iphone-duo-2007x2853",
+          "iphone-duo-2034x1398",
+          "iphone-duo-2853x2007",
           "ipad-13-2064x2752",
           "iphone-6.9-2868x1320",
           "iphone-6.1-2622x1206",
