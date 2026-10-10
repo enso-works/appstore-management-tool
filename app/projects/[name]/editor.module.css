@@ -654,8 +654,8 @@
 }
 
 .frameSelected {
-  outline: 12px solid var(--accent);
-  outline-offset: 6px;
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .framePlaceholder {

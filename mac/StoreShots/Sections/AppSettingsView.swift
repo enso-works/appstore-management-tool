@@ -55,7 +55,7 @@ struct AppSettingsView: View {
             Toggle(isOn: Binding(get: { configured.contains(t.id) }, set: { setTarget(t.id, $0) })) {
               HStack {
                 Text(t.label(among: group.1))
-                Text("\(t.width) x \(t.height)").foregroundStyle(.secondary).monospacedDigit()
+                Text(verbatim: "\(t.width) x \(t.height)").foregroundStyle(.secondary).monospacedDigit()
               }
             }
             .disabled(busy)

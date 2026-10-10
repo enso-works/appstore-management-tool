@@ -20,7 +20,7 @@ struct AppsOverview: View {
         }
         .padding(.top, 80)
       } else {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 340, maximum: 460), spacing: 20)], spacing: 20) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 340, maximum: 460), spacing: 20, alignment: .top)], spacing: 20) {
           ForEach(server.projects) { p in
             AppCard(api: api, project: p)
           }
@@ -72,14 +72,15 @@ struct AppCard: View {
         status
       }
       HStack(spacing: 8) {
-        ForEach(preview?.bodies.prefix(3).map(\.key) ?? [], id: \.self) { key in
+        ForEach(preview?.bodies ?? [], id: \.key) { b in
           ZStack {
             RoundedRectangle(cornerRadius: 8).fill(.quaternary)
-            if let image = Thumbnails.shared.images[key] {
+            if let image = Thumbnails.shared.images[b.key] {
               Image(nsImage: image).resizable().aspectRatio(contentMode: .fit)
             }
           }
-          .frame(height: 170)
+          .aspectRatio(b.size.width / max(b.size.height, 1), contentMode: .fit)
+          .frame(maxHeight: 170)
           .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         if preview == nil {
@@ -138,7 +139,8 @@ struct AppCard: View {
     }
   }
 
-  /// The app's first three screens of the default page, in its first device and language.
+  /// The screens search shows first (three in portrait, one in landscape) of the default page,
+  /// in its first device and language.
   private func load() async {
     guard project.error == nil, let data = try? await api.getData(api.project(project.name)),
       let json = try? JSONValue.parse(data), let info = try? JSONDecoder().decode(SnapshotInfo.self, from: data)
@@ -149,7 +151,7 @@ struct AppCard: View {
       .filter { $0.enabled && !$0.isOptInOnly(targets: info.targets) }
       .sorted { $0.order < $1.order }
     var bodies: [(String, JSONValue, CGSize)] = []
-    for s in screens.prefix(3) {
+    for s in screens.prefix(target.width > target.height ? 1 : 3) {
       let fields = json["content"]?[locale]?["screens"]?[s.id]?.object ?? JSONObject()
       let body: JSONValue = [
         "targetId": .string(target.id), "locale": .string(locale), "screen": .object(s.json), "fields": .object(fields),
