@@ -55,7 +55,12 @@ export async function fetchLiveListing(
   return value;
 }
 
-/** Apple's CDN renders any size from the path token; ask for full target size. */
-export function liveImageUrl(url: string, width: number, height: number): string {
-  return url.replace(/\/\d+x\d+bb\.(jpg|png)$/i, `/${width}x${height}bb.png`);
+/**
+ * Apple's CDN renders any size from the path token. Ask for the target's shape, with the
+ * long side at most `maxSide`: a full-size screenshot is about 2 MB, far more than a
+ * side-by-side comparison shows.
+ */
+export function liveImageUrl(url: string, width: number, height: number, maxSide = 1000): string {
+  const k = Math.min(1, maxSide / Math.max(width, height));
+  return url.replace(/\/\d+x\d+bb\.(jpg|png)$/i, `/${Math.round(width * k)}x${Math.round(height * k)}bb.png`);
 }
