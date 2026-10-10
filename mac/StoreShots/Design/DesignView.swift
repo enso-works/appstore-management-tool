@@ -5,10 +5,11 @@ struct DesignView: View {
   @Bindable var document: ProjectDocument
   @State private var canvas = CanvasController()
   @State private var canvasView = CanvasController.CanvasViewState()
-  @State private var showInspector = true
+  @AppStorage("design.showInspector") private var showInspector = true
   @State private var newPageKind: String?
   @State private var newPageName = ""
   @SceneStorage("design.filmstripWidth") private var filmstripWidth = 210.0
+  @State private var dropTargeted = false
 
   var body: some View {
     HSplitView {
@@ -16,10 +17,26 @@ struct DesignView: View {
         .frame(minWidth: 170, idealWidth: filmstripWidth, maxWidth: 320)
       ZStack(alignment: .bottom) {
         CanvasView(controller: canvas)
+        if dropTargeted {
+          RoundedRectangle(cornerRadius: 12)
+            .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 3, dash: [8, 6]))
+            .overlay(
+              Label("Use as the capture of \(document.screenId)", systemImage: "photo.badge.plus")
+                .padding(10)
+                .background(.regularMaterial, in: Capsule())
+            )
+            .padding(8)
+            .allowsHitTesting(false)
+        }
         CanvasStatus(document: document)
           .padding(10)
       }
       .frame(minWidth: 420)
+      .dropDestination(for: URL.self) { urls, _ in
+        guard let url = urls.first, document.screen != nil else { return false }
+        Task { await document.saveCapture(url, screen: document.screenId) }
+        return true
+      } isTargeted: { dropTargeted = $0 }
     }
     .inspector(isPresented: $showInspector) {
       InspectorView(document: document)
@@ -32,6 +49,18 @@ struct DesignView: View {
     }
     .onChange(of: syncKey) { canvas.sync() }
     .focusedSceneValue(\.canvas, canvas)
+    .confirmationDialog(
+      "Replace this capture?", isPresented: Binding(get: { document.pendingCapture != nil }, set: { if !$0 { document.pendingCapture = nil } }),
+      presenting: document.pendingCapture
+    ) { pending in
+      Button("Replace") {
+        document.pendingCapture = nil
+        Task { await document.commitCapture(pending.data, screen: pending.screenId) }
+      }
+      Button("Cancel", role: .cancel) { document.pendingCapture = nil }
+    } message: { pending in
+      Text("\(pending.path): \(pending.reason). The current file is kept in store/generated/replaced-captures.")
+    }
     .sheet(item: $newPageKind) { kind in
       NewPageSheet(kind: kind) { name in
         if let name { document.newPage(kind: kind, name: name) }
@@ -54,6 +83,8 @@ struct DesignView: View {
     h.combine(document.guides)
     h.combine(document.selected)
     h.combine(document.issues)
+    h.combine(document.captureRevisions)
+    h.combine(document.liveCountry)
     return h.finalize()
   }
 
@@ -97,6 +128,9 @@ struct DesignView: View {
       }
       Toggle(isOn: $document.guides) { Label("Guides", systemImage: "squareshape.split.3x3") }
         .help("Layout guides (G)")
+      Toggle(isOn: $document.storeLook) { Label("App Store Look", systemImage: "app.badge") }
+        .help("Show the screens as the App Store does: dark page, rounded corners")
+      LiveMenu(document: document)
       GenerateButton(document: document)
       Button {
         showInspector.toggle()
@@ -191,6 +225,9 @@ struct GenerateButton: View {
         Button(document.page == nil ? "Generate Everything" : "Generate This Page") {
           Task { await document.generate(.all) }
         }
+        Divider()
+        Button("Show Last Run") { document.showGenerationLog = true }
+          .disabled(document.generation == nil)
       } label: {
         Label("Generate", systemImage: "square.and.arrow.down.on.square")
       } primaryAction: {
@@ -255,9 +292,85 @@ struct CanvasStatus: View {
             icon: g.failed > 0 ? "exclamationmark.triangle" : "checkmark.circle", color: g.failed > 0 ? .orange : .secondary))
       }
     }
+    if document.liveCountry != nil, let live = document.liveStatus, document.mode == .strip {
+      out.append(Message(text: live, icon: "storefront", color: live.contains(":") && !live.hasPrefix("Live:") ? .orange : .secondary))
+    }
+    if let m = document.captureMessage {
+      out.append(Message(text: m, icon: "photo", color: m.contains("does not fit") ? .orange : .secondary))
+    }
     if case .failed(let e) = document.saveStatus {
       out.append(Message(text: "Not saved: \(e)", icon: "exclamationmark.triangle", color: .red))
     }
     return out
+  }
+}
+
+/// The last generation: what it did, what changed, and its log.
+struct GenerationLogView: View {
+  let document: ProjectDocument
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    let g = document.generation
+    VStack(alignment: .leading, spacing: 12) {
+      HStack {
+        Text("Last Run").font(.title2.weight(.semibold))
+        Spacer()
+        Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+      }
+      if let g {
+        Text("\(g.rendered) rendered, \(g.unchanged) unchanged, \(g.failed) failed, \(g.skipped) skipped")
+          .foregroundStyle(.secondary)
+        if let e = g.error { Text(e).foregroundStyle(.red) }
+        if !g.changes.isEmpty {
+          Text("Changed files").font(.headline)
+          ScrollView {
+            Text(g.changes.joined(separator: "\n"))
+              .font(.system(size: 11, design: .monospaced))
+              .textSelection(.enabled)
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .frame(maxHeight: 140)
+        }
+        Text("Log").font(.headline)
+        ScrollView {
+          Text(g.log.isEmpty ? "Nothing logged." : g.log.joined(separator: "\n"))
+            .font(.system(size: 11, design: .monospaced))
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+      }
+    }
+    .padding(20)
+    .frame(width: 720, height: 520)
+  }
+}
+
+/// The live App Store listing under the strip, from a storefront, for comparison.
+struct LiveMenu: View {
+  @Bindable var document: ProjectDocument
+  private static let storefronts = [("us", "United States"), ("gb", "United Kingdom"), ("de", "Germany"),
+    ("fr", "France"), ("es", "Spain"), ("mx", "Mexico"), ("nl", "Netherlands"), ("dk", "Denmark")]
+
+  var body: some View {
+    Menu {
+      Button(document.liveCountry == nil ? "Compare with Live Listing" : "Hide Live Listing") {
+        if document.liveCountry == nil {
+          document.liveCountry = "us"
+          if document.mode != .strip { document.mode = .strip }
+        } else {
+          document.liveCountry = nil
+          document.liveStatus = nil
+        }
+      }
+      Divider()
+      Picker("Storefront", selection: Binding(get: { document.liveCountry ?? "us" }, set: { document.liveCountry = $0 })) {
+        ForEach(Self.storefronts, id: \.0) { Text($0.1).tag($0.0) }
+      }
+      .disabled(document.liveCountry == nil)
+    } label: {
+      Label("Live Listing", systemImage: document.liveCountry == nil ? "storefront" : "storefront.fill")
+    }
+    .help("Show what the App Store has now under your screens (Strip view)")
   }
 }

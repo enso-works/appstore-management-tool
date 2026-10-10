@@ -1,3 +1,4 @@
+import UniformTypeIdentifiers
 import SwiftUI
 
 /// The shown page's screens as thumbnails: drag to reorder, right-click for more.
@@ -92,6 +93,14 @@ struct Filmstrip: View {
       })
   }
 
+  private func chooseCapture(for id: String) {
+    let panel = NSOpenPanel()
+    panel.allowedContentTypes = [.png, .jpeg]
+    panel.message = "Choose the capture for \(id) on \(document.target?.label ?? "this device") in \(LocaleName.of(document.locale))."
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    Task { await document.saveCapture(url, screen: id) }
+  }
+
   private func add() {
     if document.addScreen(id: newId) {
       newId = ""
@@ -108,6 +117,11 @@ struct Filmstrip: View {
     ScreenRow(document: document, screen: s, number: number)
       .tag(s.id)
       .contextMenu { menu(for: s) }
+      .dropDestination(for: URL.self) { urls, _ in
+        guard let url = urls.first else { return false }
+        Task { await document.saveCapture(url, screen: s.id) }
+        return true
+      }
   }
 
   @ViewBuilder
@@ -132,7 +146,8 @@ struct Filmstrip: View {
           set: { on in document.updateScreen(s.id, on ? "Show Screen" : "Hide Screen") { $0["enabled"] = .bool(on) } })
       )
     }
-    Button("Duplicate...") { Task { await document.duplicateScreen(s.id) } }
+    Button("Choose Capture...") { chooseCapture(for: s.id) }
+    Button("Duplicate") { Task { await document.duplicateScreen(s.id) } }
     Divider()
     Button("Delete Screen...", role: .destructive) { confirmDelete = s.id }
   }
@@ -208,6 +223,7 @@ struct ScreenRow: View {
     h.combine(body)
     // Brand colours, fonts and the default background change the picture too.
     h.combine(document.config["brand"])
+    h.combine(document.captureRevisions[screen.id] ?? 0)
     return "\(document.name)/\(h.finalize())"
   }
 

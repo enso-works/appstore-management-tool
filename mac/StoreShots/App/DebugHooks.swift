@@ -43,6 +43,10 @@ enum DebugHooks {
         let x = d.screen?.overrides["screenshotOffsetX"]?.number ?? 0
         d.patchScreen(id, patch: ["overrides": .object({ var o = d.screen!.overrides; o["screenshotOffsetX"] = .number(x + 0.01); return o }())])
       }
+    case "capture" where parts.count == 3:
+      if let d = workspace?.currentDocument {
+        Task { await d.saveCapture(URL(fileURLWithPath: parts[2]), screen: parts[1]) }
+      }
     case "undo":
       workspace?.currentDocument?.undoManager?.undo()
     case "redo":
@@ -106,6 +110,7 @@ enum DebugHooks {
       out.append("thumbnails: \(Thumbnails.shared.images.count) \(Thumbnails.shared.debugState)")
       if let g = d.generation { out.append("generation: \(g)") }
       out.append("undo: \(d.undoManager?.canUndo ?? false) \(d.undoManager?.undoActionName ?? "")")
+      out.append("capture: rev=\(d.captureRevisions) \(d.captureMessage ?? "-") pending=\(d.pendingCapture?.path ?? "-")")
     }
     try? out.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
   }

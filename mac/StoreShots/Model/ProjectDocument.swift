@@ -40,6 +40,26 @@ final class ProjectDocument {
   var selected = "phone"
   var storeLook = false
   var guides = false
+  /// The storefront whose live listing shows under the strip (nil: not shown).
+  var liveCountry: String?
+  /// The live listing's version, or why it is not there.
+  var liveStatus: String?
+
+  /// Per screen, bumped when its capture changes on disk: its previews and thumbnail render again.
+  private(set) var captureRevisions: [String: Int] = [:]
+  /// What happened to the last dropped capture, for the canvas status line.
+  var captureMessage: String?
+  /// A capture waiting for the user to confirm replacing a file other frames read too.
+  var pendingCapture: PendingCapture?
+
+  struct PendingCapture: Identifiable {
+    let id = UUID()
+    let data: Data
+    let screenId: String
+    let path: String
+    /// Why it needs a yes, in the engine's words.
+    let reason: String
+  }
 
   // MARK: The selected preview, as the canvas reports it
   var preview = PreviewState()
@@ -89,7 +109,12 @@ final class ProjectDocument {
     var skipped = 0
     var log: [String] = []
     var error: String?
+    /// Files that differ from the run before: "~ changed", "+ new", "- removed".
+    var changes: [String] = []
   }
+
+  /// The last run's log is shown (Generate menu, or the status under the canvas).
+  var showGenerationLog = false
 
   private var manifestRevision = 0
   private var contentRevision: [String: Int] = [:]
@@ -453,6 +478,66 @@ final class ProjectDocument {
     return list
   }
 
+  /// Use an image file as a screen's capture for the shown device and language. A capture
+  /// other languages or devices read too waits in `pendingCapture` for a confirmation.
+  func saveCapture(_ file: URL, screen screenId: String) async {
+    guard file.isFileURL else {
+      captureMessage = "Drop an image file from Finder"
+      return
+    }
+    let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+    guard size > 0, size <= 40 * 1024 * 1024 else {
+      captureMessage = size > 0 ? "\(file.lastPathComponent) is over 40 MB" : "Could not read \(file.lastPathComponent)"
+      return
+    }
+    guard let data = await Task.detached(operation: { try? Data(contentsOf: file) }).value else {
+      captureMessage = "Could not read \(file.lastPathComponent)"
+      return
+    }
+    do {
+      let where_ = try await api.get(
+        api.project(name, "capture"), query: ["screenId": screenId, "targetId": targetId, "locale": locale])
+      if where_["exists"]?.bool == true, let reason = where_["confirm"]?.string {
+        pendingCapture = PendingCapture(data: data, screenId: screenId, path: where_["path"]?.string ?? "", reason: reason)
+        return
+      }
+      await commitCapture(data, screen: screenId)
+    } catch {
+      captureMessage = error.localizedDescription
+    }
+  }
+
+  /// Write a capture (after any confirmation).
+  func commitCapture(_ data: Data, screen screenId: String) async {
+    do {
+      let answer = try await api.send(
+        "POST", api.project(name, "capture"),
+        body: [
+          "screenId": .string(screenId), "targetId": .string(targetId), "locale": .string(locale),
+          "dataBase64": .string(data.base64EncodedString()),
+        ])
+      captureRevisions[screenId, default: 0] += 1
+      let size = "\(answer["width"]?.int ?? 0) x \(answer["height"]?.int ?? 0)"
+      let kept = answer["backup"]?.string != nil ? "; the old one is in store/generated/replaced-captures" : ""
+      captureMessage =
+        answer["aspectFits"]?.bool == false
+        ? "Capture saved, but its shape (\(size)) does not fit \(target?.label ?? "this device")\(kept)"
+        : "Capture saved for \(screenId) (\(size))\(kept)"
+      await refreshIssues()
+    } catch {
+      captureMessage = error.localizedDescription
+    }
+  }
+
+  /// Validation again, after a file changed outside the drafts.
+  func refreshIssues() async {
+    guard let data = try? await api.getData(api.project(name)),
+      let info = try? JSONDecoder().decode(SnapshotInfo.self, from: data)
+    else { return }
+    issues = info.validation.issues
+    readiness = info.readiness
+  }
+
   /// Images under store/assets (backgrounds, badges), as paths under it.
   private var assetsCache: [String]?
   func loadBackgroundAssets(refresh: Bool = false) async -> [String] {
@@ -741,6 +826,14 @@ final class ProjectDocument {
           generation?.unchanged = data["unchanged"]?.int ?? 0
           generation?.failed = data["failed"]?.int ?? 0
           generation?.skipped = data["skipped"]?.int ?? 0
+          let c = data["changes"]
+          generation?.changes =
+            (c?["changed"]?.array ?? []).compactMap { $0.string.map { "~ \($0)" } }
+            + (c?["added"]?.array ?? []).compactMap { $0.string.map { "+ \($0)" } }
+            + (c?["removed"]?.array ?? []).compactMap { $0.string.map { "- \($0)" } }
+          for issue in data["issues"]?.array ?? [] where issue["level"]?.string == "error" {
+            generation?.log.append("ERROR \(issue["key"]?.string.map { "[\($0)] " } ?? "")\(issue["message"]?.string ?? "")")
+          }
           if data["aborted"]?.bool == true {
             generation?.error = data["issues"]?.array?.first { $0["level"]?.string == "error" }?["message"]?.string
               ?? "Nothing was generated"

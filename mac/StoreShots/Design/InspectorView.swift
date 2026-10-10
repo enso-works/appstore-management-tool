@@ -1,3 +1,4 @@
+import UniformTypeIdentifiers
 import SwiftUI
 
 /// The inspector: what was clicked on the canvas, in tabs.
@@ -92,11 +93,30 @@ struct InspectorSection<Content: View>: View {
 
 struct TextInspector: View {
   @Bindable var document: ProjectDocument
+  @State private var creating = false
 
   var body: some View {
     let template = document.template
     let slices = document.screen?.slices ?? 1
     VStack(alignment: .leading, spacing: 12) {
+      if document.issues.contains(where: { $0.code == "content.missing-locale" }) {
+        HStack {
+          Label("Some languages have no text file yet", systemImage: "exclamationmark.triangle")
+            .foregroundStyle(.orange)
+          Spacer()
+          Button("Create from \(LocaleName.of(document.defaultLocale))") {
+            Task {
+              creating = true
+              _ = try? await document.api.send("POST", document.api.project(document.name, "bootstrap-locales"))
+              await document.load()
+              creating = false
+            }
+          }
+          .disabled(creating)
+          .help("Each new file starts with the default language's text, to translate")
+        }
+        .font(.callout)
+      }
       LanguageStatusPicker(document: document)
       ForEach(0..<slices, id: \.self) { slice in
         if slices > 1 { Text("Slide \(slice + 1)").font(.headline).padding(.top, 6) }
@@ -104,7 +124,8 @@ struct TextInspector: View {
           let field = slice == 0 ? base : "\(base)\(slice + 1)"
           CopyField(
             document: document, field: field,
-            required: slice == 0 && (template?.requiredFields.contains(base) ?? false))
+            required: slice == 0 && (template?.requiredFields.contains(base) ?? false),
+            highlighted: highlighted(slice: slice))
         }
       }
       if document.page != nil {
@@ -114,6 +135,13 @@ struct TextInspector: View {
       }
     }
     .padding(.top, 4)
+  }
+
+  /// Text clicked on the canvas marks its slide's fields; the keyboard stays with the canvas.
+  private func highlighted(slice: Int) -> Bool {
+    let s = document.selected
+    guard s.hasPrefix("text") else { return false }
+    return (Int(s.split(separator: ":").last ?? "0") ?? 0) == slice
   }
 }
 
@@ -147,6 +175,7 @@ struct CopyField: View {
   @Bindable var document: ProjectDocument
   let field: String
   let required: Bool
+  var highlighted = false
 
   var body: some View {
     let screenId = document.screen?.id ?? ""
@@ -185,6 +214,9 @@ struct CopyField: View {
         .lineLimit(2...5)
         .textFieldStyle(.roundedBorder)
         .labelsHidden()
+        .overlay(
+          RoundedRectangle(cornerRadius: 6).strokeBorder(Color.accentColor, lineWidth: highlighted ? 2 : 0)
+            .allowsHitTesting(false))
       }
       HStack(spacing: 10) {
         if let ref, !ref.isEmpty {
@@ -555,6 +587,13 @@ struct ScreenInspector: View {
               }))
           if document.preview.sourceExists == false {
             Label("This capture is missing", systemImage: "exclamationmark.triangle").foregroundStyle(.red)
+          }
+          Button("Choose Capture...") {
+            let panel = NSOpenPanel()
+            panel.allowedContentTypes = [.png, .jpeg]
+            panel.message = "The capture for \(screen.id) on \(document.target?.label ?? "this device") in \(LocaleName.of(document.locale)). You can also drop an image on the canvas."
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            Task { await document.saveCapture(url, screen: screen.id) }
           }
         }
         Section("Devices") {

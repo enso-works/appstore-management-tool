@@ -24,7 +24,7 @@ final class CanvasController: NSObject, WKScriptMessageHandler, WKNavigationDele
   override init() {
     let config = WKWebViewConfiguration()
     config.websiteDataStore = .nonPersistent()
-    webView = WKWebView(frame: .zero, configuration: config)
+    webView = CanvasWebView(frame: .zero, configuration: config)
     super.init()
     config.userContentController.add(WeakHandler(self), name: "storeShots")
     webView.navigationDelegate = self
@@ -79,6 +79,8 @@ final class CanvasController: NSObject, WKScriptMessageHandler, WKNavigationDele
         ("issues", issues),
         ("failOnOverflow", d.config["validation"]?["failOnOverflow"] ?? true),
         ("failOnTextOverlap", d.config["validation"]?["failOnTextOverlap"] ?? false),
+        ("revisions", .object(JSONObject(d.captureRevisions.map { ($0.key, .number(Double($0.value))) }))),
+        ("liveCountry", d.liveCountry.map { .string($0) } ?? .null),
       ]))
     return state.serialized
   }
@@ -124,6 +126,9 @@ final class CanvasController: NSObject, WKScriptMessageHandler, WKNavigationDele
       if let c = m["checks"], !c.isNull { p.checks = try? JSONDecoder().decode(PreviewChecks.self, from: c.data) }
       if let f = m["fits"], !f.isNull { p.fits = (try? JSONDecoder().decode([FitResult].self, from: f.data)) ?? [] }
       document.preview = p
+    case "live":
+      document.liveStatus = m["error"]?.string.map { "Live listing: \($0)" }
+        ?? m["version"]?.string.map { "Live: version \($0)" }
     case "view":
       view = CanvasViewState(
         scale: m["scale"]?.number ?? 1, wrap: m["wrap"]?.bool ?? false, canWrap: m["canWrap"]?.bool ?? false)
@@ -138,6 +143,19 @@ final class CanvasController: NSObject, WKScriptMessageHandler, WKNavigationDele
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
     if let document { load(document: document) }
   }
+}
+
+/// A web view that never takes dropped files (it would open them in place of the canvas):
+/// drops go to the native drop target around it.
+final class CanvasWebView: WKWebView {
+  override init(frame: CGRect, configuration: WKWebViewConfiguration) {
+    super.init(frame: frame, configuration: configuration)
+    unregisterDraggedTypes()
+  }
+
+  required init?(coder: NSCoder) { fatalError("not used") }
+
+  override func registerForDraggedTypes(_ newTypes: [NSPasteboard.PasteboardType]) {}
 }
 
 /// WKUserContentController retains its handlers; this breaks the cycle.
