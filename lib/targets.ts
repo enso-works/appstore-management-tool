@@ -322,6 +322,15 @@ export function isOptInTarget(target: TargetProfile | string): boolean {
   return !!t && (t.family === "event" || t.family === "feature-graphic" || t.family === "creative");
 }
 
+/**
+ * Whether a screen renders for a target: a screen that lists `targets` renders only for those,
+ * one that does not renders for every screenshot set and no opt-in picture.
+ */
+export function screenRendersFor(screen: { targets?: string[] }, target: TargetProfile | string): boolean {
+  const id = typeof target === "string" ? target : target.id;
+  return screen.targets ? screen.targets.includes(id) : !isOptInTarget(target);
+}
+
 /** One wide or tall picture that shows the app's own iPhone capture: event media and creative assets. */
 export function showsIphoneCapture(target: TargetProfile): boolean {
   return target.family === "event" || target.family === "creative";

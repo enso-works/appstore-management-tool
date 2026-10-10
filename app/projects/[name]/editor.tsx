@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Issue } from "@/lib/issues";
 import type { LocaleContent, Manifest, ProjectConfig, ScreenDefinition, ScreenSet, SetContent } from "@/lib/schema";
-import { isScreenshotSet, pageCreative, type TargetProfile } from "@/lib/targets";
+import { isScreenshotSet, pageCreative, screenRendersFor, type TargetProfile } from "@/lib/targets";
 import type { TemplateDescriptor } from "@/templates/types";
 import type { InPageResult } from "@/lib/render/checks";
 import type { FitResult } from "@/lib/render/fit";
@@ -384,18 +384,20 @@ export default function Editor({ name }: { name: string }) {
   }
   const gridJobs: GridJob[] =
     canvasMode !== "locales"
-      ? pageScreens.map((s, i) => {
-          const f = fieldsFor(locale, s.id);
-          return {
-            id: s.id,
-            locale,
-            screen: s,
-            fields: f,
-            // A page numbers its screens from 1 in its own order.
-            order: page ? i + 1 : s.order,
-            key: JSON.stringify([targetId, locale, content[locale]?.direction, s, f]),
-          };
-        })
+      ? pageScreens
+          .filter((s) => !target || screenRendersFor(s, target))
+          .map((s, i) => {
+            const f = fieldsFor(locale, s.id);
+            return {
+              id: s.id,
+              locale,
+              screen: s,
+              fields: f,
+              // A page numbers its screens from 1 in its own order.
+              order: page ? i + 1 : s.order,
+              key: JSON.stringify([targetId, locale, content[locale]?.direction, s, f]),
+            };
+          })
       : canvasMode === "locales" && screen
         ? (snap?.config.locales ?? []).map((l, i) => {
             const f = fieldsFor(l, screen.id);

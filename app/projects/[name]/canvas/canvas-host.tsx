@@ -15,7 +15,7 @@ import { BRIDGE_VERSION } from "@/lib/editor/bridge";
 import type { InPageResult } from "@/lib/render/checks";
 import type { FitResult } from "@/lib/render/fit";
 import type { ScreenDefinition } from "@/lib/schema";
-import { isScreenshotSet } from "@/lib/targets";
+import { isScreenshotSet, screenRendersFor } from "@/lib/targets";
 import { liveImageUrl } from "@/lib/live";
 import PreviewCanvas, { type CanvasControls, type CanvasItem } from "../preview-canvas";
 import editorStyles from "../editor.module.css";
@@ -111,7 +111,9 @@ export default function CanvasHost({ name }: { name: string }) {
     };
     if (state.mode === "single") return screen ? [job(screen, state.locale, screen.id, screen.order)] : [];
     if (state.mode === "strip")
-      return pageScreens(state.manifest, page).map((s, i) => job(s, state.locale, s.id, page ? i + 1 : s.order));
+      return pageScreens(state.manifest, page)
+        .filter((s) => screenRendersFor(s, target))
+        .map((s, i) => job(s, state.locale, s.id, page ? i + 1 : s.order));
     const locales = Object.keys(state.content);
     return screen ? locales.map((l, i) => job(screen, l, l, i + 1)) : [];
   }, [state, target, page, screen]);
