@@ -1,14 +1,16 @@
 #if DEBUG
 import AppKit
-import WebKit
 
-/// Debug builds only: lets a script drive the window and photograph it, for
-/// checking the UI without screen-recording rights.
+/// Debug builds only: lets a script drive the window and photograph it, without
+/// screen-recording rights (`mac/docs-shots.sh` takes the docs images this way).
 ///
 ///   notify com.bavrk.storeshots.debug "open:<app>:<section>"   (section: design, pages, ...)
 ///   notify com.bavrk.storeshots.debug "apps"
 ///   notify com.bavrk.storeshots.debug "mode:<single|strip|locales>"
-///   notify com.bavrk.storeshots.debug "snapshot:/path/to/file.png"
+///   notify com.bavrk.storeshots.debug "screen:<id>"
+///   notify com.bavrk.storeshots.debug "live:<country|off>"   (the live listing under the strip)
+///   notify com.bavrk.storeshots.debug "size:<width>:<height>"   (window content size, points)
+///   notify com.bavrk.storeshots.debug "snapshot:/path/to/file.png"   (blank while the screen is locked)
 @MainActor
 enum DebugHooks {
   static var workspace: Workspace?
@@ -34,6 +36,8 @@ enum DebugHooks {
       workspace?.selection = .apps
     case "mode" where parts.count == 2:
       workspace?.currentDocument?.mode = ProjectDocument.CanvasMode(rawValue: parts[1]) ?? .single
+    case "screen" where parts.count == 2:
+      workspace?.currentDocument?.screenId = parts[1]
     case "select" where parts.count == 2:
       workspace?.currentDocument?.selected = parts[1]
     case "field" where parts.count == 3:
@@ -53,53 +57,54 @@ enum DebugHooks {
       workspace?.currentDocument?.undoManager?.redo()
     case "dump" where parts.count == 2:
       dump(to: parts[1])
+    case "size" where parts.count == 3:
+      if let w = Double(parts[1]), let h = Double(parts[2]),
+        let window = NSApp.windows.first(where: { $0.isVisible && $0.title != "" && $0.contentView != nil })
+      {
+        window.setFrame(window.frameRect(forContentRect: CGRect(x: 80, y: 80, width: w, height: h)), display: true)
+      }
+    case "live" where parts.count == 2:
+      workspace?.currentDocument?.liveCountry = parts[1] == "off" ? nil : parts[1]
     case "snapshot" where parts.count == 2:
-      Task { await snapshot(to: parts[1]) }
+      snapshot(to: parts[1])
     default:
       break
     }
   }
 
-  /// The window drawn from its layer tree (toolbar, sidebar and inspector included), with
-  /// each web view's own snapshot drawn where it sits: no screen-recording rights needed.
-  private static func snapshot(to path: String) async {
+  /// The window as the window server composes it (glass included). An app may capture its
+  /// own windows without screen-recording rights; the call is looked up at run time because
+  /// the macOS 15 SDK hides it.
+  private static func snapshot(to path: String) {
     guard let window = NSApp.windows.first(where: { $0.isVisible && $0.title != "" && $0.contentView != nil }),
-      let frameView = window.contentView?.superview, let root = frameView.layer
+      let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage")
     else { return }
-    let scale = window.backingScaleFactor
-    let size = frameView.bounds.size
-    guard
-      let ctx = CGContext(
-        data: nil, width: Int(size.width * scale), height: Int(size.height * scale), bitsPerComponent: 8, bytesPerRow: 0,
-        space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
-    else { return }
-    ctx.setFillColor(NSColor.windowBackgroundColor.cgColor)
-    ctx.fill(CGRect(origin: .zero, size: CGSize(width: size.width * scale, height: size.height * scale)))
-    ctx.scaleBy(x: scale, y: scale)
-    if root.contentsAreFlipped() || frameView.isFlipped {
-      ctx.translateBy(x: 0, y: size.height)
-      ctx.scaleBy(x: 1, y: -1)
-    }
-    root.render(in: ctx)
-    guard let base = ctx.makeImage() else { return }
-    let image = NSImage(size: size)
-    image.lockFocus()
-    NSImage(cgImage: base, size: size).draw(in: CGRect(origin: .zero, size: size))
-    for web in webViews(in: frameView) where !web.isHiddenOrHasHiddenAncestor {
-      guard let shot = try? await web.takeSnapshot(configuration: nil) else { continue }
-      shot.draw(in: web.convert(web.bounds, to: nil))
-    }
-    image.unlockFocus()
-    guard let tiff = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiff),
-      let png = bitmap.representation(using: .png, properties: [:])
-    else { return }
-    try? png.write(to: URL(fileURLWithPath: path))
+    typealias Create = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+    let create = unsafeBitCast(symbol, to: Create.self)
+    // optionIncludingWindow = 8; boundsIgnoreFraming = 1, bestResolution = 8.
+    guard let image = create(.null, 8, UInt32(window.windowNumber), 1 | 8)?.takeRetainedValue() else { return }
+    let bitmap = NSBitmapImageRep(cgImage: image)
+    try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
   }
 
   /// The window's state as text, for checking behaviour from a script.
   private static func dump(to path: String) {
     var out: [String] = []
     out.append("selection: \(String(describing: workspace?.selection))")
+    if let w = NSApp.windows.first(where: { $0.isVisible && $0.title != "" && $0.contentView != nil }) {
+      out.append("window: \(w.frame) contentMin: \(w.contentMinSize) fitting: \(w.contentView?.fittingSize ?? .zero)")
+      // Each split view column: its frame, and the width it insists on (fit).
+      func walk(_ v: NSView, _ depth: Int) {
+        if let split = v as? NSSplitView {
+          out.append(String(repeating: "  ", count: depth) + "split \(type(of: split)) \(split.frame.size)")
+          for sub in split.arrangedSubviews {
+            out.append(String(repeating: "  ", count: depth + 1) + "\(type(of: sub)) \(sub.frame) fit \(sub.fittingSize)")
+          }
+        }
+        for sub in v.subviews { walk(sub, depth + (v is NSSplitView ? 1 : 0)) }
+      }
+      if let root = w.contentView?.superview { walk(root, 0) }
+    }
     if let d = workspace?.currentDocument {
       out.append("app: \(d.projectTitle) loaded=\(d.info != nil) error=\(d.loadError ?? "-")")
       out.append("target: \(d.targetId) locale: \(d.locale) page: '\(d.pageId)' screen: \(d.screenId) mode: \(d.mode.rawValue)")
@@ -113,10 +118,6 @@ enum DebugHooks {
       out.append("capture: rev=\(d.captureRevisions) \(d.captureMessage ?? "-") pending=\(d.pendingCapture?.path ?? "-")")
     }
     try? out.joined(separator: "\n").write(toFile: path, atomically: true, encoding: .utf8)
-  }
-
-  private static func webViews(in view: NSView) -> [WKWebView] {
-    (view as? WKWebView).map { [$0] } ?? view.subviews.flatMap(webViews)
   }
 }
 #endif
