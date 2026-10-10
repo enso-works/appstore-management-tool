@@ -764,7 +764,9 @@ asc
       } else {
         console.log(
           setId === DEFAULT_PAGE
-            ? "\nDone. The version's media are in App Store Connect; submit the version there when ready."
+            ? r.libraryOnly
+              ? "\nDone. The images are drafts in the Asset Library: submit them for review there (App Store Connect > Asset Library), then choose them on the live page under Browse Assets."
+              : "\nDone. The version's media are in App Store Connect; submit the version there when ready."
             : `\nDone. "${setId}" is a draft in App Store Connect${r.ascId ? ` (${r.ascId})` : ""}; submit it there when ready.`,
         );
       }

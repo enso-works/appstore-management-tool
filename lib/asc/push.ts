@@ -37,6 +37,8 @@ export interface PushStep {
 export interface PushResult {
   set: string;
   steps: PushStep[];
+  /** The default page with no version taking edits: creative images went to the Asset Library only. */
+  libraryOnly?: boolean;
   /** The page's or treatment's id in App Store Connect, once it exists. */
   ascId?: string;
   applied: boolean;
@@ -141,11 +143,9 @@ export async function pushDefaultPage(
   opts: { apply: boolean; log?: (line: string) => void },
 ): Promise<PushResult> {
   const ctx: Ctx = { project, client, apply: opts.apply, steps: [], log: opts.log ?? (() => {}) };
-  const files = defaultPageFiles(project, manifest, content);
-  const previews = previewFiles(project, ctx);
-  if (files.screenshots.size === 0 && files.duo.size === 0 && previews.size === 0) {
-    throw new AscPushError("Nothing to upload: the default page renders no App Store screenshots");
-  }
+  // Header and search images first: a live version takes only those, so they are all a
+  // live page needs current. Screenshots are checked once a version takes them.
+  const creative = defaultPageFiles(project, manifest, content, (j) => j.target.family === "creative").creative;
   const appId = await findApp(project, client);
   ctx.appId = appId;
   const versions = await client.get<{ versionString?: string; appVersionState?: string; appStoreState?: string }>(
@@ -157,11 +157,20 @@ export async function pushDefaultPage(
   const version = all.find((v) => VERSION_EDITABLE.has(stateOf(v)));
   if (!version) {
     const pending = all.find((v) => IN_REVIEW.has(stateOf(v)));
-    throw new AscPushError(
-      pending
-        ? `Version ${pending.attributes?.versionString} is ${stateOf(pending)}; App Store Connect takes no screenshot edits until review ends`
-        : `No version takes edits${all[0] ? ` (${all[0].attributes?.versionString} is ${stateOf(all[0])})` : ""}; create the next version in App Store Connect, then push again`,
-    );
+    const why = pending
+      ? `version ${pending.attributes?.versionString} is ${stateOf(pending)}; App Store Connect takes no screenshot edits until review ends`
+      : `no version takes edits${all[0] ? ` (${all[0].attributes?.versionString} is ${stateOf(all[0])})` : ""}; create the next version in App Store Connect for screenshots and previews`;
+    // A live page takes header and search images from the Asset Library once Apple has
+    // approved them, without a new version: they go up as drafts to submit there.
+    if (!creative.size) throw new AscPushError(why.charAt(0).toUpperCase() + why.slice(1));
+    ctx.steps.push({ action: "skip", what: `screenshots and previews: ${why}` });
+    await uploadCreativeToLibrary(ctx, creative);
+    return { set: DEFAULT_PAGE, steps: ctx.steps, applied: opts.apply, libraryOnly: true };
+  }
+  const files = defaultPageFiles(project, manifest, content);
+  const previews = previewFiles(project, ctx);
+  if (files.screenshots.size === 0 && files.duo.size === 0 && previews.size === 0) {
+    throw new AscPushError("Nothing to upload: the default page renders no App Store screenshots");
   }
   ctx.steps.push({
     action: "keep",
@@ -191,6 +200,33 @@ export async function pushDefaultPage(
     if (byType) await syncMedia(ctx, PREVIEWS, ref, locale, byType);
   }
   return { set: DEFAULT_PAGE, steps: ctx.steps, ascId: version.id, applied: opts.apply };
+}
+
+/**
+ * The default page's header and search results images into the Asset Library
+ * as drafts, placed nowhere: submitted for review there and approved, they
+ * can be chosen for the live page (Browse Assets) without a new version. An
+ * image already there under its checksum name is not sent again.
+ */
+async function uploadCreativeToLibrary(ctx: Ctx, creative: Map<string, PageCreative>) {
+  for (const [locale, page] of creative) {
+    for (const file of new Set(Object.values(page))) {
+      const name = referenceNameFor(DEFAULT_PAGE, locale, file);
+      const label = `${locale} ${(Object.keys(page) as CreativePlacement[])
+        .filter((p) => page[p] === file)
+        .map((p) => PLACEMENT_LABEL[p])
+        .join(" and ")}`;
+      if (await libraryImage(ctx, name)) {
+        ctx.steps.push({ action: "keep", what: `${label}: ${path.basename(file)} is in the Asset Library` });
+        continue;
+      }
+      await act(
+        ctx,
+        { action: "upload", what: `${label}: ${path.basename(file)} to the Asset Library, for review there` },
+        () => uploadLibraryImage(ctx, file, name),
+      );
+    }
+  }
 }
 
 /**
@@ -315,10 +351,15 @@ export function setFiles(
 }
 
 /** The default product page's rendered App Store files, checked the same way. */
-export function defaultPageFiles(project: Project, manifest: Manifest, content: Map<string, LocaleContent>): PageFiles {
+export function defaultPageFiles(
+  project: Project,
+  manifest: Manifest,
+  content: Map<string, LocaleContent>,
+  only: (job: RenderJob) => boolean = () => true,
+): PageFiles {
   return collectFiles(
     project,
-    buildRenderPlan(project, manifest).filter((j) => j.target.platform === "ios"),
+    buildRenderPlan(project, manifest).filter((j) => j.target.platform === "ios" && only(j)),
     (lc) => lc,
     "Render the default page again first (store-shots generate)",
     content,

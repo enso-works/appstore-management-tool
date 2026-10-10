@@ -153,8 +153,10 @@ Fastfile. The key is read in memory only to sign a token, and never written or l
 `asc push default` does the same for the app's own product page: on the version that takes edits
 (Prepare for Submission, or rejected) it uploads the default page's screenshots, iPhone Duo
 screenshots, header and search results images, and the app previews in `store/previews/<locale>/`.
-Text stays deliver's job, and so does making the version: with none taking edits it says which
-version is live or in review and stops. The editor has the same Check and Upload draft under
+Text stays deliver's job, and so does making the version. With no version taking edits it says
+which is live or in review, and still puts the page's header and search results images in the
+Asset Library as drafts: submit them for review there, and once Apple approves them choose them on
+the live page under Browse Assets, no new version needed. The editor has the same Check and Upload draft under
 **Default page in App Store Connect**.
 
 Treatments with the same `experiment` name are tested together; **unlink** in the page panel

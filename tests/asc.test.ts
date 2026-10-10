@@ -918,6 +918,46 @@ describe("asc push default", () => {
     expect(pushBlockers(issues, "default").map((i) => i.message)).toEqual(["ios"]);
   }, 120_000);
 
+  it("with only a live version, puts the header in the Asset Library for review and places nothing", async () => {
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+      c.targets = ["iphone-6.9-1320x2868", "universal-5244x2950"];
+    });
+    editJson(path.join(fx.root, "store", "manifest.json"), (m) => {
+      m.screens.push({
+        id: "banner",
+        order: 3,
+        enabled: true,
+        template: "feature-graphic",
+        targets: ["universal-5244x2950"],
+        source: { filePattern: "01-home.png", localized: true },
+        overrides: {},
+      });
+    });
+    editJson(path.join(fx.root, "store", "content", "en-US.json"), (c) => {
+      c.screens.banner = { headline: "Plan the week" };
+    });
+    await generateProject(load(), { renderer });
+    const api = statefulApi({ versionState: "READY_FOR_DISTRIBUTION" });
+    const r = await push(api, true);
+    expect(r.libraryOnly).toBe(true);
+    expect(r.steps[0].what).toMatch(
+      /^screenshots and previews: no version takes edits \(2\.0 is READY_FOR_DISTRIBUTION\)/,
+    );
+    expect([...api.db.images.values()].map((i) => i.referenceName)).toEqual([
+      expect.stringMatching(/^store-shots default en-US 03_banner_UNIVERSAL [0-9a-f]{12}$/),
+    ]);
+    expect(api.db.placements.size).toBe(0);
+    expect(api.db.locs.get("vloc1")!.sets).toEqual([]);
+
+    api.writes.length = 0;
+    const again = await push(api, true);
+    expect(api.writes).toEqual([]);
+    expect(again.steps.at(-1)).toEqual({
+      action: "keep",
+      what: "en-US header and search results: 03_banner_UNIVERSAL.png is in the Asset Library",
+    });
+  }, 120_000);
+
   it("stops when no version takes edits, and says why", async () => {
     await generateProject(load(), { renderer });
     await expect(push(statefulApi({ versionState: "READY_FOR_DISTRIBUTION" }), false)).rejects.toThrow(
