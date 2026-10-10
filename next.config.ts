@@ -1,5 +1,8 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {/* config options here */};
+const nextConfig: NextConfig = {
+  // The Mac app embeds these pages; the development badge would sit on its canvas.
+  devIndicators: false,
+};
 
 export default nextConfig;

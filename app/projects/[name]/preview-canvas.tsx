@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { TargetProfile } from "@/lib/targets";
 import styles from "./editor.module.css";
 
@@ -41,6 +41,20 @@ export interface PreviewCanvasProps {
   onToggleGuides?: () => void;
   /** Strip mode: how many leading frames App Store search results show (0 for none). */
   searchCount?: number;
+  /** Show the zoom bar and the footer (false when a host app draws its own controls). */
+  chrome?: boolean;
+  /** Zoom and wrap controls for a host that draws its own buttons. */
+  controls?: React.Ref<CanvasControls>;
+  /** The zoom and wrap state, for a host that draws its own controls. */
+  onView?: (view: { scale: number; wrap: boolean; canWrap: boolean }) => void;
+}
+
+export interface CanvasControls {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  fit: () => void;
+  actual: () => void;
+  toggleWrap: () => void;
 }
 
 type Zoom = "fit" | number;
@@ -72,6 +86,9 @@ export default function PreviewCanvas({
   guides = false,
   onToggleGuides,
   searchCount = 0,
+  chrome = true,
+  controls,
+  onView,
 }: PreviewCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -244,6 +261,26 @@ export default function PreviewCanvas({
     return () => window.removeEventListener("keydown", onKey);
   }, [stepZoom, zoomTo]);
 
+  // Controls for a host app's own buttons.
+  useImperativeHandle(
+    controls,
+    () => ({
+      zoomIn: () => stepZoom(1),
+      zoomOut: () => stepZoom(-1),
+      actual: () => zoomTo(1),
+      toggleWrap: () => setWrap((w) => !w),
+      fit: () => {
+        setZoom("fit");
+        setPan({ x: 0, y: 0 });
+      },
+    }),
+    [stepZoom, zoomTo],
+  );
+
+  useEffect(() => {
+    onView?.({ scale, wrap, canWrap });
+  }, [onView, scale, wrap, canWrap]);
+
   useEffect(() => {
     let start: { x: number; y: number } | null = null;
     const onMessage = (ev: MessageEvent) => {
@@ -412,52 +449,54 @@ export default function PreviewCanvas({
         )}
       </div>
 
-      <div className={styles.zoomBar} onPointerDown={(e) => e.stopPropagation()}>
-        <button className={styles.btnSmall} onClick={() => stepZoom(-1)} title="zoom out (-)">
-          −
-        </button>
-        <span className={styles.zoomPct}>{Math.round(scale * 100)}%</span>
-        <button className={styles.btnSmall} onClick={() => stepZoom(1)} title="zoom in (+)">
-          +
-        </button>
-        <button
-          className={styles.btnSmall}
-          onClick={() => {
-            setZoom("fit");
-            setPan({ x: 0, y: 0 });
-          }}
-          title="fit (0)"
-        >
-          Fit
-        </button>
-        <button className={styles.btnSmall} onClick={() => zoomTo(1)} title="actual pixels (1)">
-          100%
-        </button>
-        {canWrap && (
-          <button
-            className={`${styles.btnSmall} ${wrap ? styles.chipActive : ""}`}
-            onClick={() => setWrap((w) => !w)}
-            title={
-              wrap
-                ? "show every screen in one row, as the store does"
-                : "wrap the screens into rows that fit the window"
-            }
-          >
-            Wrap
+      {chrome && (
+        <div className={styles.zoomBar} onPointerDown={(e) => e.stopPropagation()}>
+          <button className={styles.btnSmall} onClick={() => stepZoom(-1)} title="zoom out (-)">
+            −
           </button>
-        )}
-        {mode === "single" && onToggleGuides && (
-          <button
-            className={`${styles.btnSmall} ${guides ? styles.chipActive : ""}`}
-            onClick={onToggleGuides}
-            title="layout guides: safe padding, slide centres, thirds (g)"
-          >
-            Guides
+          <span className={styles.zoomPct}>{Math.round(scale * 100)}%</span>
+          <button className={styles.btnSmall} onClick={() => stepZoom(1)} title="zoom in (+)">
+            +
           </button>
-        )}
-        <span className={styles.muted}> drag to pan · ⌘/ctrl+wheel or pinch to zoom</span>
-      </div>
-      {footer && (
+          <button
+            className={styles.btnSmall}
+            onClick={() => {
+              setZoom("fit");
+              setPan({ x: 0, y: 0 });
+            }}
+            title="fit (0)"
+          >
+            Fit
+          </button>
+          <button className={styles.btnSmall} onClick={() => zoomTo(1)} title="actual pixels (1)">
+            100%
+          </button>
+          {canWrap && (
+            <button
+              className={`${styles.btnSmall} ${wrap ? styles.chipActive : ""}`}
+              onClick={() => setWrap((w) => !w)}
+              title={
+                wrap
+                  ? "show every screen in one row, as the store does"
+                  : "wrap the screens into rows that fit the window"
+              }
+            >
+              Wrap
+            </button>
+          )}
+          {mode === "single" && onToggleGuides && (
+            <button
+              className={`${styles.btnSmall} ${guides ? styles.chipActive : ""}`}
+              onClick={onToggleGuides}
+              title="layout guides: safe padding, slide centres, thirds (g)"
+            >
+              Guides
+            </button>
+          )}
+          <span className={styles.muted}> drag to pan · ⌘/ctrl+wheel or pinch to zoom</span>
+        </div>
+      )}
+      {chrome && footer && (
         <div className={styles.canvasInfo} onPointerDown={(e) => e.stopPropagation()}>
           {footer}
         </div>
