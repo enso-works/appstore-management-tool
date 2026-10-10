@@ -36,6 +36,7 @@ struct ShipView: View {
   @Environment(Workspace.self) private var workspace
   @State private var release: ReleaseStatus?
   @State private var tab = "checks"
+  @State private var sheetMessage: String?
 
   var body: some View {
     VStack(spacing: 0) {
@@ -61,6 +62,14 @@ struct ShipView: View {
       }
       ToolbarItem {
         GenerateButton(document: document)
+      }
+      ToolbarItem {
+        Button {
+          Task { await contactSheets() }
+        } label: {
+          Label("Contact Sheets", systemImage: "rectangle.grid.3x2")
+        }
+        .help("One picture per language and device with every generated screenshot, in store/generated/sheets")
       }
       ToolbarItem {
         Button {
@@ -93,6 +102,7 @@ struct ShipView: View {
         Text(subtitle).foregroundStyle(.secondary)
       }
       Spacer()
+      if let sheetMessage { Text(sheetMessage).font(.callout).foregroundStyle(.secondary) }
     }
     .padding(18)
   }
@@ -107,6 +117,22 @@ struct ShipView: View {
       if missing > 0 { parts.append("\(missing) screenshots to generate") }
     }
     return parts.joined(separator: " · ")
+  }
+
+  private func contactSheets() async {
+    do {
+      let body = try await document.api.send("POST", document.api.project(document.name, "sheet"))
+      let files = body["sheets"]?.array?.compactMap { $0["file"]?.string } ?? []
+      guard let root = document.info?.root, let first = files.first else {
+        sheetMessage = "Nothing generated yet: generate first"
+        return
+      }
+      let urls = files.map { URL(fileURLWithPath: root).appending(path: $0) }
+      NSWorkspace.shared.activateFileViewerSelecting(urls)
+      sheetMessage = "\(files.count) contact sheet\(files.count == 1 ? "" : "s") in \((first as NSString).deletingLastPathComponent)"
+    } catch {
+      sheetMessage = error.localizedDescription
+    }
   }
 
   private func loadRelease() async {
@@ -403,8 +429,10 @@ struct UploadPanel: View {
         if v["done"]?.bool == true { log.append("Finished with exit code \(v["exitCode"]?.int ?? -1)") }
         if let e = v["error"]?.string { log.append("Error: \(e)") }
       }
+      Notifier.finished("\(document.projectTitle): \(Self.names[key]!.0)", log.last ?? "Finished")
     } catch {
       log.append("Error: \(error.localizedDescription)")
+      Notifier.finished("\(document.projectTitle): \(Self.names[key]!.0) failed", error.localizedDescription)
     }
     await document.refreshReadiness()
   }

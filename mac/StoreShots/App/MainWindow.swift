@@ -6,6 +6,7 @@ struct MainWindow: View {
   @Environment(Workspace.self) private var workspace
   @Environment(\.openWindow) private var openWindow
   @State private var importing = false
+  @State private var palette = false
 
   var body: some View {
     @Bindable var workspace = workspace
@@ -24,11 +25,9 @@ struct MainWindow: View {
     }
     .onChange(of: server.projects) { _, projects in
       // Reopen the app shown last time once the list is in.
-      if workspace.selection == .apps, let last = AppSettings.lastProject,
-        projects.contains(where: { $0.name == last }), !restoredLast
-      {
+      if workspace.selection == .apps, !restoredLast, !projects.isEmpty {
         restoredLast = true
-        workspace.open(last)
+        workspace.restoreLast(among: projects.map(\.name))
       }
     }
     .sheet(isPresented: $importing) {
@@ -42,6 +41,8 @@ struct MainWindow: View {
       }
     }
     .focusedSceneValue(\.importApp, server.baseURL == nil ? nil : { importing = true })
+    .focusedSceneValue(\.openPalette, { palette = true })
+    .sheet(isPresented: $palette) { CommandPalette() }
   }
 
   @State private var restoredLast = false
@@ -111,6 +112,13 @@ struct SectionView: View {
     .onAppear { adoptUndo(undoManager) }
     .onChange(of: undoManager) { _, m in adoptUndo(m) }
     .focusedSceneValue(\.document, document)
+    .sheet(isPresented: Bindable(document).showGenerationLog) { GenerationLogView(document: document) }
+    .onChange(of: document.generation?.running) { was, now in
+      guard was == true, now == false, let g = document.generation else { return }
+      Notifier.finished(
+        "\(document.projectTitle): generated",
+        g.error ?? "\(g.rendered) rendered, \(g.unchanged) unchanged\(g.failed > 0 ? ", \(g.failed) failed" : "")")
+    }
   }
 }
 
@@ -262,4 +270,5 @@ extension FocusedValues {
   @Entry var document: ProjectDocument?
   @Entry var importApp: (() -> Void)?
   @Entry var canvas: CanvasController?
+  @Entry var openPalette: (() -> Void)?
 }

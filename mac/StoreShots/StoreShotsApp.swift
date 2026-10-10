@@ -45,6 +45,7 @@ struct AppCommands: Commands {
   @FocusedValue(\.document) private var document
   @FocusedValue(\.canvas) private var canvas
   @FocusedValue(\.importApp) private var importApp
+  @FocusedValue(\.openPalette) private var openPalette
   @Environment(\.openWindow) private var openWindow
 
   var body: some Commands {
@@ -60,6 +61,10 @@ struct AppCommands: Commands {
     }
 
     CommandMenu("Go") {
+      Button("Go to or Do...") { openPalette?() }
+        .keyboardShortcut("k")
+        .disabled(openPalette == nil)
+      Divider()
       Button("All Apps") { workspace.selection = .apps }
         .keyboardShortcut("0", modifiers: [.command, .option])
       Divider()

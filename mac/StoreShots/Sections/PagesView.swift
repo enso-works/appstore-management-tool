@@ -467,6 +467,7 @@ struct AscSection: View {
   }
 
   private func run(apply: Bool) async {
+    let pushedName = document.page?.name ?? "Default page"
     busy = true
     defer { busy = false }
     await document.save()
@@ -479,6 +480,7 @@ struct AscSection: View {
         // The engine stored App Store Connect's id in the manifest: load it, or the next save drops it.
         await document.load()
         onDone()
+        Notifier.finished("\(document.projectTitle): uploaded", pushedName)
       }
     } catch {
       self.error = error.localizedDescription

@@ -40,7 +40,12 @@ enum SidebarItem: Hashable {
 @Observable
 final class Workspace {
   var selection: SidebarItem? = .apps {
-    didSet { if let name = selection?.appName { AppSettings.lastProject = name } }
+    didSet {
+      if case .app(let name, let section) = selection {
+        AppSettings.lastProject = name
+        UserDefaults.standard.set(section.rawValue, forKey: "lastSection")
+      }
+    }
   }
   private(set) var documents: [String: ProjectDocument] = [:]
 
@@ -78,6 +83,13 @@ final class Workspace {
 
   func open(_ name: String, section: SidebarItem.Section = .design) {
     selection = .app(name, section)
+  }
+
+  /// The app and section shown when the app was last used.
+  func restoreLast(among names: [String]) {
+    guard let last = AppSettings.lastProject, names.contains(last) else { return }
+    let section = UserDefaults.standard.string(forKey: "lastSection").flatMap(SidebarItem.Section.init) ?? .design
+    open(last, section: section)
   }
 
 }
