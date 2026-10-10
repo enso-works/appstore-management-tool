@@ -27,6 +27,8 @@ export interface GenerateOptions {
   /** Print the plan and exit without rendering. */
   dryRun?: boolean;
   log?: (line: string) => void;
+  /** After each job: how many of the plan are done (any status), for progress bars. */
+  onProgress?: (progress: { done: number; total: number; key: string; status: JobStatus }) => void;
   /** Injected for tests. */
   renderer?: ExportRenderer;
   now?: () => Date;
@@ -202,6 +204,10 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
   const fontHashes = fontStack.flatMap((f) => f.files.map((x) => x.sha256));
   const templatesHash = templatesSourceHash();
 
+  const pushJob = (result: JobResult) => {
+    summary.jobs.push(result);
+    opts.onProgress?.({ done: summary.jobs.length, total: plan.length, key: result.key, status: result.status });
+  };
   try {
     await renderer.start();
     for (const job of plan) {
@@ -230,7 +236,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
         });
       }
       if (blocking.length) {
-        summary.jobs.push({ key: job.key, status: "skipped", issues: blocking, durationMs: 0 });
+        pushJob({ key: job.key, status: "skipped", issues: blocking, durationMs: 0 });
         summary.skipped++;
         keepPrevious();
         log(`SKIP ${job.key}: ${blocking[0].message}`);
@@ -252,7 +258,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
       ) {
         for (const e of prevEntries) files.push(e!);
         summary.unchanged++;
-        summary.jobs.push({ key: job.key, status: "unchanged", output: rel, issues: [], durationMs: 0 });
+        pushJob({ key: job.key, status: "unchanged", output: rel, issues: [], durationMs: 0 });
         log(`SAME ${job.key} (inputs unchanged)`);
         continue;
       }
@@ -373,7 +379,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
       if (status === "failed") keepPrevious();
       if (status === "rendered") summary.rendered++;
       else summary.failed++;
-      summary.jobs.push({
+      pushJob({
         key: job.key,
         status,
         output: status === "rendered" ? relOutput(project, job) : undefined,
