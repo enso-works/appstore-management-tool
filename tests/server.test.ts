@@ -12,6 +12,7 @@ import {
   projectSnapshot,
   saveBackgroundAsset,
   saveBrandBackground,
+  saveConfigPatch,
   bootstrapLocaleContent,
   saveContent,
   saveManifest,
@@ -25,6 +26,24 @@ describe("editor server helpers", () => {
   beforeEach(() => (fx = tempFixture()));
   afterEach(() => fx.cleanup());
   const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
+
+  it("saves the devices, languages and brand colours the Mac app edits, and nothing else", () => {
+    const p = load();
+    const file = path.join(fx.root, "store-shots.config.json");
+    const before = readJson<Record<string, unknown>>(file);
+    const r = saveConfigPatch(
+      p,
+      { targets: ["iphone-6.9-1320x2868", "iphone-duo-2007x2853"], brand: { primary: "#112233", accent: null } },
+      etagOf(file),
+    );
+    const after = readJson<Record<string, unknown> & { brand: Record<string, unknown> }>(file);
+    expect(after.targets).toEqual(["iphone-6.9-1320x2868", "iphone-duo-2007x2853"]);
+    expect(after.brand.primary).toBe("#112233");
+    expect(after.locales).toEqual(before.locales);
+    expect(r.etag).toBe(etagOf(file));
+    expect(() => saveConfigPatch(p, { targets: ["nope"] }, r.etag)).toThrow(HttpError);
+    expect(() => saveConfigPatch(p, { locales: ["en-US"] }, "stale")).toThrow(/changed on disk/);
+  });
 
   it("snapshot returns manifest, every locale's content and etags", () => {
     const snap = projectSnapshot(load());

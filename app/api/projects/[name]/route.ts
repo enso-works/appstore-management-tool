@@ -30,6 +30,8 @@ export async function GET(_req: Request, ctx: Ctx) {
       readiness: readinessReport(project),
       templates: Object.values(templateModules).map((m) => m.descriptor),
       targets: project.config.targets.map((id) => targetProfiles[id as keyof typeof targetProfiles]),
+      // Every target the engine knows, for choosing devices in settings.
+      allTargets: Object.values(targetProfiles),
       fonts: {
         stack: stack.map((f) => ({ family: f.family, source: f.source })),
         missing,

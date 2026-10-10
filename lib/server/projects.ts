@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { formatJson, jsonStyleFor } from "../json-style";
-import { type Project } from "../config";
+import { type Project, validateConfigSemantics } from "../config";
 import { contentFileFor, loadContent, loadManifest } from "../content";
 import { fileExists, resolveWithin } from "../paths";
 import { listProjects } from "../registry";
@@ -311,6 +311,53 @@ export function saveBrandBackground(project: Project, values: BackgroundValues |
   const parsed = projectConfigSchema.safeParse(raw);
   if (!parsed.success) throw new HttpError(422, "Invalid config", formatZodError(parsed.error));
   return { etag: writeJsonAtomic(file, raw) };
+}
+
+/** The config settings the Mac app edits directly; everything else in the file stays as it is. */
+export interface ConfigPatch {
+  targets?: string[];
+  locales?: string[];
+  defaultLocale?: string;
+  /** Brand colours (#rrggbb); null removes the optional accent. */
+  brand?: { primary?: string; onPrimary?: string; accent?: string | null };
+}
+
+/** Change the devices, languages or brand colours (etag-checked, validated, atomic). */
+export function saveConfigPatch(
+  project: Project,
+  patch: ConfigPatch,
+  ifMatch?: string,
+): SaveResult & { config: unknown } {
+  const file = project.configPath;
+  const current = etagOf(file);
+  if (ifMatch !== undefined && ifMatch !== current) {
+    throw new HttpError(409, "store-shots.config.json changed on disk since it was loaded; reload before saving");
+  }
+  const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, unknown> & {
+    brand?: Record<string, unknown>;
+  };
+  if (patch.targets) raw.targets = patch.targets;
+  if (patch.locales) raw.locales = patch.locales;
+  if (patch.defaultLocale) raw.defaultLocale = patch.defaultLocale;
+  if (patch.brand) {
+    raw.brand = { ...(raw.brand ?? {}) };
+    for (const key of ["primary", "onPrimary", "accent"] as const) {
+      const v = patch.brand[key];
+      if (v === null) delete raw.brand[key];
+      else if (v !== undefined) raw.brand[key] = v;
+    }
+  }
+  const parsed = projectConfigSchema.safeParse(raw);
+  if (!parsed.success) throw new HttpError(422, "Invalid settings", formatZodError(parsed.error));
+  const issues = validateConfigSemantics(parsed.data);
+  const errors = issues.items.filter((i) => i.level === "error");
+  if (errors.length)
+    throw new HttpError(
+      422,
+      "Invalid settings",
+      errors.map((i) => i.message),
+    );
+  return { etag: writeJsonAtomic(file, raw), config: parsed.data };
 }
 
 /**
