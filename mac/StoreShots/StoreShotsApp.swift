@@ -110,7 +110,7 @@ struct AppCommands: Commands {
       ) {
         Text("One Screen").tag(ProjectDocument.CanvasMode.single).keyboardShortcut("1", modifiers: [.command, .shift])
         Text("Strip").tag(ProjectDocument.CanvasMode.strip).keyboardShortcut("2", modifiers: [.command, .shift])
-        Text("All Languages").tag(ProjectDocument.CanvasMode.locales).keyboardShortcut("3", modifiers: [.command, .shift])
+        Text("Languages").tag(ProjectDocument.CanvasMode.locales).keyboardShortcut("3", modifiers: [.command, .shift])
       }
       .disabled(document == nil)
       Toggle("App Store Look", isOn: Binding(get: { document?.storeLook ?? false }, set: { document?.storeLook = $0 }))

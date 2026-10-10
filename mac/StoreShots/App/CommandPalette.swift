@@ -106,7 +106,7 @@ struct CommandPalette: View {
         })
       }
       for m in ProjectDocument.CanvasMode.allCases {
-        out.append(Command(id: "mode-\(m.rawValue)", title: "View: \(m.title)", kind: "Canvas", icon: "rectangle.3.group") {
+        out.append(Command(id: "mode-\(m.rawValue)", title: "View: \(m.title)", kind: "Canvas", icon: m.systemImage) {
           workspace.open(name, section: .design)
           doc.mode = m
         })

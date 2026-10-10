@@ -80,7 +80,14 @@ final class ProjectDocument {
       switch self {
       case .single: "One"
       case .strip: "Strip"
-      case .locales: "All Languages"
+      case .locales: "Languages"
+      }
+    }
+    var systemImage: String {
+      switch self {
+      case .single: "rectangle"
+      case .strip: "rectangle.split.3x1"
+      case .locales: "globe"
       }
     }
   }

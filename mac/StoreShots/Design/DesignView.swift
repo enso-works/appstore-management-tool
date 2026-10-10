@@ -8,13 +8,13 @@ struct DesignView: View {
   @AppStorage("design.showInspector") private var showInspector = true
   @State private var newPageKind: String?
   @State private var newPageName = ""
-  @SceneStorage("design.filmstripWidth") private var filmstripWidth = 210.0
   @State private var dropTargeted = false
 
   var body: some View {
-    HSplitView {
+    HStack(spacing: 0) {
       Filmstrip(document: document)
-        .frame(minWidth: 170, idealWidth: filmstripWidth, maxWidth: 320)
+        .frame(width: 250)
+      Divider()
       ZStack(alignment: .bottom) {
         CanvasView(controller: canvas)
         if dropTargeted {
@@ -31,7 +31,7 @@ struct DesignView: View {
         CanvasStatus(document: document)
           .padding(10)
       }
-      .frame(minWidth: 420)
+      .frame(maxWidth: .infinity)
       .dropDestination(for: URL.self) { urls, _ in
         guard let url = urls.first, document.screen != nil else { return false }
         Task { await document.saveCapture(url, screen: document.screenId) }
@@ -96,12 +96,11 @@ struct DesignView: View {
     ToolbarItemGroup(placement: .principal) {
       Picker("Device", selection: $document.targetId) {
         ForEach(document.targets) { t in
-          Label(t.label(among: document.targets), systemImage: t.systemImage).tag(t.id)
+          Text(t.label(among: document.targets)).tag(t.id)
         }
       }
       .pickerStyle(.menu)
       .help("Device")
-      .frame(minWidth: 130)
 
       Picker("Language", selection: $document.locale) {
         ForEach(document.locales, id: \.self) { l in
@@ -112,20 +111,21 @@ struct DesignView: View {
       .help("Language")
 
       Picker("View", selection: $document.mode) {
-        ForEach(ProjectDocument.CanvasMode.allCases) { m in Text(m.title).tag(m) }
+        ForEach(ProjectDocument.CanvasMode.allCases) { m in Label(m.title, systemImage: m.systemImage).tag(m) }
       }
       .pickerStyle(.segmented)
       .help("One screen, the page's screens side by side, or this screen in every language")
     }
     ToolbarItemGroup {
-      ControlGroup {
-        Button { canvas.command("zoomOut") } label: { Label("Zoom Out", systemImage: "minus.magnifyingglass") }
-        Button { canvas.command("fit") } label: {
-          Text("\(Int((canvasView.scale * 100).rounded()))%").monospacedDigit().frame(minWidth: 38)
-        }
-        .help("Zoom to fit")
-        Button { canvas.command("zoomIn") } label: { Label("Zoom In", systemImage: "plus.magnifyingglass") }
+      Menu {
+        Button("Zoom In") { canvas.command("zoomIn") }
+        Button("Zoom Out") { canvas.command("zoomOut") }
+        Button("Zoom to Fit") { canvas.command("fit") }
+        Button("Actual Size") { canvas.command("actual") }
+      } label: {
+        Text("\(Int((canvasView.scale * 100).rounded()))%").monospacedDigit()
       }
+      .help("Zoom: Command-= in, Command-- out, Command-9 fits")
       Toggle(isOn: $document.guides) { Label("Guides", systemImage: "squareshape.split.3x3") }
         .help("Layout guides (G)")
       Toggle(isOn: $document.storeLook) { Label("App Store Look", systemImage: "app.badge") }
