@@ -2,3 +2,5 @@
 /StoreShots.xcodeproj/
 /StoreShots/Info.plist
 /build/
+/.build/
+/.swiftpm/

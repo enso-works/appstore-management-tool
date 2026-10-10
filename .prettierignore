@@ -6,3 +6,5 @@ schema/
 *.png
 package-lock.json
 mac/build/
+mac/.build/
+mac/.swiftpm/
