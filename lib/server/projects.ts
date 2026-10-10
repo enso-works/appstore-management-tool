@@ -6,6 +6,9 @@ import { type Project, validateConfigSemantics } from "../config";
 import { contentFileFor, loadContent, loadManifest } from "../content";
 import { fileExists, resolveWithin } from "../paths";
 import { listProjects } from "../registry";
+import { buildJob } from "../render-plan";
+import { isOptInTarget, targetProfiles } from "../targets";
+import { readImageInfo } from "../image";
 import {
   backgroundValuesSchema,
   formatZodError,
@@ -418,4 +421,120 @@ export function bootstrapLocaleContent(project: Project): { created: string[] } 
     created.push(path.relative(project.root, file).split(path.sep).join("/"));
   }
   return { created };
+}
+
+const CAPTURE_MAX_BYTES = 40 * 1024 * 1024;
+
+export interface CaptureTarget {
+  /** App-relative path of the capture file. */
+  path: string;
+  /** A capture is there now (it would be replaced). */
+  exists: boolean;
+  /** What else reads the same file: other languages, other devices. Empty when only this one. */
+  sharedWith: string[];
+  /**
+   * Why replacing it needs a yes: the file belongs to another device (an iPhone capture
+   * seen from a Duo, header or event size) or to the default language (a screen with
+   * one capture for every language, seen in another). Absent when the drop is plainly
+   * this screen's own capture.
+   */
+  confirm?: string;
+}
+
+/** Where a screen reads its capture for a device and locale, and what else reads that file. */
+export function captureTarget(project: Project, screenId: string, targetId: string, locale: string) {
+  const { manifest } = loadManifest(project);
+  const screen = manifest?.screens.find((s) => s.id === screenId);
+  if (!screen) throw new HttpError(404, `No screen "${screenId}"`);
+  if (!project.config.locales.includes(locale)) throw new HttpError(400, `Unknown locale "${locale}"`);
+  // Whichever devices the screen renders for, the capture goes where this device reads it.
+  const job = buildJob(project, { ...screen, targets: [targetId] }, targetId, locale);
+  if (!job) throw new HttpError(400, `Unknown target "${targetId}"`);
+  if (job.sourceError) throw new HttpError(422, job.sourceError);
+  const sharedWith: string[] = [];
+  // Only the devices this screen renders for read its captures.
+  const renders = screen.targets ?? project.config.targets.filter((t) => !isOptInTarget(t));
+  for (const t of renders.filter((t) => t !== targetId && project.config.targets.includes(t))) {
+    const other = buildJob(project, { ...screen, targets: [t] }, t, locale);
+    if (other?.sourcePath === job.sourcePath) sharedWith.push(other.target.id);
+  }
+  if (!screen.source.localized && project.config.locales.length > 1) sharedWith.unshift("every language");
+  const shown = job.target;
+  const ownDevice = shown.family === job.sourceDevice && !shown.id.startsWith("iphone-duo-");
+  const confirm = !ownDevice
+    ? `it is the ${job.sourceDevice} capture, read by every size that shows the ${job.sourceDevice} captures`
+    : !screen.source.localized && locale !== project.config.defaultLocale
+      ? `this screen has one capture for every language: it is the ${project.config.defaultLocale} file`
+      : undefined;
+  const info: CaptureTarget = {
+    path: path.relative(project.root, job.sourcePath).split(path.sep).join("/"),
+    exists: fs.existsSync(job.sourcePath),
+    sharedWith,
+    ...(confirm ? { confirm } : {}),
+  };
+  return { job, info };
+}
+
+/**
+ * Put a capture where a screen reads it for a device and locale (the path its
+ * render job names under store/raw). PNG or JPEG only, checked before anything
+ * is replaced; a replaced capture is kept under store/generated/replaced-captures/. Reports
+ * the image size and whether its shape fits the device that reads it.
+ */
+export function saveCapture(
+  project: Project,
+  screenId: string,
+  targetId: string,
+  locale: string,
+  data: Buffer,
+): CaptureTarget & { width: number; height: number; aspectFits: boolean; backup?: string } {
+  const { job, info: where } = captureTarget(project, screenId, targetId, locale);
+  if (data.length > CAPTURE_MAX_BYTES) throw new HttpError(422, "Capture too large (max 40 MB)");
+  const abs = job.sourcePath;
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  const tmp = path.join(path.dirname(abs), `.${path.basename(abs)}.tmp`);
+  fs.writeFileSync(tmp, data);
+  let size: { width: number; height: number };
+  try {
+    size = readImageInfo(tmp);
+    if (!(size.width > 0 && size.height > 0)) throw new Error("no size");
+  } catch {
+    fs.rmSync(tmp, { force: true });
+    throw new HttpError(422, "A capture is a readable PNG or JPEG");
+  }
+  let backup: string | undefined;
+  if (fs.existsSync(abs)) {
+    const rel = path.relative(project.paths.raw, abs);
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    // Under the generated folder, which apps keep out of git.
+    const keep = path.join(project.paths.generated, "replaced-captures", `${rel}.${stamp}${path.extname(abs)}`);
+    fs.mkdirSync(path.dirname(keep), { recursive: true });
+    fs.copyFileSync(abs, keep);
+    backup = path.relative(project.root, keep).split(path.sep).join("/");
+  }
+  fs.renameSync(tmp, abs);
+  // The shape the device that reads this file expects: its own, or the iPhone sets' for
+  // targets that show the iPhone captures (Duo, header, events), in the same orientation.
+  const shown = job.target;
+  let expected = shown.width / shown.height;
+  if (job.sourceDevice === "iphone" && !(shown.family === "iphone" && !shown.id.startsWith("iphone-duo-"))) {
+    const iphone =
+      project.config.targets
+        .map((t) => targetProfiles[t as keyof typeof targetProfiles])
+        .find(
+          (t) => t && t.family === "iphone" && !t.id.startsWith("iphone-duo-") && t.orientation === shown.orientation,
+        ) ??
+      project.config.targets
+        .map((t) => targetProfiles[t as keyof typeof targetProfiles])
+        .find((t) => t && t.family === "iphone" && !t.id.startsWith("iphone-duo-"));
+    expected = iphone ? iphone.width / iphone.height : 1320 / 2868;
+  }
+  return {
+    ...where,
+    exists: true,
+    width: size.width,
+    height: size.height,
+    aspectFits: Math.abs(size.width / size.height - expected) < 0.02,
+    backup,
+  };
 }

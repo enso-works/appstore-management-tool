@@ -13,6 +13,8 @@ import {
   saveBackgroundAsset,
   saveBrandBackground,
   saveConfigPatch,
+  saveCapture,
+  captureTarget,
   bootstrapLocaleContent,
   saveContent,
   saveManifest,
@@ -43,6 +45,40 @@ describe("editor server helpers", () => {
     expect(r.etag).toBe(etagOf(file));
     expect(() => saveConfigPatch(p, { targets: ["nope"] }, r.etag)).toThrow(HttpError);
     expect(() => saveConfigPatch(p, { locales: ["en-US"] }, "stale")).toThrow(/changed on disk/);
+  });
+
+  it("puts a dropped capture where the screen reads it for that device and locale", () => {
+    const p = load();
+    const png = fs.readFileSync(path.join(fx.root, "store", "raw", "iphone", "en-US", "01-home.png"));
+    const before = fs.readFileSync(path.join(fx.root, "store/raw/iphone/en-US/02-planning.png"));
+    const r = saveCapture(p, "planning", "iphone-6.9-1320x2868", "en-US", png);
+    expect(r.path).toBe("store/raw/iphone/en-US/02-planning.png");
+    expect(fs.readFileSync(path.join(fx.root, r.path)).equals(png)).toBe(true);
+    expect(r.aspectFits).toBe(true);
+    // The capture it replaced is kept.
+    expect(fs.readFileSync(path.join(fx.root, r.backup!)).equals(before)).toBe(true);
+    // A broken image never replaces a good one.
+    const broken = Buffer.concat([png.subarray(0, 8), Buffer.from("broken")]);
+    expect(() => saveCapture(p, "planning", "iphone-6.9-1320x2868", "en-US", broken)).toThrow(/readable PNG or JPEG/);
+    expect(fs.readFileSync(path.join(fx.root, r.path)).equals(png)).toBe(true);
+    expect(() => saveCapture(p, "ghost", "iphone-6.9-1320x2868", "en-US", png)).toThrow(/No screen/);
+  });
+
+  it("says what else reads a capture before it is replaced", () => {
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+      c.targets = ["iphone-6.9-1320x2868", "iphone-6.1-1206x2622"];
+    });
+    const shared = captureTarget(load(), "planning", "iphone-6.9-1320x2868", "en-US").info;
+    expect(shared).toMatchObject({ path: "store/raw/iphone/en-US/02-planning.png", exists: true });
+    expect(shared.sharedWith).toEqual(["every language", "iphone-6.1-1206x2622"]);
+    // Its own capture, in its own language: no question asked.
+    expect(shared.confirm).toBeUndefined();
+    // The same file seen from another language, or from a Duo size, asks first.
+    expect(captureTarget(load(), "planning", "iphone-6.9-1320x2868", "ar-SA").info.confirm).toMatch(/every language/);
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+      c.targets = ["iphone-6.9-1320x2868", "iphone-duo-2007x2853"];
+    });
+    expect(captureTarget(load(), "home", "iphone-duo-2007x2853", "en-US").info.confirm).toMatch(/iphone capture/);
   });
 
   it("snapshot returns manifest, every locale's content and etags", () => {
