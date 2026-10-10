@@ -10,15 +10,17 @@ already running, and talks to its API.
 brew install xcodegen      # once
 sh mac/build.sh --open     # builds mac/build/Store Shots.app and launches it
 cd mac && swift test       # the model's tests (JSON, document, edits and undo)
+sh mac/docs-shots.sh       # retakes docs/images/app-*.png (screen unlocked)
 ```
 
 ## The window
 
 - **Sidebar**: All Apps, then each app with its sections. Import with + or Command-O.
-- **Design**: the page's screens as thumbnails (drag to reorder, right-click for more), the
-  canvas, and the inspector in tabs: Text, Layout, Background, Layers, Screen. Click the
-  phone or text on the canvas to select it, drag to move, Option-drag to tilt, Shift-drag to
-  scale, arrow keys to nudge.
+- **Design**: the page's screens as thumbnails (drag to reorder, right-click for more, drop
+  an image from Finder to make it the capture), the canvas, and the inspector in tabs: Text,
+  Layout, Background, Layers, Screen. Click the phone or text on the canvas to select it,
+  drag to move, Option-drag to tilt, Shift-drag to scale, arrow keys to nudge. In Strip,
+  Live Listing shows the App Store's current screenshots under the drafts.
 - **Pages**: the default page, custom product pages and optimization tests, each with its
   App Store Connect state, text, keywords, header, search and Duo images, and Check / Upload
   Draft. The default page can also submit its header and search images for review.
@@ -34,6 +36,7 @@ written before the engine restarts or the app quits.
 
 | Shortcut                          | Action                                    |
 | --------------------------------- | ----------------------------------------- |
+| Command-K                         | Go to or do anything                      |
 | Command-1 to 5                    | Design, Pages, Listing, Ship, Settings    |
 | Option-Command-0                  | All apps                                  |
 | Option-Command-1 to 9             | Open an app                               |
@@ -42,7 +45,7 @@ written before the engine restarts or the app quits.
 | Option-Command-Up / Down          | Previous / next screen                    |
 | Command-[ / Command-]             | Previous / next language                  |
 | Option-Command-]                  | Next device                               |
-| Shift-Command-1, 2, 3             | One screen, strip, all languages          |
+| Shift-Command-1, 2, 3             | One screen, strip, languages              |
 | Command-= / Command-- / Command-0 | Zoom in, out, actual size; Command-9 fits |
 | Option-Command-G                  | Layout guides                             |
 | Shift-Command-L                   | Engine log                                |
