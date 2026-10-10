@@ -35,6 +35,10 @@ export interface CanvasState {
   issues?: Issue[];
   failOnOverflow?: boolean;
   failOnTextOverlap?: boolean;
+  /** Per screen id, bumped when its capture changes on disk: that screen's frames render again. */
+  revisions?: Record<string, number>;
+  /** Show the live App Store listing under the strip, from this storefront (e.g. "us"). */
+  liveCountry?: string;
 }
 
 /** App -> canvas: zoom and layout commands from the native toolbar and menus. */
@@ -68,4 +72,6 @@ export type CanvasMessage =
       fits?: FitResult[];
     }
   /** Zoom and wrap, for the native toolbar. */
-  | { type: "view"; scale: number; wrap: boolean; canWrap: boolean };
+  | { type: "view"; scale: number; wrap: boolean; canWrap: boolean }
+  /** The live listing's state when it is shown: its version, or why it is not there. */
+  | { type: "live"; version?: string; error?: string };

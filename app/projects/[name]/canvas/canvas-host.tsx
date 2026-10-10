@@ -16,6 +16,7 @@ import type { InPageResult } from "@/lib/render/checks";
 import type { FitResult } from "@/lib/render/fit";
 import type { ScreenDefinition } from "@/lib/schema";
 import { isScreenshotSet } from "@/lib/targets";
+import { liveImageUrl } from "@/lib/live";
 import PreviewCanvas, { type CanvasControls, type CanvasItem } from "../preview-canvas";
 import editorStyles from "../editor.module.css";
 import styles from "./canvas.module.css";
@@ -104,6 +105,7 @@ export default function CanvasHost({ name }: { name: string }) {
           s,
           fields,
           state.manifest.screens.length,
+          state.revisions?.[s.id] ?? 0,
         ]),
       };
     };
@@ -248,6 +250,39 @@ export default function CanvasHost({ name }: { name: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // The live App Store listing, under the strip, for comparison.
+  const [live, setLive] = useState<{ iphone: string[]; ipad: string[] } | null>(null);
+  const liveCountry = state?.liveCountry;
+  useEffect(() => {
+    if (!liveCountry) return;
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(name)}/live?country=${encodeURIComponent(liveCountry)}`,
+          {
+            signal: controller.signal,
+            cache: "no-store",
+          },
+        );
+        const body = await res.json();
+        if (!res.ok || !body.live) {
+          setLive(null);
+          post({ type: "live", error: body.error ?? `not on the ${liveCountry.toUpperCase()} App Store` });
+        } else {
+          setLive({ iphone: body.live.iphone, ipad: body.live.ipad });
+          post({ type: "live", version: body.live.version });
+        }
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") post({ type: "live", error: (err as Error).message });
+      }
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      controller.abort();
+    };
+  }, [liveCountry, name]);
+
   const onView = useCallback((view: { scale: number; wrap: boolean; canWrap: boolean }) => {
     post({ type: "view", ...view });
   }, []);
@@ -291,6 +326,10 @@ export default function CanvasHost({ name }: { name: string }) {
     ...(state.mode === "single" ? {} : statusOf(j)),
   }));
   const selectedId = state.mode === "locales" ? state.locale : state.screenId;
+  const liveImages =
+    state.liveCountry && live && state.mode === "strip"
+      ? (target.family === "ipad" ? live.ipad : live.iphone).map((u) => liveImageUrl(u, target.width, target.height))
+      : [];
 
   return (
     <div className={`${editorStyles.canvas} ${styles.host}`}>
@@ -312,6 +351,7 @@ export default function CanvasHost({ name }: { name: string }) {
               : 1
             : 0
         }
+        belowRow={liveImages.length ? { label: "Live on the App Store", images: liveImages } : undefined}
         chrome={false}
         controls={controls}
         onView={onView}

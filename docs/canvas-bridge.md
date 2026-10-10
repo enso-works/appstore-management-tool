@@ -24,6 +24,8 @@ changes:
 | `selected`                            | `phone`, `background`, `text:<slice>` or `layer:<id>`                         |
 | `issues`                              | Validation issues, for the badges under each frame                            |
 | `failOnOverflow`, `failOnTextOverlap` | The project's validation settings                                             |
+| `liveCountry`                         | Show the live App Store listing under the strip, from that storefront         |
+| `revisions`                           | Per screen, bumped when its capture changes on disk: render that screen again |
 
 `window.storeShots.command({ action })` with `zoomIn`, `zoomOut`, `fit`,
 `actual` or `toggleWrap`, from the native toolbar and menus.
@@ -43,6 +45,7 @@ parent window and as a `store-shots-canvas` DOM event, for tests).
 | `deleteLayer { screenId, layerId }`                                                 | Delete or Backspace with a layer selected                             |
 | `toggleGuides`                                                                      | The g key                                                             |
 | `preview { screenId, locale, loading, error, sourceExists, budgets, checks, fits }` | The single preview's state, for the inspector                         |
+| `live { version, error }`                                                           | The live listing loaded, or why not                                   |
 | `view { scale, wrap, canWrap }`                                                     | Zoom and wrap changed                                                 |
 
 Zoom keys (+, -, 0, 1), pinch and scroll stay inside the canvas.
