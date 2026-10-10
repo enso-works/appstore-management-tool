@@ -55,3 +55,5 @@ The tool discovers apps by scanning the workspace root (three levels up from `li
 - fastlane via Homebrew; Ruby via rbenv/Homebrew, not system Ruby
   (see `../../starter-template/NEW-APP.md`, "iOS build gotchas").
 - Next.js 16: read `AGENTS.md` (above) before touching `app/`.
+- Mac app (`mac/`, SwiftUI): `sh mac/build.sh` builds it, `cd mac && swift test` runs the
+  model's tests. The canvas contract with the engine is `docs/canvas-bridge.md`.

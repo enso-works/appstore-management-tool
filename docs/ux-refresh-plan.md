@@ -1,9 +1,21 @@
-# UX refresh: native Mac app around the web canvas (draft, 2026-10-10)
+# UX refresh: native Mac app around the web canvas (2026-10-10)
 
 The tool does the work well; the editor is hard to use. Decision (the user, 2026-10-10): every
 piece of UI becomes native SwiftUI for the Mac feel; the canvas stays the web render it is
 today, so what you see is still exactly what gets exported. The engine (`lib/`), templates,
-CLI, API routes and file formats do not change. Nothing here starts until this plan is approved.
+CLI, API routes and file formats do not change. Approved and started 2026-10-10.
+
+## Status
+
+| #   | Phase                    | Status                                                                                                                                             |
+| --- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0   | Foundations              | done 2026-10-10: canvas route and bridge, generate progress stream, ordered JSON model, API client, document with autosave and undo, package tests |
+| 1   | Apps and Design          | done 2026-10-10: sidebar, apps overview, import sheet, filmstrip with thumbnails, canvas, toolbar, inspector                                       |
+| 2   | Design, rest             | done 2026-10-10: background, layers, presets, frames, device per screen                                                                            |
+| 3   | Pages                    | done 2026-10-10: pages list, App Store Connect state, text and keywords, check and upload, image submission                                        |
+| 4   | Listing                  | done 2026-10-10                                                                                                                                    |
+| 5   | Ship                     | done 2026-10-10: checks with fixes, review grid with Quick Look, fastlane uploads                                                                  |
+| 6   | Settings, polish, retire | settings and menus done 2026-10-10; the web editor stays until the native app has been used for real, then goes                                    |
 
 ## What is wrong today (from screenshots of every view)
 
