@@ -164,7 +164,8 @@ export async function pushDefaultPage(
     // approved them, without a new version: they go up as drafts to submit there.
     if (!creative.size) throw new AscPushError(why.charAt(0).toUpperCase() + why.slice(1));
     ctx.steps.push({ action: "skip", what: `screenshots and previews: ${why}` });
-    await uploadCreativeToLibrary(ctx, creative);
+    const live = all.find((v) => stateOf(v) === "READY_FOR_DISTRIBUTION");
+    await uploadCreativeToLibrary(ctx, creative, live?.id);
     return { set: DEFAULT_PAGE, steps: ctx.steps, applied: opts.apply, libraryOnly: true };
   }
   const files = defaultPageFiles(project, manifest, content);
@@ -204,29 +205,161 @@ export async function pushDefaultPage(
 
 /**
  * The default page's header and search results images into the Asset Library
- * as drafts, placed nowhere: submitted for review there and approved, they
- * can be chosen for the live page (Browse Assets) without a new version. An
+ * as drafts, for review there (`asc submit default`, or by hand). Once Apple
+ * has approved a locale's images they need no new version: they are placed on
+ * the live version (`liveVersionId`) as its header and search results. An
  * image already there under its checksum name is not sent again.
  */
-async function uploadCreativeToLibrary(ctx: Ctx, creative: Map<string, PageCreative>) {
+async function uploadCreativeToLibrary(ctx: Ctx, creative: Map<string, PageCreative>, liveVersionId?: string) {
+  const liveLocs = liveVersionId
+    ? (
+        await ctx.client.getAll<{ locale: string }>(
+          `/v1/appStoreVersions/${liveVersionId}/appStoreVersionLocalizations`,
+        )
+      ).data
+    : [];
   for (const [locale, page] of creative) {
+    const states: string[] = [];
     for (const file of new Set(Object.values(page))) {
       const name = referenceNameFor(DEFAULT_PAGE, locale, file);
       const label = `${locale} ${(Object.keys(page) as CreativePlacement[])
         .filter((p) => page[p] === file)
         .map((p) => PLACEMENT_LABEL[p])
         .join(" and ")}`;
-      if (await libraryImage(ctx, name)) {
-        ctx.steps.push({ action: "keep", what: `${label}: ${path.basename(file)} is in the Asset Library` });
+      const found = await libraryImageWithState(ctx, name);
+      if (found) {
+        states.push(found.state);
+        ctx.steps.push({
+          action: "keep",
+          what: `${label}: ${path.basename(file)} is in the Asset Library (${found.state})`,
+        });
         continue;
       }
+      states.push("PREPARE_FOR_SUBMISSION");
       await act(
         ctx,
         { action: "upload", what: `${label}: ${path.basename(file)} to the Asset Library, for review there` },
         () => uploadLibraryImage(ctx, file, name),
       );
     }
+    // Approved: show it on the live page. Until then it waits for Apple.
+    const loc = liveLocs.find((l) => l.attributes?.locale === locale);
+    if (loc && states.length && states.every((st) => st === "APPROVED")) {
+      await syncCreative(
+        ctx,
+        {
+          type: "appStoreVersionLocalizations",
+          id: loc.id,
+          path: "appStoreVersionLocalizations",
+          relationship: "appStoreVersionLocalization",
+        },
+        DEFAULT_PAGE,
+        locale,
+        page,
+      );
+    } else if (loc && states.some((st) => st !== "APPROVED")) {
+      ctx.steps.push({ action: "skip", what: `${locale}: on the live page once Apple approves it` });
+    }
   }
+}
+
+/** The library image of that name and its state, if there is one that can still show. */
+async function libraryImageWithState(
+  ctx: Ctx,
+  referenceName: string,
+  category: AssetCategory = "CREATIVE_ASSETS",
+): Promise<{ id: string; state: string } | undefined> {
+  const found = await ctx.client.get<{ referenceName?: string; state?: string }>(
+    `/v1/appAssetLibraries/${await assetLibraryId(ctx)}/images`,
+    { "filter[referenceName]": referenceName, "filter[category]": category, limit: "5" },
+  );
+  const usable = (Array.isArray(found.data) ? found.data : [found.data]).find(
+    (r) =>
+      r?.attributes?.referenceName === referenceName &&
+      !["AWAITING_UPLOAD", ...BROKEN].includes(r.attributes?.state ?? ""),
+  );
+  return usable ? { id: usable.id, state: usable.attributes?.state ?? "" } : undefined;
+}
+
+/** Image states Apple counts as sent for review, or past it. */
+const SUBMITTED = new Set(["READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW", "ACCEPTED", "APPROVED"]);
+
+/**
+ * Submit the default page's header and search results images for review,
+ * on the user's request only (`asc submit default`, the user's decision
+ * 2026-10-10): images from the Asset Library, never an app version, page or
+ * experiment. An unsent review submission that already holds anything else is
+ * left alone, so nothing rides along unseen. Plans first like `asc push`.
+ */
+export async function submitDefaultCreative(
+  project: Project,
+  client: AscClient,
+  manifest: Manifest,
+  content: Map<string, LocaleContent>,
+  opts: { apply: boolean; log?: (line: string) => void },
+): Promise<PushResult> {
+  const ctx: Ctx = { project, client, apply: opts.apply, steps: [], log: opts.log ?? (() => {}) };
+  const creative = defaultPageFiles(project, manifest, content, (j) => j.target.family === "creative").creative;
+  if (!creative.size) throw new AscPushError("The default page has no header or search results image to submit");
+  ctx.appId = await findApp(project, client);
+  const toSubmit: { id: string; label: string }[] = [];
+  for (const [locale, page] of creative) {
+    for (const file of new Set(Object.values(page))) {
+      const label = `${locale} ${path.basename(file)}`;
+      const found = await libraryImageWithState(ctx, referenceNameFor(DEFAULT_PAGE, locale, file));
+      if (!found) throw new AscPushError(`${label} is not in the Asset Library yet; run asc push default first`);
+      if (SUBMITTED.has(found.state)) ctx.steps.push({ action: "keep", what: `${label}: ${found.state}` });
+      else if (found.state !== "PREPARE_FOR_SUBMISSION")
+        ctx.steps.push({ action: "skip", what: `${label}: ${found.state}, not ready to submit` });
+      else toSubmit.push({ id: found.id, label });
+    }
+  }
+  if (!toSubmit.length) return { set: DEFAULT_PAGE, steps: ctx.steps, applied: opts.apply };
+  const open = await client.getAll<{ state?: string }>(`/v1/apps/${ctx.appId}/reviewSubmissions`, {
+    "filter[platform]": "IOS",
+    "filter[state]": "READY_FOR_REVIEW",
+  });
+  let submission = open.data[0];
+  if (submission) {
+    const items = await client.getAll(`/v1/reviewSubmissions/${submission.id}/items`);
+    const others = items.data.filter((i) => !related(i, "appAssetLibraryImage").length);
+    if (others.length) {
+      throw new AscPushError(
+        `An unsent review submission (${submission.id}) already holds ${others.length} other item(s); send or clear it in App Store Connect first`,
+      );
+    }
+  }
+  if (!submission) {
+    const created = await act(ctx, { action: "create", what: "a review submission for the images" }, () =>
+      client.post("/v1/reviewSubmissions", {
+        data: {
+          type: "reviewSubmissions",
+          attributes: { platform: "IOS" },
+          relationships: { app: { data: { type: "apps", id: ctx.appId! } } },
+        },
+      }),
+    );
+    if (created) submission = one(created) as typeof submission;
+  }
+  for (const image of toSubmit) {
+    await act(ctx, { action: "update", what: `${image.label}: add to the review submission` }, () =>
+      client.post("/v1/reviewSubmissionItems", {
+        data: {
+          type: "reviewSubmissionItems",
+          relationships: {
+            reviewSubmission: { data: { type: "reviewSubmissions", id: submission!.id } },
+            appAssetLibraryImage: { data: { type: "appAssetLibraryImages", id: image.id } },
+          },
+        },
+      }),
+    );
+  }
+  await act(ctx, { action: "update", what: `submit ${toSubmit.length} image(s) for review` }, () =>
+    client.patch(`/v1/reviewSubmissions/${submission!.id}`, {
+      data: { type: "reviewSubmissions", id: submission!.id, attributes: { submitted: true } },
+    }),
+  );
+  return { set: DEFAULT_PAGE, steps: ctx.steps, ascId: submission?.id, applied: opts.apply };
 }
 
 /**

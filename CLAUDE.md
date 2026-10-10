@@ -32,8 +32,10 @@ The tool discovers apps by scanning the workspace root (three levels up from `li
 - The App Store Connect client uploads drafts only: custom product pages, optimization
   treatments, Asset Library items, and the media (screenshots, previews, Asset Library
   placements) of an app version that is not yet submitted (`asc push default`, the user's
-  decision 2026-10-09). It never creates versions, never changes their text and never submits
-  anything for review.
+  decision 2026-10-09). It never creates versions and never changes their text.
+- It submits for review only Asset Library images, and only when the user runs `asc submit`
+  (the user's decision 2026-10-10). App versions, custom product pages and experiments are
+  never submitted by the tool.
 - Never add or run fastlane lanes that build (`beta`, `internal`) or submit.
   `submit_for_review` stays `false` everywhere.
 - After a phase: run `npm test`, `npm run typecheck`, `npm run lint`, then `/code-review`;

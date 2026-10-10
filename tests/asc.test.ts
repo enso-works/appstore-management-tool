@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AscAuthError, findAscKey, signToken, tokenSource } from "../lib/asc/auth";
 import { AscApiError, AscClient } from "../lib/asc/client";
-import { AscPushError, pushBlockers, pushDefaultPage, pushSet } from "../lib/asc/push";
+import { AscPushError, pushBlockers, pushDefaultPage, pushSet, submitDefaultCreative } from "../lib/asc/push";
 import { ascStatus } from "../lib/asc/status";
 import { loadProject } from "../lib/config";
 import { generateProject } from "../lib/generate";
@@ -309,8 +309,9 @@ function statefulApi(opts: { pageState?: string; versionState?: string } = {}) {
     >(),
     images: new Map<
       string,
-      { id: string; referenceName: string; fileName: string; uploaded?: boolean; parts: number }
+      { id: string; referenceName: string; fileName: string; uploaded?: boolean; parts: number; state?: string }
     >(),
+    submissions: [] as { id: string; items: string[]; submitted: boolean; other?: boolean }[],
     placements: new Map<
       string,
       { id: string; type: string; group: string; image: string; loc: string; position: number }
@@ -500,15 +501,59 @@ function statefulApi(opts: { pageState?: string; versionState?: string } = {}) {
       }
     }
     // Asset Library: images, and placements tying them to a page localization.
-    const imageJson = (i: { id: string; referenceName: string; fileName: string; uploaded?: boolean }) => ({
+    const imageJson = (i: {
+      id: string;
+      referenceName: string;
+      fileName: string;
+      uploaded?: boolean;
+      state?: string;
+    }) => ({
       type: "appAssetLibraryImages",
       id: i.id,
       attributes: {
         referenceName: i.referenceName,
         fileName: i.fileName,
-        state: i.uploaded ? "COMPLETE" : "AWAITING_UPLOAD",
+        state: i.state ?? (i.uploaded ? "PREPARE_FOR_SUBMISSION" : "AWAITING_UPLOAD"),
       },
     });
+    // Review submissions: an unsent one, its items, and sending it.
+    if (p === "/v1/apps/app1/reviewSubmissions")
+      return res({
+        data: db.submissions
+          .filter((x) => !x.submitted)
+          .map((x) => ({ type: "reviewSubmissions", id: x.id, attributes: { state: "READY_FOR_REVIEW" } })),
+      });
+    if ((m = p.match(/^\/v1\/reviewSubmissions\/(\w+)\/items$/))) {
+      const sub = db.submissions.find((x) => x.id === m![1])!;
+      return res({
+        data: [
+          ...sub.items.map((img, i) => ({
+            type: "reviewSubmissionItems",
+            id: `${sub.id}-${i}`,
+            relationships: { appAssetLibraryImage: { data: { type: "appAssetLibraryImages", id: img } } },
+          })),
+          ...(sub.other
+            ? [{ type: "reviewSubmissionItems", id: "v", relationships: { appStoreVersion: { data: { id: "x" } } } }]
+            : []),
+        ],
+      });
+    }
+    if (p === "/v1/reviewSubmissions" && method === "POST") {
+      const sub = { id: id("sub"), items: [] as string[], submitted: false };
+      db.submissions.push(sub);
+      return res({ data: { type: "reviewSubmissions", id: sub.id } }, 201);
+    }
+    if (p === "/v1/reviewSubmissionItems" && method === "POST") {
+      const sub = db.submissions.find((x) => x.id === body.data.relationships.reviewSubmission.data.id)!;
+      sub.items.push(body.data.relationships.appAssetLibraryImage.data.id);
+      return res({ data: { type: "reviewSubmissionItems", id: id("item") } }, 201);
+    }
+    if ((m = p.match(/^\/v1\/reviewSubmissions\/(\w+)$/)) && method === "PATCH") {
+      const sub = db.submissions.find((x) => x.id === m![1])!;
+      sub.submitted = body.data.attributes.submitted;
+      for (const img of sub.items) db.images.get(img)!.state = "WAITING_FOR_REVIEW";
+      return res({ data: { type: "reviewSubmissions", id: sub.id } });
+    }
     if ((m = p.match(new RegExp(`^/v1/${LOC}/(\\w+)/placements$`)))) {
       const types = u.searchParams.get("filter[placementType]")?.split(",");
       const group = u.searchParams.get("filter[placementGroup]");
@@ -952,10 +997,74 @@ describe("asc push default", () => {
     api.writes.length = 0;
     const again = await push(api, true);
     expect(api.writes).toEqual([]);
-    expect(again.steps.at(-1)).toEqual({
-      action: "keep",
-      what: "en-US header and search results: 03_banner_UNIVERSAL.png is in the Asset Library",
+    expect(again.steps.slice(-2)).toEqual([
+      {
+        action: "keep",
+        what: "en-US header and search results: 03_banner_UNIVERSAL.png is in the Asset Library (PREPARE_FOR_SUBMISSION)",
+      },
+      { action: "skip", what: "en-US: on the live page once Apple approves it" },
+    ]);
+
+    // asc submit default: plan, then one submission with the image and nothing else, sent.
+    const v = validateProject(load());
+    const submit = (apply: boolean) =>
+      submitDefaultCreative(load(), new AscClient(() => "tok", api.fetchImpl), v.manifest!, v.content, { apply });
+    expect((await submit(false)).steps.map((x) => x.what)).toEqual([
+      "a review submission for the images",
+      "en-US 03_banner_UNIVERSAL.png: add to the review submission",
+      "submit 1 image(s) for review",
+    ]);
+    expect(api.db.submissions).toEqual([]);
+    await submit(true);
+    const [image] = api.db.images.values();
+    expect(api.db.submissions).toEqual([expect.objectContaining({ items: [image.id], submitted: true })]);
+    expect((await submit(true)).steps).toEqual([
+      { action: "keep", what: "en-US 03_banner_UNIVERSAL.png: WAITING_FOR_REVIEW" },
+    ]);
+
+    // Approved: the next push places it on the live page as header and search results.
+    image.state = "APPROVED";
+    await push(api, true);
+    expect(
+      [...api.db.placements.values()]
+        .filter((x) => x.loc === "vloc1")
+        .map((x) => [x.type, x.image])
+        .sort(),
+    ).toEqual([
+      ["APP_STORE_SEARCH_RESULTS_ASSET", image.id],
+      ["PRODUCT_PAGE_HEADER_ASSET", image.id],
+    ]);
+  }, 120_000);
+
+  it("submits nothing when an unsent review submission holds other items", async () => {
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+      c.targets = ["iphone-6.9-1320x2868", "universal-5244x2950"];
     });
+    editJson(path.join(fx.root, "store", "manifest.json"), (m) => {
+      m.screens.push({
+        id: "banner",
+        order: 3,
+        enabled: true,
+        template: "feature-graphic",
+        targets: ["universal-5244x2950"],
+        source: { filePattern: "01-home.png", localized: true },
+        overrides: {},
+      });
+    });
+    editJson(path.join(fx.root, "store", "content", "en-US.json"), (c) => {
+      c.screens.banner = { headline: "Plan the week" };
+    });
+    await generateProject(load(), { renderer });
+    const api = statefulApi({ versionState: "READY_FOR_DISTRIBUTION" });
+    await push(api, true);
+    api.db.submissions.push({ id: "subX", items: [], submitted: false, other: true });
+    const v = validateProject(load());
+    await expect(
+      submitDefaultCreative(load(), new AscClient(() => "tok", api.fetchImpl), v.manifest!, v.content, {
+        apply: true,
+      }),
+    ).rejects.toThrow(/already holds 1 other item/);
+    expect(api.db.submissions[0].submitted).toBe(false);
   }, 120_000);
 
   it("stops when no version takes edits, and says why", async () => {

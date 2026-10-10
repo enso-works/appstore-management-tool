@@ -155,8 +155,10 @@ Fastfile. The key is read in memory only to sign a token, and never written or l
 screenshots, header and search results images, and the app previews in `store/previews/<locale>/`.
 Text stays deliver's job, and so does making the version. With no version taking edits it says
 which is live or in review, and still puts the page's header and search results images in the
-Asset Library as drafts: submit them for review there, and once Apple approves them choose them on
-the live page under Browse Assets, no new version needed. The editor has the same Check and Upload draft under
+Asset Library as drafts. `asc submit default` submits those images for review (images only: the
+tool never submits a version, page or experiment, and refuses when an unsent submission already
+holds anything else). Once Apple approves them, the next `asc push default` places them on the live
+page as its header and search results, no new version needed. The editor has the same Check and Upload draft under
 **Default page in App Store Connect**.
 
 Treatments with the same `experiment` name are tested together; **unlink** in the page panel

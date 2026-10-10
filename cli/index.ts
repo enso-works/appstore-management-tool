@@ -23,7 +23,7 @@ import { writeContactSheets } from "../lib/sheet";
 import { downloadFrames, framesAvailable, framesDir, listFrames } from "../lib/frames";
 import { AscAuthError, tokenSource } from "../lib/asc/auth";
 import { AscApiError, AscClient } from "../lib/asc/client";
-import { AscPushError, DEFAULT_PAGE, pushBlockers, pushPage } from "../lib/asc/push";
+import { AscPushError, DEFAULT_PAGE, pushBlockers, pushPage, submitDefaultCreative } from "../lib/asc/push";
 import { ascStatus, AscStatusError } from "../lib/asc/status";
 import { loadManifest } from "../lib/content";
 import { expandArgs, findBlender, planScenes, renderScenes, sceneDirs, ScenesError } from "../lib/scenes";
@@ -768,6 +768,51 @@ asc
               ? "\nDone. The images are drafts in the Asset Library: submit them for review there (App Store Connect > Asset Library), then choose them on the live page under Browse Assets."
               : "\nDone. The version's media are in App Store Connect; submit the version there when ready."
             : `\nDone. "${setId}" is a draft in App Store Connect${r.ascId ? ` (${r.ascId})` : ""}; submit it there when ready.`,
+        );
+      }
+    } catch (err) {
+      if (err instanceof AscAuthError || err instanceof AscPushError || err instanceof AscApiError) {
+        console.error(err.message);
+        process.exit(err instanceof AscAuthError ? 2 : 1);
+      }
+      throw err;
+    }
+  });
+
+asc
+  .command("submit <page>")
+  .description(
+    'Submit the default page\'s header and search results images ("default") for review in the Asset Library; images only, never a version, page or experiment; changes nothing without --yes',
+  )
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--yes", "submit")
+  .action(async (page: string, opts: { project?: string; yes?: boolean }) => {
+    if (page !== DEFAULT_PAGE) {
+      console.error(`Only "${DEFAULT_PAGE}" can be submitted from here: its Asset Library images`);
+      process.exit(1);
+    }
+    const project = openProject(opts.project);
+    const v = validateProject(project);
+    const blocking = pushBlockers(v.issues.items, DEFAULT_PAGE);
+    if (!v.manifest || blocking.length) {
+      printIssues(blocking);
+      console.error("Fix these before submitting.");
+      process.exit(1);
+    }
+    try {
+      const r = await submitDefaultCreative(project, new AscClient(tokenSource(project)), v.manifest, v.content, {
+        apply: !!opts.yes,
+        log: (l) => console.log(l),
+      });
+      const changes = r.steps.filter((s) => s.action !== "keep" && s.action !== "skip").length;
+      if (!opts.yes) {
+        for (const s of r.steps) console.log(`${s.action.padEnd(6)} ${s.what}`);
+        console.log(changes ? `\nRun again with --yes to submit.` : "\nNothing to submit.");
+      } else {
+        console.log(
+          changes
+            ? "\nSubmitted. Once Apple approves them, asc push default puts them on the live page."
+            : "\nNothing to submit.",
         );
       }
     } catch (err) {
