@@ -1,4 +1,7 @@
 "use client";
+/* eslint-disable react-hooks/refs, react-hooks/immutability -- the editor's save and undo refs and its
+   hoisted helpers predate the compiler rules; this editor is being replaced by the Mac app
+   (docs/ux-refresh-plan.md), so it keeps them rather than being restructured. */
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -19,6 +22,14 @@ import PagePanel, { PageCreative } from "./page-panel";
 import AscPushBox from "./asc-push-box";
 import PreviewCanvas, { type CanvasItem } from "./preview-canvas";
 import { liveImageUrl } from "@/lib/live";
+import {
+  dragPatch,
+  fieldsFor as pageFields,
+  nudgePatch,
+  pageScreens as screensOfPage,
+  stripWindow,
+  type DragEnd,
+} from "@/lib/editor/drag";
 import styles from "./editor.module.css";
 
 interface Snapshot {
@@ -233,15 +244,10 @@ export default function Editor({ name }: { name: string }) {
   const template = snap?.templates.find((t) => t.id === screen?.template);
   const page = pageId ? manifest.sets?.find((s) => s.id === pageId) : undefined;
   /** A screen's copy in a locale as the shown page renders it: the page's own fields over the default page's. */
-  const fieldsFor = (l: string, id: string): Fields => ({
-    ...((content[l]?.screens[id] as Fields | undefined) ?? {}),
-    ...((page ? content[l]?.sets?.[page.id]?.screens[id] : undefined) ?? {}),
-  });
+  const fieldsFor = (l: string, id: string): Fields => pageFields(content, l, id, page);
   const fields: Fields = fieldsFor(locale, screenId);
   // The screens the shown page has, in its order (the default page: every enabled screen).
-  const pageScreens: ScreenDefinition[] = page
-    ? page.screens.map((id) => screens.find((s) => s.id === id)).filter((s): s is ScreenDefinition => !!s)
-    : screens.filter((s) => s.enabled);
+  const pageScreens: ScreenDefinition[] = screensOfPage(manifest, page);
   const refLocale = snap?.config.defaultLocale ?? "";
   const refFields: Fields = (content[refLocale]?.screens[screenId] as Fields | undefined) ?? {};
   const isDirty = dirty.manifest || dirty.content.size > 0;
@@ -330,64 +336,15 @@ export default function Editor({ name }: { name: string }) {
   useEffect(() => {
     const onDrag = (ev: MessageEvent) => {
       if (ev.data?.type !== "store-shots-drag-end" || !screen || !target) return;
-      const o = { ...screen.overrides } as Record<string, number | string | undefined>;
-      const W = target.width;
-      const num = (v: unknown, d: number) => (typeof v === "number" ? v : d);
-      if (ev.data.mode === "move") {
-        const rtl = (content[locale]?.direction ?? "ltr") === "rtl";
-        o.screenshotOffsetX = Math.round((num(o.screenshotOffsetX, 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
-        o.screenshotOffsetY = Math.round((num(o.screenshotOffsetY, 0) + ev.data.dy / W) * 100) / 100;
-      } else if (ev.data.mode === "layer" && typeof ev.data.layerId === "string") {
-        const layers = (screen.layers ?? []).map((l) =>
-          l.id === ev.data.layerId
-            ? {
-                ...l,
-                x: Math.round((l.x + ev.data.dx / W) * 1000) / 1000,
-                y: Math.round((l.y + ev.data.dy / W) * 1000) / 1000,
-              }
-            : l,
-        );
-        updateScreen({ layers });
-        setSelectedEl(`layer:${ev.data.layerId}`);
-        return;
-      } else if (ev.data.mode === "layer-tilt" && typeof ev.data.layerId === "string") {
-        updateScreen({
-          layers: (screen.layers ?? []).map((l) =>
-            l.id === ev.data.layerId
-              ? {
-                  ...l,
-                  rotate:
-                    Math.max(-180, Math.min(180, Math.round((num(l.rotate, 0) + ev.data.dTilt) * 2) / 2)) || undefined,
-                }
-              : l,
-          ),
-        });
-        return;
-      } else if (ev.data.mode === "layer-scale" && typeof ev.data.layerId === "string") {
-        updateScreen({
-          layers: (screen.layers ?? []).map((l) =>
-            l.id === ev.data.layerId
-              ? { ...l, width: Math.max(0.02, Math.min(2, Math.round(l.width * ev.data.dScale * 1000) / 1000)) }
-              : l,
-          ),
-        });
-        return;
-      } else if (ev.data.mode === "text") {
-        const rtl = (content[locale]?.direction ?? "ltr") === "rtl";
-        const slice = typeof ev.data.slice === "number" ? ev.data.slice : 0;
-        const kx = slice === 0 ? "textOffsetX" : `textOffsetX${slice + 1}`;
-        const ky = slice === 0 ? "textOffsetY" : `textOffsetY${slice + 1}`;
-        o[kx] = Math.round((num(o[kx], 0) + ((rtl ? -1 : 1) * ev.data.dx) / W) * 100) / 100;
-        o[ky] = Math.max(-0.3, Math.min(1, Math.round((num(o[ky], 0) + ev.data.dy / W) * 100) / 100));
-      } else if (ev.data.mode === "tilt") {
-        o.deviceTilt = Math.max(-30, Math.min(30, Math.round((num(o.deviceTilt, 0) + ev.data.dTilt) * 2) / 2));
-      } else if (ev.data.mode === "scale") {
-        const tpl = snap?.templates.find((t) => t.id === screen.template);
-        void tpl;
-        const base = num(o.screenshotScale, target.family === "ipad" ? 0.72 : 0.8);
-        o.screenshotScale = Math.max(0.3, Math.min(1.8, Math.round(base * ev.data.dScale * 100) / 100));
-      }
-      updateScreen({ overrides: o });
+      const d = ev.data as DragEnd;
+      const patch = dragPatch(screen, d, {
+        targetWidth: target.width,
+        family: target.family,
+        rtl: (content[locale]?.direction ?? "ltr") === "rtl",
+      });
+      if (!patch.overrides && !patch.layers) return;
+      updateScreen(patch);
+      if (d.mode === "layer" && d.layerId) setSelectedEl(`layer:${d.layerId}`);
     };
     window.addEventListener("message", onDrag);
     return () => window.removeEventListener("message", onDrag);
@@ -572,31 +529,8 @@ export default function Editor({ name }: { name: string }) {
       if (!dir) return;
       e.preventDefault();
       const step = e.shiftKey ? 0.05 : 0.005;
-      const dx = dir[0] * step;
-      const dy = dir[1] * step;
-      const round3 = (v: number) => Math.round(v * 1000) / 1000;
-      const num = (v: unknown, d: number) => (typeof v === "number" ? v : d);
-      if (selectedEl === "phone") {
-        setOverrides({
-          screenshotOffsetX: round3(num(screen.overrides.screenshotOffsetX, 0) + dx),
-          screenshotOffsetY: round3(num(screen.overrides.screenshotOffsetY, 0) + dy),
-        });
-      } else if (selectedEl.startsWith("text")) {
-        const slice = Number(selectedEl.split(":")[1] ?? 0);
-        const kx = slice === 0 ? "textOffsetX" : `textOffsetX${slice + 1}`;
-        const ky = slice === 0 ? "textOffsetY" : `textOffsetY${slice + 1}`;
-        setOverrides({
-          [kx]: round3(num(screen.overrides[kx], 0) + dx),
-          [ky]: round3(Math.max(-0.3, Math.min(1, num(screen.overrides[ky], 0) + dy))),
-        });
-      } else if (selectedEl.startsWith("layer:")) {
-        const id = selectedEl.slice(6);
-        updateScreen({
-          layers: (screen.layers ?? []).map((l) =>
-            l.id === id ? { ...l, x: round3(l.x + dx), y: round3(l.y + dy) } : l,
-          ),
-        });
-      }
+      const patch = nudgePatch(screen, selectedEl, dir[0] * step, dir[1] * step);
+      if (patch) updateScreen(patch);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -793,20 +727,6 @@ export default function Editor({ name }: { name: string }) {
       else overrides[key] = value;
     }
     updateScreen({ overrides });
-  }
-
-  /** A screen's horizontal window into the strip of enabled screens (for span backgrounds). */
-  function stripWindow(m: Manifest, id: string, W: number): { offsetX: number; width: number } {
-    const ordered = [...m.screens]
-      .filter((s) => s.enabled)
-      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
-    let acc = 0;
-    let offsetX = 0;
-    for (const s of ordered) {
-      if (s.id === id) offsetX = acc;
-      acc += W * (s.panorama?.slices ?? 1);
-    }
-    return { offsetX, width: acc };
   }
 
   /** Drop a text layer's content field from every locale (layer text lives in content files). */
