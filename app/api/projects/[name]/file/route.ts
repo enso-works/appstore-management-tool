@@ -30,6 +30,7 @@ const MIME: Record<string, string> = {
  *   ?kind=asset&path=backgrounds/waves.png
  *   ?kind=shot&path=en-US/01_hero_IPHONE_69.png     (fastlane/screenshots)
  *   ?kind=sheet&path=en-US_IPHONE_69.png            (store/generated/sheets)
+ *   ?kind=generated&path=duo/en-US/01_home_IPHONE_DUO_INNER.png  (store/generated)
  *   ?kind=font&src=app|bundled&path=inter/inter-400.ttf
  */
 export async function GET(req: Request, ctx: Ctx) {
@@ -44,10 +45,11 @@ export async function GET(req: Request, ctx: Ctx) {
     else if (kind === "asset") root = project.paths.assets;
     else if (kind === "shot") root = project.paths.outputScreenshots;
     else if (kind === "sheet") root = path.join(project.paths.generated, "sheets");
+    else if (kind === "generated") root = project.paths.generated;
     else if (kind === "devframe") root = framesDir();
     else if (kind === "font")
       root = url.searchParams.get("src") === "bundled" ? bundledFontsDir() : appFontsDir(project);
-    else throw new HttpError(400, "kind must be raw, asset, shot, sheet, font or devframe");
+    else throw new HttpError(400, "kind must be raw, asset, shot, sheet, generated, font or devframe");
     let abs: string;
     try {
       abs = resolveWithin(root, rel);

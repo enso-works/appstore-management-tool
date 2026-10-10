@@ -171,7 +171,7 @@ export default function ReleasePanel({
                       ) : (
                         // eslint-disable-next-line @next/next/no-img-element -- local API file, not an optimizable asset
                         <img
-                          src={`/api/projects/${encodeURIComponent(name)}/file?kind=shot&path=${encodeURIComponent(shot.rel)}`}
+                          src={`/api/projects/${encodeURIComponent(name)}/file?kind=${shot.kind}&path=${encodeURIComponent(shot.rel)}`}
                           alt={`${locale} ${shot.screen}`}
                           loading="lazy"
                         />

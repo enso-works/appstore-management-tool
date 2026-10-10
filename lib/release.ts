@@ -23,8 +23,13 @@ import { fileExists } from "./paths";
 export type ShotState = "ok" | "stale" | "missing" | "blocked";
 
 export interface ReleaseShot {
-  /** Path relative to fastlane/screenshots/, usable with the file API (kind=shot). */
+  /**
+   * Path relative to the folder `kind` names, usable with the file API:
+   * fastlane/screenshots/ ("shot") for what deliver uploads, the generated
+   * folder ("generated") for iPhone Duo, creative and event images.
+   */
   rel: string;
+  kind: "shot" | "generated";
   screen: string;
   slice: number;
   state: ShotState;
@@ -132,7 +137,12 @@ export function releaseStatus(project: Project): ReleaseStatus {
           ? inputsHash(project, job, content, toolVersion, fontHashes, templatesHash)
           : undefined;
       job.outputPaths.forEach((abs, slice) => {
-        const rel = path.relative(outRoot, abs).split(path.sep).join("/");
+        const inShots = !path.relative(outRoot, abs).startsWith("..");
+        const kind = inShots ? ("shot" as const) : ("generated" as const);
+        const rel = path
+          .relative(inShots ? outRoot : project.paths.generated, abs)
+          .split(path.sep)
+          .join("/");
         const entry = manifest?.files.find(
           (f) => f.path === path.relative(project.root, abs).split(path.sep).join("/"),
         );
@@ -155,7 +165,7 @@ export function releaseStatus(project: Project): ReleaseStatus {
           state = "stale";
           reason = entry ? "inputs changed since the last generate" : "not recorded by the last generate";
         }
-        set!.shots.push({ rel, screen: job.screen.id, slice, state, reason });
+        set!.shots.push({ rel, kind, screen: job.screen.id, slice, state, reason });
         set![state === "ok" ? "ok" : state === "stale" ? "stale" : state === "missing" ? "missing" : "blocked"]++;
       });
     }

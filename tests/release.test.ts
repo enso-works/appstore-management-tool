@@ -17,6 +17,22 @@ describe("release", () => {
   afterEach(() => fx.cleanup());
   const load = () => loadProject(path.join(fx.root, "store-shots.config.json"));
 
+  it("names the folder each file lives in: deliver's for screenshots, generated for Duo", () => {
+    editJson(path.join(fx.root, "store-shots.config.json"), (c) => {
+      c.locales = ["en-US"];
+      c.targets = ["iphone-6.9-1320x2868", "iphone-duo-2007x2853"];
+    });
+    const sets = releaseStatus(load()).sets;
+    expect(sets.find((x) => x.target === "iphone-6.9-1320x2868")!.shots[0]).toMatchObject({
+      kind: "shot",
+      rel: "en-US/01_home_IPHONE_69.png",
+    });
+    expect(sets.find((x) => x.target === "iphone-duo-2007x2853")!.shots[0]).toMatchObject({
+      kind: "generated",
+      rel: "duo/en-US/01_home_IPHONE_DUO_INNER.png",
+    });
+  });
+
   it("reads the app version and persists sign-offs per version", () => {
     const project = load();
     expect(appVersionOf(project)).toBe("1.2.0");
