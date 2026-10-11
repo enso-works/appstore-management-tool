@@ -123,6 +123,11 @@ final class ProjectDocument {
   /// The last run's log is shown (Generate menu, or the status under the canvas).
   var showGenerationLog = false
 
+  /// Design > Theme... is shown.
+  var showThemeSheet = false
+  /// Holds the theme's undo steps: `load()` drops the document's own, and a theme reloads.
+  @ObservationIgnored let themeUndoTarget = NSObject()
+
   private var manifestRevision = 0
   private var contentRevision: [String: Int] = [:]
   private var dirtyManifest = false

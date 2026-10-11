@@ -101,6 +101,9 @@ struct AppCommands: Commands {
       Button("Generate This Screen") { Task { await document?.generate(.screen) } }
         .keyboardShortcut("g", modifiers: [.command, .shift])
         .disabled(document?.screen == nil || document?.generation?.running == true)
+      Divider()
+      Button("Theme...") { document?.showThemeSheet = true }
+        .disabled(document == nil)
     }
 
     CommandGroup(before: .toolbar) {

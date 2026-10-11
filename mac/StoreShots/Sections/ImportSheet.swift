@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Add an app: pick one found near the tool or choose its folder, check what was
-/// read from it, and import. An app that already has a config keeps it unchanged.
+/// read from it, pick how it starts (a theme in the app's colour, or plain), and
+/// import. An app that already has a config keeps it unchanged.
 struct ImportSheet: View {
   let api: APIClient
   var done: (String?) -> Void
@@ -16,6 +17,9 @@ struct ImportSheet: View {
   @State private var play = false
   @State private var error: String?
   @State private var busy = false
+  @State private var theme: String? = "aurora"
+  @State private var accent = Color.accentColor
+  @State private var accentSource = ""
 
   struct Candidate: Hashable {
     let root: String
@@ -59,6 +63,19 @@ struct ImportSheet: View {
             Toggle("iPad", isOn: $ipad)
             Toggle("Google Play", isOn: $play)
           }
+          if proposal?["hasConfig"]?.bool != true {
+            Section {
+              ThemePicker(
+                api: api, selection: $theme, accent: $accent, orientation: orientation, allowPlain: true)
+            } header: {
+              Text("Look")
+            } footer: {
+              Text(
+                theme == nil
+                  ? "Starts with one screen, to style yourself."
+                  : "Starts with five screens in this theme, with copy to replace\(accentSource.isEmpty ? "" : "; the colour is from \(accentSource)").")
+            }
+          }
           if let notes = proposal?["notes"]?.array?.compactMap(\.string), !notes.isEmpty {
             Section("Notes") {
               ForEach(notes, id: \.self) { Text($0).font(.callout).foregroundStyle(.secondary) }
@@ -71,7 +88,7 @@ struct ImportSheet: View {
       }
       .formStyle(.grouped)
     }
-    .frame(width: 520, height: 520)
+    .frame(width: proposal == nil ? 520 : 760, height: proposal == nil ? 520 : 720)
     .toolbar {
       ToolbarItem(placement: .cancellationAction) { Button("Cancel") { done(nil) } }
       if proposal != nil {
@@ -111,6 +128,8 @@ struct ImportSheet: View {
       orientation = p["orientation"]?.string ?? "portrait"
       ipad = p["ipad"]?.bool ?? false
       play = p["play"]?.bool ?? false
+      if let hex = p["accent"]?["hex"]?.string, let color = CSSColor.color(hex) { accent = color }
+      accentSource = p["accent"]?["source"]?.string ?? ""
       error = nil
     } catch {
       self.error = error.localizedDescription
@@ -121,13 +140,17 @@ struct ImportSheet: View {
     busy = true
     defer { busy = false }
     let list = locales.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    var pairs: [(String, JSONValue)] = [
+      ("root", .string(root)), ("projectName", .string(projectName)), ("locales", .array(list.map { .string($0) })),
+      ("orientation", .string(orientation)), ("ipad", .bool(ipad)), ("play", .bool(play)),
+    ]
+    // A theme only for an app that has no config yet: one that has keeps its own.
+    if let theme, proposal?["hasConfig"]?.bool != true {
+      pairs += [("theme", .string(theme)), ("accent", .string(CSSColor.css(accent)))]
+    }
+    let body = JSONObject(pairs)
     do {
-      let answer = try await api.send(
-        "POST", "api/import",
-        body: [
-          "root": .string(root), "projectName": .string(projectName), "locales": .array(list.map { .string($0) }),
-          "orientation": .string(orientation), "ipad": .bool(ipad), "play": .bool(play),
-        ])
+      let answer = try await api.send("POST", "api/import", body: .object(body))
       done(answer["entry"]?["name"]?.string)
     } catch {
       self.error = error.localizedDescription

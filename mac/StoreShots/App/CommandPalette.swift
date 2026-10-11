@@ -97,6 +97,14 @@ struct CommandPalette: View {
           Task { await doc.generate(.all) }
         })
       out.append(
+        Command(id: "theme", title: "Theme...", kind: "Action", icon: "paintpalette") {
+          // After the palette's own sheet has gone: a sheet asked for while another closes is dropped.
+          Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            doc.showThemeSheet = true
+          }
+        })
+      out.append(
         Command(id: "generate-screen", title: "Generate This Screen", kind: "Action", icon: "square.and.arrow.down") {
           Task { await doc.generate(.screen) }
         })

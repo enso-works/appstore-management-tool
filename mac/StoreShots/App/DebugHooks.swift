@@ -51,6 +51,8 @@ enum DebugHooks {
       if let d = workspace?.currentDocument {
         Task { await d.saveCapture(URL(fileURLWithPath: parts[2]), screen: parts[1]) }
       }
+    case "theme":
+      workspace?.currentDocument?.showThemeSheet = true
     case "undo":
       workspace?.currentDocument?.undoManager?.undo()
     case "redo":

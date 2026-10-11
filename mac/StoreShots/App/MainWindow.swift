@@ -113,6 +113,7 @@ struct SectionView: View {
     .onChange(of: undoManager) { _, m in adoptUndo(m) }
     .focusedSceneValue(\.document, document)
     .sheet(isPresented: Bindable(document).showGenerationLog) { GenerationLogView(document: document) }
+    .sheet(isPresented: Bindable(document).showThemeSheet) { ThemeSheet(document: document) }
     .onChange(of: document.generation?.running) { was, now in
       guard was == true, now == false, let g = document.generation else { return }
       Notifier.finished(
