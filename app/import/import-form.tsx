@@ -2,11 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { AppProposal, ImportCandidate, ImportResult } from "@/lib/import";
 import { APP_STORE_LOCALES } from "@/lib/locales";
 import { getTarget, targetsFor, type Orientation } from "@/lib/targets";
+import { THEMES } from "@/lib/themes";
 import styles from "./import.module.css";
+
+/** What GET /api/import answers: the proposal and the app's own colour. */
+type Proposal = AppProposal & { accent?: { hex: string; source: string } };
 
 interface Choices {
   projectName: string;
@@ -15,6 +19,9 @@ interface Choices {
   orientation: Orientation;
   ipad: boolean;
   play: boolean;
+  /** A starter theme, or null for one plain screen. */
+  theme: string | null;
+  accent: string;
 }
 
 const KIND_LABEL: Record<AppProposal["kind"], string> = {
@@ -24,7 +31,7 @@ const KIND_LABEL: Record<AppProposal["kind"], string> = {
   unknown: "app",
 };
 
-function choicesFrom(p: AppProposal): Choices {
+function choicesFrom(p: Proposal): Choices {
   return {
     projectName: p.projectName,
     locales: p.locales,
@@ -32,6 +39,8 @@ function choicesFrom(p: AppProposal): Choices {
     orientation: p.orientation,
     ipad: p.ipad,
     play: p.play,
+    theme: "aurora",
+    accent: p.accent?.hex ?? "#2F6FEB",
   };
 }
 
@@ -43,7 +52,7 @@ export default function ImportForm({
   candidates,
 }: {
   initialPath: string;
-  initialProposal?: AppProposal;
+  initialProposal?: Proposal;
   initialError: string;
   workspace: string;
   candidates: ImportCandidate[];
@@ -64,7 +73,7 @@ export default function ImportForm({
       const res = await fetch(`/api/import?path=${encodeURIComponent(dir.trim())}`);
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      const p = body as AppProposal;
+      const p = body as Proposal;
       setProposal(p);
       setPath(p.root);
       setChoices(choicesFrom(p));
@@ -83,7 +92,13 @@ export default function ImportForm({
       const res = await fetch("/api/import", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ root: proposal.root, ...choices }),
+        // A theme only for an app with no config yet; one that has keeps its own.
+        body: JSON.stringify({
+          root: proposal.root,
+          ...choices,
+          theme: proposal.hasConfig ? undefined : (choices.theme ?? undefined),
+          accent: choices.accent,
+        }),
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
@@ -102,6 +117,12 @@ export default function ImportForm({
       return { ...c, locales, defaultLocale: c.defaultLocale === locale ? locales[0] : c.defaultLocale };
     });
   const targets = choices ? targetsFor(choices) : [];
+  // Previews follow the colour once it has settled, not on every step of the picker.
+  const [previewAccent, setPreviewAccent] = useState(choices?.accent ?? "");
+  useEffect(() => {
+    const t = setTimeout(() => setPreviewAccent(choices?.accent ?? ""), 400);
+    return () => clearTimeout(t);
+  }, [choices?.accent]);
 
   return (
     <main className={styles.main}>
@@ -254,6 +275,53 @@ export default function ImportForm({
                     />{" "}
                     Google Play phone <span className={styles.small}>· {proposal.sources.play}</span>
                   </label>
+                </div>
+              </Field>
+
+              <Field label="Look" source={proposal.accent?.source}>
+                <div className={styles.stack}>
+                  <label className={styles.check}>
+                    <input
+                      type="color"
+                      value={choices.accent}
+                      onChange={(e) => update({ accent: e.target.value })}
+                      aria-label="Colour"
+                    />{" "}
+                    Every theme is drawn in this colour
+                  </label>
+                  <div className={styles.themes}>
+                    <button
+                      className={styles.theme}
+                      aria-pressed={choices.theme === null}
+                      onClick={() => update({ theme: null })}
+                    >
+                      <span className={styles.themePlain}>One screen, to style yourself</span>
+                      <strong>Plain</strong>
+                    </button>
+                    {THEMES.map((t) => (
+                      <button
+                        key={t.id}
+                        className={styles.theme}
+                        aria-pressed={choices.theme === t.id}
+                        onClick={() => update({ theme: t.id })}
+                        title={t.description}
+                      >
+                        {previewAccent && (
+                          // eslint-disable-next-line @next/next/no-img-element -- a PNG the engine renders on request
+                          <img
+                            src={`/api/themes/preview?${new URLSearchParams({ theme: t.id, accent: previewAccent, orientation: choices.orientation, height: "220" })}`}
+                            alt={`${t.name}: ${t.description}`}
+                          />
+                        )}
+                        <strong>{t.name}</strong>
+                      </button>
+                    ))}
+                  </div>
+                  <span className={styles.small}>
+                    {choices.theme
+                      ? "Starts with five screens in this theme, with copy to replace."
+                      : "Starts with one screen."}
+                  </span>
                 </div>
               </Field>
 

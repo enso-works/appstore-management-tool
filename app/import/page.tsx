@@ -1,3 +1,4 @@
+import { accentOf } from "@/lib/accent";
 import { findImportCandidates, ImportError, inspectApp, resolveAppPath, type AppProposal } from "@/lib/import";
 import { defaultWorkspaceRoot } from "@/lib/registry";
 import ImportForm from "./import-form";
@@ -12,11 +13,13 @@ export default async function ImportPage({
 }) {
   const { path } = await searchParams;
   const dir = typeof path === "string" ? path : "";
-  let proposal: AppProposal | undefined;
+  let proposal: (AppProposal & { accent?: { hex: string; source: string } }) | undefined;
   let error = "";
   if (dir) {
     try {
-      proposal = inspectApp(resolveAppPath(dir));
+      const found = inspectApp(resolveAppPath(dir));
+      // The colour a starter theme would draw in, as GET /api/import answers it.
+      proposal = { ...found, accent: await accentOf(found.root) };
     } catch (err) {
       if (!(err instanceof ImportError)) throw err;
       error = err.message;
