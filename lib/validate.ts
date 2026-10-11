@@ -581,6 +581,16 @@ function validateContent(project: Project, manifest: Manifest, content: Map<stri
       ];
       for (const f of Object.keys(fields)) {
         if (!known.includes(f)) {
+          // Copy for a field another template shows (an eyebrow under Full Bleed Card) is kept
+          // for switching back, not a mistake: changing a template or a theme must not block renders.
+          if (fields[f] === null || anyTemplateDeclares(f, slices)) {
+            issues.warn(
+              "content.unused-field",
+              `Field "${f}" is not shown by template "${template.id}" (screen "${screen.id}", ${locale})`,
+              { key, file, hint: `fields it shows: ${known.join(", ")}` },
+            );
+            continue;
+          }
           issues[strict ? "error" : "warn"](
             "content.unknown-field",
             `Field "${f}" is not declared by template "${template.id}" (screen "${screen.id}", ${locale})`,
@@ -795,4 +805,16 @@ function validateGlyphs(project: Project, manifest: Manifest, content: Map<strin
       }
     }
   }
+}
+
+/** Whether any template shows this field (slice-suffixed fields only count on a screen with that many slides). */
+function anyTemplateDeclares(field: string, slices: number): boolean {
+  const m = /^(.*?)([2-9])?$/.exec(field)!;
+  const base = m[1];
+  const slice = m[2] ? Number(m[2]) : 1;
+  if (slice > slices) return false;
+  return templateIds.some((id) => {
+    const t = getTemplate(id);
+    return !!t && templateFields(t).includes(base);
+  });
 }
