@@ -46,9 +46,13 @@ export const BACKGROUND_IMAGE_RE =
 
 /** Background values shared by the project default (brand.background) and per-screen overrides. */
 export const backgroundValuesSchema = z.strictObject({
+  /** Any CSS background: a colour, a gradient, several layered. */
   background: z.string().min(1).optional(),
+  /** Over the background: "asset:<file in store/assets>", "pattern:<waves, dots, grid, lines, zigzag, rings, crosses, checker or noise>", or "none". */
   backgroundImage: z.string().regex(BACKGROUND_IMAGE_RE, 'use "asset:<path>", "pattern:<kind>" or "none"').optional(),
+  /** Line colour of a pattern (any CSS colour; noise ignores it). */
   patternColor: z.string().min(1).optional(),
+  /** Size of a pattern's tiles, 0.25 to 4 times the default. */
   patternScale: z.number().min(0.25).max(4).optional(),
   /** Stretch the project-default background across the whole screenshot strip (each screen shows its slice). */
   span: z.boolean().optional(),
@@ -57,8 +61,11 @@ export const backgroundValuesSchema = z.strictObject({
 export type BackgroundValues = z.infer<typeof backgroundValuesSchema>;
 
 export const fontConfigSchema = z.strictObject({
+  /** The font family, as Google Fonts names it, or a family added locally. */
   family: z.string().min(1).default("Inter"),
+  /** Where `store-shots fonts add` gets it from. */
   source: z.enum(["google", "local"]).default("google"),
+  /** The weights downloaded; headlines use the heaviest a headline font lists. */
   weights: z.array(z.number().int().min(100).max(900)).min(1).default([400, 600, 700]),
   /** Extra families tried after `family`, in order (must be local: `fonts add`). Bundled fallbacks are appended automatically. */
   fallbacks: z.array(z.string().min(1)).default([]),
@@ -70,6 +77,7 @@ export const fontConfigSchema = z.strictObject({
  */
 export const sceneStepSchema = z
   .strictObject({
+    /** The step's name, for `scenes render <step>` and `needs`. */
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "step id: lowercase letters, digits, dashes"),
     /** Run as `blender -b --factory-startup` with this script; its arguments follow `--`. */
     blender: relativePath.optional(),
@@ -90,67 +98,98 @@ export type SceneStep = z.infer<typeof sceneStepSchema>;
 
 export const projectConfigSchema = z.strictObject({
   $schema: z.string().optional(),
+  /** The app's name in the editors and in contact sheets. */
   projectName: z.string().min(1),
+  /** The iOS bundle id, for App Store Connect. */
   bundleId: z.string().min(1).optional(),
+  /** The language other languages start from, and whose copy and captures fill gaps. */
   defaultLocale: localeCode,
+  /** Every App Store language the app's screenshots and listing are made in (e.g. en-US, de-DE). */
   locales: z.array(localeCode).min(1),
+  /** Where the tool reads and writes, relative to the app; the defaults suit nearly every app. */
   paths: z
     .strictObject({
+      /** The screens and pages. */
       manifest: relativePath.default("store/manifest.json"),
+      /** The copy, one file per language. */
       content: relativePath.default("store/content"),
+      /** The captures, by device family and language. */
       raw: relativePath.default("store/raw"),
+      /** Fonts, logos, backgrounds and layer art. */
       assets: relativePath.default("store/assets"),
+      /** Where the App Store screenshots go, for fastlane `deliver`. */
       outputScreenshots: relativePath.default("fastlane/screenshots"),
       /** Google Play (`supply`) metadata root; screenshots go under <locale>/images/phoneScreenshots/. */
       outputPlay: relativePath.default("fastlane/metadata/android"),
+      /** The store text, one folder per language, for fastlane `deliver`. */
       metadata: relativePath.default("fastlane/metadata"),
+      /** Pages, iPhone Duo, header and search images, events, contact sheets; not committed. */
       generated: relativePath.default("store/generated"),
-      /** App Preview videos, <previews>/<locale>/*.mp4|m4v|mov; readiness checks them, App Store Connect takes them by hand. */
+      /** App Preview videos, <previews>/<locale>/*.mp4|m4v|mov; readiness checks them and `asc push default` uploads them. */
       previews: relativePath.default("store/previews"),
     })
     .prefault({}),
+  /** The devices to render for, by id (`iphone-6.9-1320x2868`, `header-3840x1646`, ...). */
   targets: z.array(z.enum(targetIds as [string, ...string[]])).min(1),
   /** target id -> raw capture device folder name under paths.raw */
   sourceDevices: z.record(z.string(), safePathFragment).prefault({}),
+  /** The app's look: fonts, colours and the default background. A theme sets these. */
   brand: z
     .strictObject({
+      /** The body font. */
       font: fontConfigSchema.prefault({}),
       /** Optional display face for headlines (e.g. a serif); body copy keeps `font`. */
       headlineFont: fontConfigSchema.optional(),
       /** Project-wide default background; screens inherit it unless they override (backgroundImage "none" opts out of a texture). */
       background: backgroundValuesSchema.optional(),
+      /** The brand colour: the default background, and Full Bleed Card's card. */
       primary: hexColor.default("#111111"),
+      /** The text colour on `primary`. */
       onPrimary: hexColor.default("#FFFFFF"),
       /** Colour for the eyebrow and caption (a sub-line in a second colour); default: the text colour. */
       accent: hexColor.optional(),
     })
     .prefault({}),
+  /** How the files are written. */
   output: z
     .strictObject({
       // JPEG output (Apple accepts it) needs a JPEG header reader for readiness; add with Phase 2 if wanted.
+      /** The file format; PNG only for now. */
       format: z.enum(["png"]).default("png"),
+      /** The colour transparency is flattened onto, since the stores refuse alpha. */
       backgroundColor: hexColor.default("#FFFFFF"),
+      /** A full run deletes the files of the last run that are no longer planned. */
       cleanBeforeRender: z.boolean().default(true),
     })
     .prefault({}),
+  /** How strict the checks are. */
   validation: z
     .strictObject({
+      /** A missing translation is an error (true) or a warning (false). */
       strictTranslations: z.boolean().default(true),
+      /** Text that overflows at its smallest allowed size is an error (true) or a warning. */
       failOnOverflow: z.boolean().default(true),
+      /** A rendered file with transparency is an error (true) or a warning. */
       failOnAlpha: z.boolean().default(true),
       /** Text overlapping the device shell is a warning by default (designers do it on purpose); true makes it an error. */
       failOnTextOverlap: z.boolean().default(false),
+      /** How many screenshots each device and language should have (Apple takes 1 to 10). */
       screensPerTarget: z
         .strictObject({
+          /** Fewer is reported. */
           min: z.number().int().min(1).max(10).default(3),
+          /** More is reported. */
           max: z.number().int().min(1).max(10).default(10),
         })
         .prefault({}),
     })
     .prefault({}),
+  /** The store text in fastlane/metadata. */
   metadata: z
     .strictObject({
+      /** The tool edits and checks the store text; false leaves it to you. */
       manage: z.boolean().default(true),
+      /** The fields Listing shows and readiness requires. */
       fields: z.array(z.enum(METADATA_FIELDS)).default([...METADATA_FIELDS]),
     })
     .prefault({}),
@@ -182,16 +221,23 @@ export const projectConfigSchema = z.strictObject({
     .strictObject({
       /** Path to the Blender binary (default: $BLENDER, /Applications/Blender.app, or `blender` on PATH). */
       blender: z.string().min(1).optional(),
+      /** The steps, in order. */
       steps: z.array(sceneStepSchema).min(1),
     })
     .optional(),
+  /** The app's own fastlane lanes the tool may run. It never runs one that builds or submits. */
   fastlane: z
     .strictObject({
+      /** False turns off the lanes and the credentials check. */
       enabled: z.boolean().default(true),
+      /** The lane names, as `<platform> <lane>`. */
       lanes: z
         .strictObject({
+          /** Checks the store text against the limits. */
           validate: z.string().default("ios validate_metadata"),
+          /** Uploads the store text. */
           metadata: z.string().default("ios metadata"),
+          /** Uploads the screenshots. */
           screenshots: z.string().default("ios screenshots"),
         })
         .prefault({}),
@@ -252,10 +298,15 @@ export const layerSchema = z.discriminatedUnion("type", [
 export type Layer = z.infer<typeof layerSchema>;
 
 export const screenSchema = z.strictObject({
+  /** The screen's name: lowercase letters, digits and dashes. It names its copy, captures and files. */
   id: screenId,
+  /** Its position on the default page, from 1. */
   order: z.number().int().min(1),
+  /** On the default page; false keeps it for other pages, or for the header and event pictures. */
   enabled: z.boolean().default(true),
+  /** The template id: hero-top, split-caption, full-bleed-card or feature-graphic. */
   template: z.string().min(1),
+  /** Where the screen's capture is. */
   source: z
     .strictObject({
       /** Interpolates {order} {id} {locale} {device} {target}. Relative to raw/<device>/<locale>/. */
@@ -273,7 +324,13 @@ export const screenSchema = z.strictObject({
    * consecutive files (order, order+1, ...). The following order numbers are
    * reserved for the slices.
    */
-  panorama: z.strictObject({ slices: z.number().int().min(2).max(3) }).optional(),
+  panorama: z
+    .strictObject({
+      /** How many screenshots wide: 2 or 3. */
+      slices: z.number().int().min(2).max(3),
+    })
+    .optional(),
+  /** The layout and background the inspector sets; see screens[].overrides below. */
   overrides: z.record(z.string(), z.unknown()).prefault({}),
   /** Extra image/text elements composited over the template. Text layers read content field <layer id>. */
   layers: z.array(layerSchema).prefault([]),
@@ -285,10 +342,12 @@ export const screenSchema = z.strictObject({
  * A named screenshot set besides the default product page: a custom product
  * page (up to 70 per app) or a product page optimization treatment (up to 3
  * per test). Its screens may be disabled on the default page. Rendered to
- * <generated>/sets/<id>/<locale>/ and uploaded by hand in App Store Connect.
+ * <generated>/sets/<id>/<locale>/ and uploaded as a draft with `asc push <id>`.
  */
 export const screenSetSchema = z.strictObject({
+  /** The page's name in the tool: lowercase letters, digits and dashes. */
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "set id: lowercase letters, digits, dashes"),
+  /** "custom" for a custom product page, "ppo" for an optimization test treatment. */
   kind: z.enum(["custom", "ppo"]),
   /** The page's or treatment's name in App Store Connect, for your reference. */
   name: z.string().min(1).optional(),
@@ -337,7 +396,9 @@ export type SetContent = z.infer<typeof setContentSchema>;
 
 export const localeContentSchema = z.strictObject({
   $schema: z.string().optional(),
+  /** The language this file is for, as in the file name. */
   locale: localeCode,
+  /** Right to left mirrors the layouts; default: from the language. */
   direction: z.enum(["ltr", "rtl"]).optional(),
   /** screen id -> field -> text (null = intentionally empty) */
   screens: z.record(screenId, z.record(z.string(), fieldValue)).prefault({}),

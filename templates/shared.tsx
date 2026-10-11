@@ -44,12 +44,15 @@ export const commonOverridesSchema = z.strictObject({
   textOffsetX: z.number().min(-1).max(1).optional(),
   /** Vertical nudge of the text block, fraction of canvas width (positive = down). */
   textOffsetY: z.number().min(-0.3).max(1).optional(),
-  /** Panorama slide 2 text offsets (independent of slide 1). */
+  /** Slide 2's text, across (a wide screen's slides each have their own). */
   textOffsetX2: z.number().min(-1).max(1).optional(),
+  /** Slide 2's text, down. */
   textOffsetY2: z.number().min(-0.3).max(1).optional(),
-  /** Panorama slide 3 text offsets. */
+  /** Slide 3's text, across. */
   textOffsetX3: z.number().min(-1).max(1).optional(),
+  /** Slide 3's text, down. */
   textOffsetY3: z.number().min(-0.3).max(1).optional(),
+  /** Text alignment (start = left in left-to-right languages). */
   textAlign: z.enum(["start", "center", "end"]).optional(),
   /** Text colour override (any CSS colour); default brand.onPrimary. */
   textColor: z.string().min(1).optional(),
