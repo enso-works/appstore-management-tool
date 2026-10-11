@@ -1,0 +1,33 @@
+name: site
+
+# store-shots.bavrk.com is built in enso-works/bavrk from site/ and docs/ here
+# (deploy-store-shots.yml there). A change to them on main asks bavrk to deploy,
+# with a token that can dispatch there: BAVRK_DISPATCH_TOKEN, a fine-grained
+# token on enso-works/bavrk with Contents read and write. Without it, bavrk's
+# hourly run picks the change up within the hour.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "docs/**"
+      - "lib/schema.ts"
+      - "templates/shared.tsx"
+      - "lib/targets.ts"
+      - "cli/**"
+      - "mac/README.md"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask bavrk to deploy store-shots.bavrk.com
+        env:
+          GH_TOKEN: ${{ secrets.BAVRK_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::BAVRK_DISPATCH_TOKEN is not set: bavrk's hourly run deploys this within the hour."
+            exit 0
+          fi
+          gh api repos/enso-works/bavrk/dispatches -f event_type=store-shots-docs
