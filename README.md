@@ -316,8 +316,8 @@ templates/    React templates and the device body
 schema/       JSON Schemas for the files in your app
 fixtures/     the demo app the tests use
 tests/        vitest
-docs/         templates, troubleshooting, the canvas bridge, roadmap
-site/         the docs site (Fumadocs, static export)
+docs/         plans, the canvas bridge, roadmap
+site/         the docs site (Fumadocs, static export): the manual, troubleshooting, templates
 ```
 
 ## Development
@@ -333,7 +333,7 @@ npm run fixtures               # regenerate fixtures/demo-app
 
 Capturing from a simulator needs Xcode; the engine and CLI run on any OS with Node 22.
 
-More: [writing a template](docs/templates.md), [troubleshooting](docs/troubleshooting.md),
+More: [writing a template](site/content/docs/templates/index.mdx), [troubleshooting](site/content/docs/help/troubleshooting.mdx),
 [the canvas bridge](docs/canvas-bridge.md), [roadmap](docs/roadmap.md). Why this exists:
 [I built my own App Store screenshot generator](https://bavrk.com/articles/app-store-screenshot-generator).
 

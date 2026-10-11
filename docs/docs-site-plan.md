@@ -1,7 +1,7 @@
 # Docs site plan
 
-The README is the front door; the docs site is the manual. Phase 1 is built (`site/`); phases
-2 to 4 are not.
+The README is the front door; the docs site is the manual. Phases 1 and 2 are built (`site/`);
+phases 3 and 4 are not.
 
 ## Where it lives and how it is built
 
@@ -28,22 +28,22 @@ The README is the front door; the docs site is the manual. Phase 1 is built (`si
 | Listing           | Fields and limits; languages; starting a language; what's new                                                                                                   |
 | Ship              | Every check, what it means and how to fix it; review and contact sheets; fastlane lanes; CI with `check`                                                        |
 | App Store Connect | The key; status; drafts for pages and treatments; the default page; Asset Library; submitting header and search images; what the tool never does                |
-| Templates         | Writing a template (from `docs/templates.md`); fields, budgets and overrides                                                                                    |
+| Templates         | Writing a template (moved from `docs/templates.md`); fields, budgets and overrides                                                                              |
 | Art pipeline      | Scenes: Blender and post-processing steps, inputs, quick renders                                                                                                |
 | Reference         | CLI (generated from the commands' own help); config, manifest and content files (generated from `schema/`); devices table (from the registry); shortcuts        |
-| Help              | Troubleshooting (from `docs/troubleshooting.md`); FAQ; changelog                                                                                                |
+| Help              | Troubleshooting (moved from `docs/troubleshooting.md`); FAQ; changelog                                                                                          |
 
 Generated pages stay true by construction: the CLI reference, the file reference and the
 devices table are built from the code at site build time, so they cannot drift.
 
 ## Phases
 
-| #   | What lands                                                                                                       | Size |
-| --- | ---------------------------------------------------------------------------------------------------------------- | ---- |
-| 1   | Done: `site/` with Fumadocs, theme, navigation; Start and Design pages; local preview with `npm run site`        | M    |
-| 2   | Devices, Pages, Listing, Ship, App Store Connect; the existing `docs/*.md` moved in (the repo links to the site) | M    |
-| 3   | Generated reference: CLI, files, devices; a test that fails when a command or schema has no page                 | S    |
-| 4   | Hosting: DNS, Caddy, deploy workflow; the README and package homepage link to the site                           | S    |
+| #   | What lands                                                                                                             | Size |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | ---- |
+| 1   | Done: `site/` with Fumadocs, theme, navigation; Start and Design pages; local preview with `npm run site`              | M    |
+| 2   | Done: Devices, Pages, Listing, Ship, App Store Connect; the existing `docs/*.md` moved in (the repo links to the site) | M    |
+| 3   | Generated reference: CLI, files, devices; a test that fails when a command or schema has no page                       | S    |
+| 4   | Hosting: DNS, Caddy, deploy workflow; the README and package homepage link to the site                                 | S    |
 
 ## Running it
 

@@ -1,4 +1,7 @@
-# Troubleshooting
+---
+title: Troubleshooting
+description: What the messages mean and how to fix them.
+---
 
 ## `validate` / `generate`
 
@@ -7,6 +10,9 @@
 | `No store-shots.config.json found`                     | Run from inside an app, pass `--project <app-dir>`, or `store-shots init --project <app-dir>`                                                                                       |
 | `content.missing-locale`                               | Create `store/content/<locale>.json` (`{"locale":"de-DE","screens":{}}`) or remove the locale from `config.locales`                                                                 |
 | `content.missing-field` / `content.missing-screen`     | Copy is missing for that locale/screen; strict mode blocks the job. Edit in the UI or the JSON                                                                                      |
+| `content.unused-field` (warning)                       | The screen's template does not show that field (an eyebrow under Full Bleed Card). The copy is kept for switching back; delete it if you do not need it                             |
+| `content.unknown-field`                                | No template knows that field name: a typo, or a slide field (`headline2`) on a screen with one slide                                                                                |
+| `content.starter-copy` (warning)                       | A theme's prompt ("What does this screen let you do?") is still the copy. Write the screen's own; readiness fails until every prompt is gone                                        |
 | `content.glyph-missing`                                | A character is not covered by any local font. `store-shots fonts add "<family>"` (the message suggests one) and list it in `brand.font.fallbacks`                                   |
 | `font.missing`                                         | `brand.font.family` (or `headlineFont`) is not downloaded: `store-shots fonts add "<family>" --project <app>`                                                                       |
 | `source.missing`                                       | Raw capture not found at `store/raw/<device>/<locale>/<file>`; capture it (`store-shots capture --screen <id> --device iphone --locale <l>`) or fix `source.filePattern`            |
@@ -21,7 +27,7 @@
 
 ## Readiness
 
-- `Metadata present for every locale` fails → the Store tab edits `fastlane/metadata/<locale>/*.txt`; create missing locale dirs there (explicit button).
+- `Metadata present for every locale` fails → Listing edits `fastlane/metadata/<locale>/*.txt`; **Start from** the default language fills a new one.
 - `Screenshots complete` fails → generate; the check wants exact target dimensions and no alpha. Hand-made files that match a target count too; files of other sizes are listed as "matches no configured target" (warning).
 - `App icon ... has an alpha channel` is a warning: Expo prebuild flattens the iOS icon.
 - `Screenshot sets cover the sizes Apple requires` warns without a 6.1" iPhone set: Apple names it required, but scales a 6.9" set down when it is missing. Add `iphone-6.1-1206x2622` to the targets; it renders from the same captures. It fails when `ios.supportsTablet` is true and there is no iPad 13" set.
@@ -30,7 +36,7 @@
 ## Fastlane runner
 
 - Upload lanes are disabled while readiness fails; enter an override reason to force them (logged).
-- `lane "<name>" not found in fastlane/Fastfile` → the app's Fastfile lacks the lane; copy it from `starter-template/fastlane/Fastfile`.
+- `lane "<name>" not found in fastlane/Fastfile` → the app's Fastfile lacks the lane; add it (see [Uploading with fastlane](/docs/ship/fastlane)) or point `fastlane.lanes` at the lane it has.
 - Output is the real `fastlane` output; credentials and ASC behaviour are fastlane's, not the tool's.
 - fastlane is found at `/opt/homebrew/bin/fastlane`, `/usr/local/bin/fastlane`, `$STORE_SHOTS_FASTLANE`, or on `PATH`.
 

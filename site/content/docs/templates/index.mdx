@@ -1,4 +1,7 @@
-# Writing a template
+---
+title: Writing a template
+description: Templates are React components rendered the same way for the canvas and for export; this is the contract they keep.
+---
 
 Templates live in `templates/` and are plain React components rendered the same way for
 the editor preview and for export (`renderToStaticMarkup` → Playwright). A template module
@@ -41,9 +44,10 @@ render pipeline pick it up from there.
 ## Overrides
 
 Extend `commonOverridesSchema` with `.extend({...})` for template-specific keys and list
-them in `descriptor.overrideKeys`. The editor renders controls for known keys (see
-`OVERRIDE_CONTROLS` in `app/projects/[name]/editor.tsx`); add an entry there for a new key
-to get a slider/select instead of a plain text box.
+them in `descriptor.overrideKeys`. The editors show controls for the keys they know: the Mac
+app's **Layout** tab (`mac/StoreShots/Design/InspectorView.swift`) and the browser editor
+(`OVERRIDE_CONTROLS` in `app/projects/[name]/editor.tsx`). Add a control in both for a new key;
+until then it can still be set in `store/manifest.json`.
 
 `stackLayout()` in `shared.tsx` computes the text column and device boxes for the
 "text + phone" family of templates, honouring all positional overrides (`textWidth`,
