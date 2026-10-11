@@ -4,6 +4,7 @@ import {
   appFacts,
   capacitorConfigFile,
   findInfoPlist,
+  nativeDir,
   readCapacitor,
   readExpoSafely,
   readInfoPlist,
@@ -112,7 +113,7 @@ export function inspectApp(dir: string, opts: { allowUnknown?: boolean } = {}): 
   const kind: AppKind = expo ? "expo" : capacitor ? "capacitor" : plist || xcode ? "native-ios" : "unknown";
   if (kind === "unknown" && !opts.allowUnknown && !dirExists(path.join(root, "fastlane")) && !hasConfig(root)) {
     throw new ImportError(
-      `${root} does not look like an app: no app.json, capacitor.config, ios/ project or fastlane/ folder`,
+      `${root} does not look like an app: no app.json, capacitor.config, Xcode project or fastlane/ folder`,
     );
   }
 
@@ -120,6 +121,7 @@ export function inspectApp(dir: string, opts: { allowUnknown?: boolean } = {}): 
     [str(expo?.name), "app.json name"],
     [capacitor?.appName, "capacitor.config appName"],
     [plist?.displayName, "Info.plist CFBundleDisplayName"],
+    [xcode?.displayName, "Xcode project INFOPLIST_KEY_CFBundleDisplayName"],
     [str(pkg?.name), "package.json name"],
     [path.basename(root), "folder name"],
   );
@@ -152,6 +154,7 @@ export function inspectApp(dir: string, opts: { allowUnknown?: boolean } = {}): 
     [expoOrientation === "landscape" ? "landscape" : undefined, "app.json orientation"],
     [expoOrientation ? "portrait" : undefined, "app.json orientation"],
     [plist?.orientation, "Info.plist UISupportedInterfaceOrientations"],
+    [xcode?.orientation, "Xcode project INFOPLIST_KEY_UISupportedInterfaceOrientations"],
     ["portrait", "default"],
   );
   // Same reading readiness uses, so the two never disagree about iPad.
@@ -286,7 +289,7 @@ export function findImportCandidates(dir: string, maxDepth = 2): ImportCandidate
 function quickKind(dir: string): AppKind | undefined {
   if (readExpoSafely(dir)) return "expo";
   if (capacitorConfigFile(dir)) return "capacitor";
-  if (findInfoPlist(dir)) return "native-ios";
+  if (findInfoPlist(dir) || nativeDir(dir)) return "native-ios";
   return undefined;
 }
 

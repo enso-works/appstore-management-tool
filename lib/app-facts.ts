@@ -164,14 +164,30 @@ export function readCapacitor(root: string): { appId?: string; appName?: string 
   return { appId: field("appId"), appName: field("appName") };
 }
 
-/** The app target's Info.plist: Capacitor's ios/App/App, else ios/<name>/ (Expo prebuild, React Native, Xcode). */
-export function findInfoPlist(root: string): string | undefined {
+/**
+ * Where the native iOS project lives: ios/ (Expo prebuild, React Native,
+ * Capacitor), else the app folder itself when it holds an Xcode project or an
+ * XcodeGen project.yml (a native app).
+ */
+export function nativeDir(root: string): string | undefined {
   const ios = path.join(root, "ios");
-  if (!dirExists(ios)) return undefined;
+  if (dirExists(ios)) return ios;
+  if (!dirExists(root)) return undefined;
+  const own = fs.readdirSync(root).some((f) => f.endsWith(".xcodeproj")) || fileExists(path.join(root, "project.yml"));
+  return own ? root : undefined;
+}
+
+/** Folders a native project search never enters: dependencies and build output. */
+export const NATIVE_SKIP = new Set(["Pods", "build", "DerivedData", "node_modules", "fastlane", "store"]);
+
+/** The app target's Info.plist: Capacitor's ios/App/App, else <native dir>/<name>/ (Expo prebuild, React Native, Xcode). */
+export function findInfoPlist(root: string): string | undefined {
+  const ios = nativeDir(root);
+  if (!ios) return undefined;
   const capacitor = path.join(ios, "App", "App", "Info.plist");
   if (fileExists(capacitor)) return capacitor;
   for (const e of fs.readdirSync(ios, { withFileTypes: true })) {
-    if (!e.isDirectory() || e.name === "Pods" || e.name.startsWith(".") || /Tests$|\.xc/.test(e.name)) continue;
+    if (!e.isDirectory() || NATIVE_SKIP.has(e.name) || e.name.startsWith(".") || /Tests$|\.xc/.test(e.name)) continue;
     const candidate = path.join(ios, e.name, "Info.plist");
     // Widgets and other extensions have their own Info.plist; the app's has no NSExtension.
     if (fileExists(candidate) && !fs.readFileSync(candidate, "utf8").includes("<key>NSExtension</key>")) {
@@ -225,43 +241,72 @@ export interface XcodeFacts {
   version?: string;
   /** The app icon set's name (ASSETCATALOG_COMPILER_APPICON_NAME). */
   iconSet?: string;
+  /** From a generated Info.plist's build settings (INFOPLIST_KEY_*), for apps whose Info.plist file does not say. */
+  displayName?: string;
+  orientation?: Orientation;
 }
 
 /**
- * The app target's build settings, from the first project.pbxproj under ios/.
- * Extensions and tests have their own; the app's bundle id is the shortest,
- * since theirs extend it (com.x.app.widget).
+ * The app target's build settings, from the first project.pbxproj in the
+ * native dir, else from an XcodeGen project.yml (the .xcodeproj is often
+ * generated and not kept). Extensions and tests have their own; the app's
+ * bundle id is the shortest, since theirs extend it (com.x.app.widget).
  */
 export function readXcodeProject(root: string): XcodeFacts | undefined {
-  const ios = path.join(root, "ios");
-  if (!dirExists(ios)) return undefined;
+  const ios = nativeDir(root);
+  if (!ios) return undefined;
   const capacitor = path.join(ios, "App");
   const dirs = [ios, ...(dirExists(capacitor) ? [capacitor] : [])];
   for (const d of dirs) {
     const proj = fs.readdirSync(d).find((f) => f.endsWith(".xcodeproj"));
-    if (!proj) continue;
-    const file = path.join(d, proj, "project.pbxproj");
-    if (!fileExists(file)) continue;
-    const setting = (block: string, key: string) => new RegExp(`\\b${key} = "?([^";]+)"?;`).exec(block)?.[1];
-    const settings = [...fs.readFileSync(file, "utf8").matchAll(/buildSettings = \{([^{}]*)\}/g)].map((m) => ({
-      bundleId: setting(m[1], "PRODUCT_BUNDLE_IDENTIFIER"),
-      families: setting(m[1], "TARGETED_DEVICE_FAMILY"),
-      version: setting(m[1], "MARKETING_VERSION"),
-      iconSet: setting(m[1], "ASSETCATALOG_COMPILER_APPICON_NAME"),
-    }));
-    const ids = settings
-      .map((s) => s.bundleId)
-      .filter((id): id is string => !!id && !id.includes("$(") && !/tests?$/i.test(id));
-    const bundleId = ids.sort((a, b) => a.length - b.length)[0];
-    const app = settings.filter((s) => !bundleId || s.bundleId === bundleId);
-    return {
-      bundleId,
-      ipad: app.some((s) => (s.families ?? "").split(",").includes("2")),
-      version: app.map((s) => s.version).find((v) => v && !v.includes("$(")),
-      iconSet: app.map((s) => s.iconSet).find(Boolean),
-    };
+    const file = proj ? path.join(d, proj, "project.pbxproj") : undefined;
+    if (file && fileExists(file)) {
+      const setting = (block: string, key: string) => new RegExp(`\\b${key} = "?([^";]+)"?;`).exec(block)?.[1];
+      const blocks = [...fs.readFileSync(file, "utf8").matchAll(/buildSettings = \{([^{}]*)\}/g)].map((m) => m[1]);
+      return appSettings(blocks, setting);
+    }
+  }
+  const yml = path.join(ios, "project.yml");
+  if (fileExists(yml)) {
+    // One block per target (a two-space-indented `Name:` line); settings are `KEY: value` lines.
+    const blocks = fs.readFileSync(yml, "utf8").split(/\n(?= {2}[A-Za-z][\w-]*:[ \t]*\n)/);
+    const setting = (block: string, key: string) =>
+      new RegExp(`^\\s*${key}:\\s*"?([^"\\n#]+?)"?\\s*(#.*)?$`, "m").exec(block)?.[1];
+    return appSettings(blocks, setting);
   }
   return undefined;
+}
+
+/** The app target's facts from its build-settings blocks. */
+function appSettings(blocks: string[], setting: (block: string, key: string) => string | undefined): XcodeFacts {
+  const settings = blocks.map((b) => ({
+    bundleId: setting(b, "PRODUCT_BUNDLE_IDENTIFIER"),
+    families: setting(b, "TARGETED_DEVICE_FAMILY"),
+    version: setting(b, "MARKETING_VERSION"),
+    iconSet: setting(b, "ASSETCATALOG_COMPILER_APPICON_NAME"),
+    displayName: setting(b, "INFOPLIST_KEY_CFBundleDisplayName"),
+    orientations:
+      setting(b, "INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone") ??
+      setting(b, "INFOPLIST_KEY_UISupportedInterfaceOrientations"),
+  }));
+  const ids = settings
+    .map((s) => s.bundleId)
+    .filter((id): id is string => !!id && !id.includes("$(") && !/tests?$/i.test(id));
+  const bundleId = ids.sort((a, b) => a.length - b.length)[0];
+  const app = settings.filter((s) => !bundleId || s.bundleId === bundleId);
+  const orientations = app.map((s) => s.orientations).find(Boolean);
+  return {
+    bundleId,
+    ipad: app.some((s) => (s.families ?? "").split(",").includes("2")),
+    version: app.map((s) => s.version).find((v) => v && !v.includes("$(")),
+    iconSet: app.map((s) => s.iconSet).find(Boolean),
+    displayName: app.map((s) => s.displayName).find((v) => v && !v.includes("$(")),
+    orientation: orientations
+      ? orientations.split(/\s+/).every((o) => o.includes("Landscape"))
+        ? "landscape"
+        : "portrait"
+      : undefined,
+  };
 }
 
 /**
@@ -283,14 +328,14 @@ export function findAppIcon(root: string, iconSet = "AppIcon"): string | undefin
   return undefined;
 }
 
-/** `<iconSet>.appiconset` folders under ios/ (the app's catalog, skipping Pods and build output). */
+/** `<iconSet>.appiconset` folders in the native dir (the app's catalog, skipping Pods and build output). */
 function findIconSets(root: string, iconSet: string): string[] {
-  const ios = path.join(root, "ios");
-  if (!dirExists(ios)) return [];
+  const ios = nativeDir(root);
+  if (!ios) return [];
   const sets: string[] = [];
   const walk = (dir: string, depth: number) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-      if (!e.isDirectory() || e.name === "Pods" || e.name === "build" || e.name.startsWith(".")) continue;
+      if (!e.isDirectory() || NATIVE_SKIP.has(e.name) || e.name.startsWith(".")) continue;
       const full = path.join(dir, e.name);
       if (e.name === `${iconSet}.appiconset`) sets.push(full);
       else if (depth < 5) walk(full, depth + 1);

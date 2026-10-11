@@ -193,3 +193,59 @@ describe("import", () => {
     expect(findImportCandidates(ws).map((c) => c.name)).toEqual([path.join("group", "calm")]);
   });
 });
+
+describe("a native app with its Xcode project at the top", () => {
+  let root: string;
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), "store-shots-native-"));
+    fs.writeFileSync(
+      path.join(root, "project.yml"),
+      [
+        "name: Notes",
+        "targets:",
+        "  NotesApp:",
+        "    type: application",
+        "    settings:",
+        "      base:",
+        "        PRODUCT_BUNDLE_IDENTIFIER: com.x.notes",
+        "        INFOPLIST_KEY_CFBundleDisplayName: notes",
+        '        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"',
+        '        TARGETED_DEVICE_FAMILY: "1,2"',
+        "  NotesWidget:",
+        "    settings:",
+        "      base:",
+        "        PRODUCT_BUNDLE_IDENTIFIER: com.x.notes.widget",
+        "",
+      ].join("\n"),
+    );
+    const plist = '<?xml version="1.0"?><plist version="1.0"><dict><key>X</key><string>$(X)</string></dict></plist>';
+    fs.mkdirSync(path.join(root, "Notes", "Assets.xcassets", "AccentColor.colorset"), { recursive: true });
+    fs.writeFileSync(path.join(root, "Notes", "Info.plist"), plist);
+    fs.writeFileSync(
+      path.join(root, "Notes", "Assets.xcassets", "AccentColor.colorset", "Contents.json"),
+      JSON.stringify({ colors: [{ color: { components: { red: "0x5B", green: "0x4B", blue: "0xF0", alpha: "1" } } }] }),
+    );
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it("is read from an XcodeGen project.yml: name, bundle id, orientation and iPad", () => {
+    const proposal = inspectApp(root);
+    expect(proposal.kind).toBe("native-ios");
+    expect(proposal.projectName).toBe("notes");
+    expect(proposal.bundleId).toBe("com.x.notes");
+    expect(proposal.orientation).toBe("landscape");
+    expect(proposal.ipad).toBe(true);
+  });
+
+  it("prefers the generated project when there is one", () => {
+    fs.mkdirSync(path.join(root, "Notes.xcodeproj"));
+    fs.writeFileSync(
+      path.join(root, "Notes.xcodeproj", "project.pbxproj"),
+      "buildSettings = { PRODUCT_BUNDLE_IDENTIFIER = com.x.notesapp; INFOPLIST_KEY_CFBundleDisplayName = Notes; TARGETED_DEVICE_FAMILY = 1; };",
+    );
+    const proposal = inspectApp(root);
+    expect(proposal.bundleId).toBe("com.x.notesapp");
+    expect(proposal.projectName).toBe("Notes");
+    expect(proposal.ipad).toBe(false);
+  });
+});
