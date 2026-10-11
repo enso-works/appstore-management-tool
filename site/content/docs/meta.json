@@ -1,3 +1,21 @@
 {
-  "pages": ["---Start---", "index", "install", "import", "generate", "---Design---", "...design"]
+  "pages": [
+    "---Start---",
+    "index",
+    "install",
+    "import",
+    "generate",
+    "---Design---",
+    "...design",
+    "---Devices---",
+    "...devices",
+    "---Pages---",
+    "...pages",
+    "---Listing---",
+    "...listing",
+    "---Ship---",
+    "...ship",
+    "---App Store Connect---",
+    "...app-store-connect"
+  ]
 }

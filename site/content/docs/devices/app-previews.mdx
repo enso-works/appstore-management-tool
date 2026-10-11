@@ -1,0 +1,17 @@
+---
+title: App previews
+description: The videos at the start of a product page, checked against Apple's specification.
+---
+
+App previews are videos you record; the tool does not make them, but it checks them and uploads
+them with the default page.
+
+Put them in `store/previews/<locale>/`. The [readiness checks](/docs/ship) hold each one to
+Apple's specification:
+
+- 886 × 1920 or 1200 × 1600, either way round;
+- 15 to 30 seconds;
+- at most 30 frames per second and 500 MB;
+- at most three per device.
+
+`appreview-6.9-886x1920` renders a poster frame, the still shown before the video plays.

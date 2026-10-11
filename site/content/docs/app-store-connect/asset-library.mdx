@@ -1,0 +1,19 @@
+---
+title: The Asset Library
+description: Header and search images, reviewed by Apple on their own and placed on the live page once approved.
+---
+
+Header and search images go to the app's Asset Library, named by their checksum, so an
+unchanged image is never sent twice.
+
+- With a version taking edits, they upload with it and are placed on that version.
+- With none, they wait in the Asset Library as drafts. **Submit Images for Review**, on the
+  default page in Pages, sends those images, and only those, to Apple. Once they are approved,
+  the next upload places them on the live page: no new version needed.
+
+```sh
+store-shots asc submit default          # the plan
+store-shots asc submit default --yes
+```
+
+Only Asset Library images are ever submitted, and only when you ask. The app version is not.

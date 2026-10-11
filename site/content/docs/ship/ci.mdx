@@ -1,0 +1,20 @@
+---
+title: CI
+description: One command that fails the build when the listing would.
+---
+
+`store-shots check` runs validation, the readiness checks and the metadata limits in one go and
+exits non-zero on any error, so a pull request that breaks the listing fails like one that breaks
+the app.
+
+```sh
+store-shots check --project path/to/app
+```
+
+| Exit code | Meaning                         |
+| --------- | ------------------------------- |
+| `0`       | Everything passes               |
+| `1`       | A validation or readiness error |
+| `2`       | A usage or config error         |
+
+It reads files only: no rendering, no network, no credentials. It runs on any OS with Node 22.

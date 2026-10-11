@@ -1,0 +1,52 @@
+---
+title: Every device
+description: The screenshot sets the tool renders, their exact sizes, and which ones the stores require.
+---
+
+Every device renders at the exact pixel size the store accepts, as an opaque PNG. **Settings**
+lists them grouped as Apple names them; tick the ones the app needs. Import App proposes a set
+from the app itself: landscape sets for an app that only runs sideways, iPad only if it runs on
+iPad, Google Play only when `fastlane/metadata/android` exists.
+
+| Device id                | Store                                           | Size        |
+| ------------------------ | ----------------------------------------------- | ----------- |
+| `iphone-6.9-1320x2868`   | App Store, iPhone 6.9"                          | 1320 × 2868 |
+| `iphone-6.1-1206x2622`   | App Store, iPhone 6.1"                          | 1206 × 2622 |
+| `ipad-13-2064x2752`      | App Store, iPad 13"                             | 2064 × 2752 |
+| `iphone-6.9-2868x1320`   | iPhone 6.9", landscape                          | 2868 × 1320 |
+| `iphone-6.1-2622x1206`   | iPhone 6.1", landscape                          | 2622 × 1206 |
+| `ipad-13-2752x2064`      | iPad 13", landscape                             | 2752 × 2064 |
+| `iphone-duo-1398x2034`   | iPhone Duo, outer screen                        | 1398 × 2034 |
+| `iphone-duo-2007x2853`   | iPhone Duo, inner screen                        | 2007 × 2853 |
+| `iphone-duo-2034x1398`   | iPhone Duo, outer screen, landscape             | 2034 × 1398 |
+| `iphone-duo-2853x2007`   | iPhone Duo, inner screen, landscape             | 2853 × 2007 |
+| `header-3840x1646`       | Product page header (iOS 27)                    | 3840 × 1646 |
+| `search-3840x2560`       | Search results image (iOS 27)                   | 3840 × 2560 |
+| `universal-5244x2950`    | Header and search results in one image (iOS 27) | 5244 × 2950 |
+| `event-card-1920x1080`   | In-app event card                               | 1920 × 1080 |
+| `event-detail-1080x1920` | In-app event details page                       | 1080 × 1920 |
+| `appreview-6.9-886x1920` | App Preview poster frame                        | 886 × 1920  |
+| `play-phone-1080x1920`   | Google Play, phone                              | 1080 × 1920 |
+| `play-feature-1024x500`  | Google Play, feature graphic                    | 1024 × 500  |
+
+## What the App Store requires
+
+- **iPhone 6.1"** is the size Apple names as required. Without it Apple scales the 6.9" set down,
+  so the tool warns rather than fails. It renders from the same captures as 6.9"; add it.
+- **iPad 13"** is required for an app that runs on iPad.
+- **iPhone Duo** sets are required from April 2027. See [iPhone Duo](/docs/devices/duo).
+
+[Ship's checks](/docs/ship) report a missing required set before anything uploads.
+
+## One capture, many sizes
+
+Captures belong to a device family, not a size: one iPhone capture serves 6.9", 6.1", the
+header and search images, iPhone Duo and event media. An iPad capture serves iPad 13". Positions
+are fractions of the screen, so a layout made at 6.9" lands in the same place at 6.1"; devices
+with a different shape (iPad, landscape) usually want their own positions.
+
+## Pictures that are not screenshots
+
+The header and search images, the event media and the Google Play feature graphic are not part of
+the screenshot strip. A screen makes them only when its **Devices** list names them (the
+**Screen** tab in Design), and such a screen takes no screenshot position.

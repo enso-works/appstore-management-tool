@@ -1,0 +1,21 @@
+---
+title: iPhone Duo
+description: The foldable iPhone's screenshot sets, required from April 2027.
+---
+
+The foldable iPhone has its own sets: `iphone-duo-1398x2034` (outer screen) and
+`iphone-duo-2007x2853` (inner screen), and the same in landscape. App Store Connect requires them
+from April 2027.
+
+They render from the iPhone captures by default. With captures from a Duo simulator, put them in a
+folder of their own and point the Duo sets at it with `sourceDevices` in the config:
+
+```json
+"sourceDevices": { "iphone-duo-1398x2034": "duo", "iphone-duo-2007x2853": "duo" }
+```
+
+The Duo sets then read `store/raw/duo/<locale>/` instead of the iPhone captures.
+
+fastlane has no display type for them yet, so they render into `store/generated/duo/<locale>/`
+and upload with the rest of the default page from **Pages** (`store-shots asc push default`),
+not through deliver.

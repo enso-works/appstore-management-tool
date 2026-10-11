@@ -1,0 +1,21 @@
+---
+title: Pages and treatments
+description: Custom product pages and test treatments, uploaded as drafts.
+---
+
+Each custom page and treatment in Pages has **Check** and **Upload Draft**.
+
+- **Check** compares the page with what App Store Connect has and lists what an upload would
+  change. **App Store Connect is up to date** means nothing.
+- **Upload Draft** creates the page or treatment on the first upload, then updates it: its
+  version, text, keywords, deep link and screenshots, as a draft. App Store Connect's id goes
+  into the manifest, so the next upload updates the same page.
+
+An upload refuses stale renders (generate first) and leaves a page that is in review alone.
+
+```sh
+store-shots asc push anxiety           # the plan
+store-shots asc push anxiety --yes     # upload it
+```
+
+Submitting a custom page, or starting a test, stays a click in App Store Connect.

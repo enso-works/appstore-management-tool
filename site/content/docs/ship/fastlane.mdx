@@ -1,0 +1,30 @@
+---
+title: Uploading with fastlane
+description: The app's own fastlane lanes for the store text and the screenshots, each showing its plan first.
+---
+
+The store text and the screenshots upload through the app's own fastlane lanes, the ones it
+already has in `fastlane/Fastfile`. **Upload** in Ship runs them:
+
+| Lane          | What it does                                                  |
+| ------------- | ------------------------------------------------------------- |
+| `validate`    | Checks the store text against Apple's limits, uploads nothing |
+| `metadata`    | Uploads the store text of the version being prepared          |
+| `screenshots` | Uploads the generated screenshots                             |
+
+Each upload says what it will change first. While a check fails the upload lanes stay off; **Reason
+to upload anyway** turns them on for one run, and the reason is logged. A notification says when a
+long run finishes while you are elsewhere.
+
+The tool runs only these lanes. It never runs a lane that builds the app or submits it, whatever
+the Fastfile has: those stay a click in App Store Connect or a command you run yourself.
+
+```sh
+store-shots lane validate
+store-shots lane metadata --yes
+store-shots lane screenshots --yes --override "known warning, see notes"
+```
+
+The lane names are configurable in `store-shots.config.json` under `fastlane.lanes`.
+Custom product pages, tests, header and search images, iPhone Duo and app previews do not go
+through fastlane; they upload from Pages. See [App Store Connect](/docs/app-store-connect).

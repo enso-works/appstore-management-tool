@@ -1,0 +1,14 @@
+---
+title: Google Play
+description: Phone screenshots and the feature graphic, written where fastlane supply uploads them.
+---
+
+Two devices cover Google Play:
+
+- `play-phone-1080x1920`: phone screenshots. A phone capture keeps a phone's proportions on
+  the 9:16 canvas.
+- `play-feature-1024x500`: the feature graphic, opt-in per screen like the header images.
+
+Import App adds them when the app already ships to Google Play through fastlane, that is when
+`fastlane/metadata/android` exists. Generate writes them to
+`fastlane/metadata/android/<locale>/images/`, where `fastlane supply` uploads them.

@@ -1,0 +1,23 @@
+---
+title: Optimization tests
+description: Treatments of the default page, tested against it on part of the traffic.
+---
+
+An optimization test shows treatments of the default page to part of the App Store's visitors
+and reports which converts better. Each treatment is a page of its own screens, and can test an
+**alternate app icon**, one that ships in the app's binary, by its name in the asset catalog.
+
+Treatments with the same experiment name are tested together, up to three per test. App Store
+Connect runs a test only for an app that is live.
+
+```json
+{
+  "id": "calm-first",
+  "kind": "ppo",
+  "name": "Calm first",
+  "experiment": "October",
+  "screens": ["voice", "hero", "lock"]
+}
+```
+
+The tool uploads a treatment as a draft; starting the test stays a click in App Store Connect.

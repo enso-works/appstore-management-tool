@@ -1,0 +1,20 @@
+---
+title: The default page
+description: "The media of the version being prepared: screenshots, iPhone Duo, header and search images, app previews."
+---
+
+For the default page, an upload works on the version that takes edits: one in Prepare for
+Submission, or rejected. It uploads that version's media:
+
+- the screenshots of every device and language;
+- the iPhone Duo sets, which fastlane cannot upload;
+- the header and search images, through the Asset Library;
+- the app previews.
+
+The version's text stays fastlane's job (the `metadata` lane), and so does creating the version.
+With no version taking edits, nothing is uploaded but the Asset Library images.
+
+```sh
+store-shots asc push default
+store-shots asc push default --yes
+```

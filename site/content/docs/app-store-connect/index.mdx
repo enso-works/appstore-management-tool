@@ -1,0 +1,38 @@
+---
+title: The key and what it may do
+description: How the tool talks to App Store Connect, with the app's own API key, and what it never does.
+---
+
+The tool talks to App Store Connect with the app's own API key, found the way fastlane and
+Apple's tools find it:
+
+1. `APP_STORE_CONNECT_API_KEY_PATH`, a fastlane JSON key file;
+2. `fastlane/asc_api_key.json`;
+3. `AuthKey_<KEY_ID>.p8` in `fastlane/` or `~/.appstoreconnect/private_keys`, with the key id and
+   issuer id from `ASC_KEY_ID` and `ASC_ISSUER_ID`, or named in the Fastfile.
+
+The key is read in memory only to sign a token, and is never written, logged or sent anywhere
+but to Apple. **Settings** shows whether a key is found.
+
+## Status
+
+**Refresh App Store Connect** in Pages, or on the command line:
+
+```sh
+store-shots asc status
+```
+
+lists the versions and their states, the custom product pages and the tests, matched to the
+pages in the manifest.
+
+## What it does, and never does
+
+Every upload shows its plan first and changes nothing until you confirm (`--yes` on the
+command line).
+
+- It **uploads drafts**: custom product pages, test treatments, the default page's media on a
+  version that takes edits, and Asset Library images.
+- It **submits only Asset Library images**, and only when you ask.
+- It **never** creates a version, changes a version's text (that is fastlane's job), submits a
+  version, a custom page or a test, or runs a lane that builds or submits. Those stay a click
+  in App Store Connect.

@@ -1,0 +1,28 @@
+---
+title: Header and search images
+description: The wide image that leads a product page on iOS 27, and the creative that can stand in for screenshots in search.
+---
+
+Since iOS 27 a product page can lead with a wide header image, and search results can show one
+creative image instead of the first screenshots. Three devices make them, from the iPhone
+captures, with the **Feature Graphic** template:
+
+- `header-3840x1646`: the product page header (21:9);
+- `search-3840x2560`: the search results image (3:2);
+- `universal-5244x2950`: one 16:9 image for both. App Store Connect crops it to 21:9 for the
+  header and 3:2 for search, so the layout keeps the text and device where both crops show
+  them. **Guides** draws the two crops.
+
+A page shows one of each.
+
+## Making one
+
+1. Add the device in **Settings**.
+2. Add a screen for it and, in the **Screen** tab, name only that device under **Devices**. It
+   is listed apart, under **Header, Search and Events**, and takes no screenshot position.
+3. Give it a short headline and caption: the picture is wide and read at a glance.
+
+Generate writes them to `store/generated/creative/` (and a custom page's to its own folder in
+`store/generated/sets/`). Unlike screenshots, they do not go through fastlane:
+they upload to the app's Asset Library from **Pages**, and Apple reviews them on their own. See
+[the Asset Library](/docs/app-store-connect/asset-library).

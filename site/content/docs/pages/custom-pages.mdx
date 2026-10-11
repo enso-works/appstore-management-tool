@@ -1,0 +1,32 @@
+---
+title: Custom product pages
+description: Pages with their own screens, promotional text, keywords and deep link.
+---
+
+A custom product page is a page you link to: from an ad, a campaign, or the search results for
+the keywords it answers to. Each has:
+
+- **screens** of its own, in its own order;
+- a **deep link** (`myapp://screen` or an `https://` link): where the app opens when it is
+  installed from this page;
+- per language, **promotional text** (170 characters), shown above the description on this page;
+- per language, the **keywords** it answers to in search, picked from the app's own keyword
+  field (Listing). A language with no keywords yet says so.
+
+Pages counts the promotional text against its limit as you type.
+
+## In the files
+
+Pages live in `store/manifest.json` under `sets`, and their text in each language's content
+file:
+
+```json
+"sets": [
+  { "id": "anxiety", "kind": "custom", "name": "Anxiety", "deepLink": "braele://session/478",
+    "screens": ["lock", "voice", "hero"] }
+]
+```
+
+After the first upload the page also carries `ascId`, App Store Connect's id for it, so later
+uploads update the same page. **Unlink from App Store Connect** forgets it, for a page you
+deleted there; the next upload then matches by name.
