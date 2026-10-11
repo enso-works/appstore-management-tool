@@ -26,3 +26,6 @@ yarn-error.log*
 next-env.d.ts
 # copied from docs/images by scripts/images.mjs
 /public/images
+
+# generated from the code by scripts/docs-reference.ts
+/content/docs/reference

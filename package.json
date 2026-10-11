@@ -37,6 +37,7 @@
     "start": "next start",
     "cli": "tsx cli/index.ts",
     "schemas": "tsx scripts/gen-schemas.ts",
+    "docs:reference": "tsx scripts/docs-reference.ts",
     "fixtures": "tsx scripts/make-fixture.ts",
     "test": "vitest run",
     "test:watch": "vitest",

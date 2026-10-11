@@ -1,7 +1,7 @@
 # Docs site plan
 
-The README is the front door; the docs site is the manual. Phases 1 and 2 are built (`site/`);
-phases 3 and 4 are not.
+The README is the front door; the docs site is the manual. Phases 1 to 3 are built (`site/`);
+phase 4, hosting, is not.
 
 ## Where it lives and how it is built
 
@@ -42,7 +42,7 @@ devices table are built from the code at site build time, so they cannot drift.
 | --- | ---------------------------------------------------------------------------------------------------------------------- | ---- |
 | 1   | Done: `site/` with Fumadocs, theme, navigation; Start and Design pages; local preview with `npm run site`              | M    |
 | 2   | Done: Devices, Pages, Listing, Ship, App Store Connect; the existing `docs/*.md` moved in (the repo links to the site) | M    |
-| 3   | Generated reference: CLI, files, devices; a test that fails when a command or schema has no page                       | S    |
+| 3   | Done: generated reference: CLI, files, devices; a test that fails when a command or schema has no page                 | S    |
 | 4   | Hosting: DNS, Caddy, deploy workflow; the README and package homepage link to the site                                 | S    |
 
 ## Running it

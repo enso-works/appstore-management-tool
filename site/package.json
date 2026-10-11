@@ -1,13 +1,13 @@
 {
   "name": "store-shots-site",
   "private": true,
-  "//": "The docs site. Its own install (npm ci here), so the engine's dependencies stay its own.",
+  "//": "The docs site. Its own install (npm ci here), so the engine's dependencies stay its own. The reference pages are generated from the engine's code at build (npm run content), so the engine's install is needed too.",
   "scripts": {
-    "images": "node scripts/images.mjs",
-    "dev": "npm run images && next dev -p 3120",
-    "build": "npm run images && next build",
+    "dev": "npm run content && next dev -p 3120",
+    "build": "npm run content && next build",
     "start": "serve out -l 3120",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "content": "node scripts/images.mjs && npm --prefix .. run --silent docs:reference"
   },
   "dependencies": {
     "fumadocs-core": "16.17.1",

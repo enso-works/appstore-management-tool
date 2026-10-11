@@ -96,6 +96,9 @@ const CHECKS: { id: string; title: string; run: CheckFn }[] = [
   { id: "version", title: "App version consistent", run: checkVersion },
 ];
 
+/** Every check, by id and its fixed title (the docs list each one; tests/docs-reference.test.ts holds them to it). */
+export const READINESS_CHECKS: { id: string; title: string }[] = CHECKS.map(({ id, title }) => ({ id, title }));
+
 /**
  * Store readiness (plan §13.2). Every check is independent and cheap; none
  * reads credential contents or touches the network. A check that throws
