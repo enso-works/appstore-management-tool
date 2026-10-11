@@ -296,6 +296,11 @@ describe("the capture placeholder", () => {
       expect(portrait).toContain('width="600" height="1300"');
       expect(landscape).toContain('width="1300" height="600"');
       expect(portrait).toContain(paletteFrom(project.config.brand.primary).accent);
+      // A theme that makes accent the text colour still sketches in its colour.
+      const card = { ...project, config: { ...project.config, brand: { ...project.config.brand, accent: "#FFFFFF" } } };
+      expect(decodeURIComponent(missingCapture(card, getTarget("iphone-6.9-1320x2868")!))).toContain(
+        paletteFrom(project.config.brand.primary).accent,
+      );
     } finally {
       fx.cleanup();
     }

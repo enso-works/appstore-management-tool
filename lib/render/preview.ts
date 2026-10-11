@@ -4,7 +4,7 @@ import { directionForLocale } from "../locales";
 import { fileExists } from "../paths";
 import { buildJob } from "../render-plan";
 import { safeAreaOf, type TargetProfile } from "../targets";
-import { paletteFrom, rgba } from "../color";
+import { hexToOklch, paletteFrom, rgba } from "../color";
 import { formatZodError, screenSchema, type LocaleContent, type ScreenDefinition } from "../schema";
 import { IN_PAGE_CHECKS_SOURCE } from "./checks";
 import { FIT_SOURCE } from "./fit";
@@ -103,7 +103,11 @@ export function previewHtml(
  */
 export function missingCapture(project: Project, target: TargetProfile): string {
   const b = project.config.brand;
-  const p = paletteFrom(b.accent ?? b.primary);
+  // The more colourful of the two: a theme may make accent the text colour (white) or primary a near-black.
+  const colour = [b.accent, b.primary]
+    .filter((c): c is string => !!c)
+    .sort((x, y) => hexToOklch(y).c - hexToOklch(x).c)[0];
+  const p = paletteFrom(colour);
   const landscape = target.orientation === "landscape";
   const tablet = target.family === "ipad" || target.family === "tablet";
   const [w, h] = landscape ? [1300, tablet ? 975 : 600] : [600, tablet ? 800 : 1300];
