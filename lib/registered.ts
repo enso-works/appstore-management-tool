@@ -41,7 +41,8 @@ function write(projects: RegisteredProject[]) {
   fs.mkdirSync(registryDir(), { recursive: true });
   // Written via a temp file so an interrupted write cannot leave the list
   // truncated - losing the registry would look like every app vanished.
-  const tmp = `${registryPath()}.tmp`;
+  // Unique per writer: two processes saving at once must not rename each other's temp file away.
+  const tmp = `${registryPath()}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tmp, `${JSON.stringify({ version: 1, projects }, null, 2)}\n`);
   fs.renameSync(tmp, registryPath());
 }
