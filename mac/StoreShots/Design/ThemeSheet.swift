@@ -18,6 +18,10 @@ struct ThemePicker: View {
   var orientation = "portrait"
   /// Offer "Plain": one screen with the template's defaults, as importing did before themes.
   var allowPlain = false
+  /// Where the colour was found ("app.json primaryColor"), shown beside it.
+  var accentSource = ""
+  /// The app's headline font: the theme with that font is marked as in use (each theme has its own).
+  var currentHeadlineFont: String?
 
   @State private var themes: [ThemeInfo] = []
   @State private var previewAccent = ""
@@ -26,11 +30,15 @@ struct ThemePicker: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 12) {
       HStack {
-        ColorPicker("Colour", selection: $accent, supportsOpacity: false)
-        Text("Every theme is drawn in this colour.").font(.callout).foregroundStyle(.secondary)
+        Text("Colour")
+        Spacer()
+        Text(accentSource.isEmpty ? "Every theme is drawn in it" : "From \(accentSource)")
+          .font(.callout)
+          .foregroundStyle(.secondary)
+        ColorPicker("Colour", selection: $accent, supportsOpacity: false).labelsHidden()
       }
       if let error { Text(error).foregroundStyle(.red).font(.callout) }
-      LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 14)], spacing: 14) {
+      LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 12)], spacing: 12) {
         if allowPlain {
           card(id: nil, title: "Plain", detail: "One screen with the template's defaults, to style yourself") {
             RoundedRectangle(cornerRadius: 6).fill(.quaternary)
@@ -38,7 +46,10 @@ struct ThemePicker: View {
           }
         }
         ForEach(themes) { t in
-          card(id: t.id, title: t.name, detail: "\(t.description). Headlines in \(t.headlineFont).") {
+          card(
+            id: t.id, title: t.name, detail: "\(t.description). Headlines in \(t.headlineFont).",
+            inUse: t.headlineFont == currentHeadlineFont
+          ) {
             AsyncImage(url: previewURL(t.id)) { phase in
               switch phase {
               case .success(let image): image.resizable().scaledToFit()
@@ -59,7 +70,9 @@ struct ThemePicker: View {
     }
   }
 
-  private func card(id: String?, title: String, detail: String, @ViewBuilder image: () -> some View) -> some View {
+  private func card(
+    id: String?, title: String, detail: String, inUse: Bool = false, @ViewBuilder image: () -> some View
+  ) -> some View {
     let selected = selection == id
     return Button {
       selection = id
@@ -68,7 +81,14 @@ struct ThemePicker: View {
         image()
           .frame(height: 150)
           .frame(maxWidth: .infinity)
-        Text(title).font(.headline)
+        HStack {
+          Text(title).font(.headline)
+          if inUse {
+            Text("In use").font(.caption).foregroundStyle(.secondary)
+              .padding(.horizontal, 6).padding(.vertical, 1)
+              .background(Capsule().fill(.quaternary))
+          }
+        }
         Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(3, reservesSpace: true)
       }
       .padding(10)
@@ -116,15 +136,13 @@ struct ThemeSheet: View {
         Text("Theme").font(.title2.weight(.semibold))
         Text("Restyles every screen, the brand colours and the headline font. Copy, captures, layers and the order of screens stay as they are.")
           .font(.callout).foregroundStyle(.secondary)
-        if !accentSource.isEmpty {
-          Text("Colour from \(accentSource).").font(.callout).foregroundStyle(.secondary)
-        }
       }
       .padding(20)
       ScrollView {
         ThemePicker(
           api: document.api, selection: $selection, accent: $accent, project: document.name,
-          orientation: document.target?.orientation ?? "portrait"
+          orientation: document.target?.orientation ?? "portrait", accentSource: accentSource,
+          currentHeadlineFont: document.config["brand"]?["headlineFont"]?["family"]?.string
         )
         .padding([.horizontal, .bottom], 20)
       }

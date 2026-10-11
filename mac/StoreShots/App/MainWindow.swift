@@ -6,6 +6,7 @@ struct MainWindow: View {
   @Environment(Workspace.self) private var workspace
   @Environment(\.openWindow) private var openWindow
   @State private var importing = false
+  @State private var importPath: String?
   @State private var palette = false
 
   var body: some View {
@@ -32,7 +33,7 @@ struct MainWindow: View {
     }
     .sheet(isPresented: $importing) {
       if let base = server.baseURL {
-        ImportSheet(api: APIClient(base: base)) { name in
+        ImportSheet(api: APIClient(base: base), initialPath: importPath) { name in
           Task {
             await server.refreshProjects()
             if let name { workspace.open(name) }
@@ -40,6 +41,13 @@ struct MainWindow: View {
         }
       }
     }
+    .onChange(of: workspace.importRequest) { _, path in
+      guard let path else { return }
+      importPath = path
+      importing = true
+      workspace.importRequest = nil
+    }
+    .onChange(of: importing) { _, now in if !now { importPath = nil } }
     .focusedSceneValue(\.importApp, server.baseURL == nil ? nil : { importing = true })
     .focusedSceneValue(\.openPalette, { palette = true })
     .sheet(isPresented: $palette) { CommandPalette() }

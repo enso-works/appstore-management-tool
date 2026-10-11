@@ -5,6 +5,8 @@ import SwiftUI
 /// import. An app that already has a config keeps it unchanged.
 struct ImportSheet: View {
   let api: APIClient
+  /// A folder to read straight away, instead of picking one.
+  var initialPath: String?
   var done: (String?) -> Void
 
   @State private var candidates: [Candidate] = []
@@ -66,14 +68,15 @@ struct ImportSheet: View {
           if proposal?["hasConfig"]?.bool != true {
             Section {
               ThemePicker(
-                api: api, selection: $theme, accent: $accent, orientation: orientation, allowPlain: true)
+                api: api, selection: $theme, accent: $accent, orientation: orientation, allowPlain: true,
+                accentSource: accentSource)
             } header: {
               Text("Look")
             } footer: {
               Text(
                 theme == nil
                   ? "Starts with one screen, to style yourself."
-                  : "Starts with five screens in this theme, with copy to replace\(accentSource.isEmpty ? "" : "; the colour is from \(accentSource)").")
+                  : "Starts with five screens in this theme, with copy to replace.")
             }
           }
           if let notes = proposal?["notes"]?.array?.compactMap(\.string), !notes.isEmpty {
@@ -98,7 +101,9 @@ struct ImportSheet: View {
         }
       }
     }
-    .task { await loadCandidates() }
+    .task {
+      if let initialPath { await inspect(initialPath) } else { await loadCandidates() }
+    }
   }
 
   private func loadCandidates() async {

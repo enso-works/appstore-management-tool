@@ -48,6 +48,8 @@ final class Workspace {
     }
   }
   private(set) var documents: [String: ProjectDocument] = [:]
+  /// Open Import App with this folder already read (a debug hook asks for it; nil once shown).
+  var importRequest: String?
 
   /// The document for an app, loaded on first use.
   func document(_ name: String, base: URL) -> ProjectDocument {
