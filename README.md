@@ -4,6 +4,8 @@
 the rules that get listings rejected.** A native Mac app over an open-source engine that runs on
 your machine: no account, nothing uploaded unless you ask for it.
 
+**Docs: [store-shots.bavrk.com](https://store-shots.bavrk.com)**
+
 ![Rallo's App Store listing: eight landscape screenshots in one stadium, a 3D player in front of each phone](docs/images/hero.png)
 
 That listing is one project in this tool: the game's own captures in a real iPhone body, a 3D
@@ -336,7 +338,7 @@ npm run fixtures               # regenerate fixtures/demo-app
 
 Capturing from a simulator needs Xcode; the engine and CLI run on any OS with Node 22.
 
-More: [writing a template](site/content/docs/templates/index.mdx), [troubleshooting](site/content/docs/help/troubleshooting.mdx),
+More: [the manual](https://store-shots.bavrk.com/docs), [writing a template](https://store-shots.bavrk.com/docs/templates), [troubleshooting](https://store-shots.bavrk.com/docs/help/troubleshooting),
 [the canvas bridge](docs/canvas-bridge.md), [roadmap](docs/roadmap.md). Why this exists:
 [I built my own App Store screenshot generator](https://bavrk.com/articles/app-store-screenshot-generator).
 

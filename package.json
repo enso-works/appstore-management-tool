@@ -21,7 +21,7 @@
     "ios",
     "android"
   ],
-  "homepage": "https://bavrk.com/articles/app-store-screenshot-generator",
+  "homepage": "https://store-shots.bavrk.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/enso-works/appstore-management-tool.git"

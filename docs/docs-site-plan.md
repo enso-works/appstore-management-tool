@@ -1,7 +1,6 @@
 # Docs site plan
 
-The README is the front door; the docs site is the manual. Phases 1 to 3 are built (`site/`);
-phase 4, hosting, is not.
+The README is the front door; the docs site is the manual. All four phases are done: the site is live at https://store-shots.bavrk.com.
 
 ## Where it lives and how it is built
 
@@ -10,9 +9,9 @@ phase 4, hosting, is not.
 - **Fumadocs on Next.js**, exported as static files. Same stack as the engine, search built
   in, Geist like the other bavrk sites, no server to run.
 - **Served at `store-shots.bavrk.com`** from the bavrk server (Caddy `file_server`, like the
-  landing sites), deployed by a GitHub workflow on push to `main` when `site/` or `docs/`
-  changes. The DNS record, Caddy block and workflow come from the workspace's site tooling,
-  not by hand.
+  landing sites). `deploy-store-shots.yml` in enso-works/bavrk builds it from this repo's
+  `main`: on a dispatch from `.github/workflows/site.yml` here (needs `BAVRK_DISPATCH_TOKEN`),
+  by hand, or hourly, when the live `version.txt` is behind.
 - **Images** come from scripts, never by hand: `mac/docs-shots.sh` for the Mac app, the
   engine's own renders for screenshots and devices, so every image can be retaken after a UI
   change in one run.
@@ -43,7 +42,7 @@ devices table are built from the code at site build time, so they cannot drift.
 | 1   | Done: `site/` with Fumadocs, theme, navigation; Start and Design pages; local preview with `npm run site`              | M    |
 | 2   | Done: Devices, Pages, Listing, Ship, App Store Connect; the existing `docs/*.md` moved in (the repo links to the site) | M    |
 | 3   | Done: generated reference: CLI, files, devices; a test that fails when a command or schema has no page                 | S    |
-| 4   | Hosting: DNS, Caddy, deploy workflow; the README and package homepage link to the site                                 | S    |
+| 4   | Done: hosting: DNS, Caddy, deploy workflow; the README and package homepage link to the site                           | S    |
 
 ## Running it
 
