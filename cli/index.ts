@@ -1058,7 +1058,22 @@ program
     process.exit(ok ? 0 : 1);
   });
 
-program.parseAsync(process.argv).catch((err) => {
-  console.error(err instanceof Error ? err.message : String(err));
-  process.exit(2);
-});
+/** The command tree as data, for the docs site's CLI reference (scripts/docs-reference.ts). */
+function describeCommand(cmd: Command): unknown {
+  return {
+    name: cmd.name(),
+    usage: cmd.usage(),
+    description: cmd.description(),
+    options: cmd.options.map((o) => ({ flags: o.flags, description: o.description, default: o.defaultValue })),
+    commands: cmd.commands.map(describeCommand),
+  };
+}
+
+if (process.env.STORE_SHOTS_DESCRIBE_CLI) {
+  console.log(JSON.stringify(describeCommand(program)));
+} else {
+  program.parseAsync(process.argv).catch((err) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(2);
+  });
+}
