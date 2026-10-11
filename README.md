@@ -259,7 +259,8 @@ current folder, so inside an app you can leave it off.
 
 ```sh
 npx store-shots open      [name|dir]          # the editor in a browser
-npx store-shots init      [--project <app>] [--landscape|--portrait]
+npx store-shots init      [--project <app>] [--landscape|--portrait] [--theme <id>] [--accent <hex>]
+npx store-shots theme     list | apply <id> [--accent <hex>] [--dry-run]
 npx store-shots add       [dir]               # add an app that already has a config
 npx store-shots projects | remove <name> | prune
 npx store-shots validate  [--project <app>] [--dry-run] [--json]
