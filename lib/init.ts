@@ -6,6 +6,8 @@ import { APP_LANGUAGE_TO_STORE_LOCALES, type AppStoreLocale } from "./locales";
 import { dirExists, displayRelative, fileExists } from "./paths";
 import { formatZodError, projectConfigSchema, type ProjectConfigInput } from "./schema";
 import { isScreenshotSet, targetsFor, type Orientation } from "./targets";
+import { themeChanges } from "./apply-theme";
+import { STARTER_PROMPTS, STARTER_SCREEN_IDS } from "./themes";
 
 export interface InitOptions {
   /** Absolute app root. */
@@ -21,6 +23,11 @@ export interface InitOptions {
   targets?: string[];
   /** Default: app.json ios.bundleIdentifier. */
   bundleId?: string;
+  /**
+   * A starter theme (lib/themes.ts) and the accent colour to draw it in: the app
+   * starts with five styled screens and copy to replace, instead of one plain screen.
+   */
+  theme?: { id: string; accent: string };
   force?: boolean;
 }
 
@@ -77,34 +84,50 @@ export function initProject(opts: InitOptions): InitResult {
     throw new ScaffoldError(`Refusing to scaffold: ${semantic.errors.map((i) => i.message).join("; ")}`);
   }
 
-  write(path.join(root, CONFIG_FILENAME), formatJson(config, style));
+  const screenIds: string[] = opts.theme ? [...STARTER_SCREEN_IDS] : ["home"];
+  let manifest: Record<string, unknown> = {
+    $schema: `../${toolRel}/schema/manifest.schema.json`,
+    screens: screenIds.map((id, i) => ({
+      id,
+      order: i + 1,
+      enabled: true,
+      template: "hero-top",
+      source: { filePattern: "{order}-{id}.png", localized: true },
+    })),
+  };
+  let configOut: Record<string, unknown> = config as unknown as Record<string, unknown>;
+  if (opts.theme) {
+    const themed = themeChanges(configOut, manifest, opts.theme.id, opts.theme.accent);
+    configOut = themed.config;
+    manifest = themed.manifest;
+    const check = projectConfigSchema.safeParse(configOut);
+    if (!check.success) throw new ScaffoldError(`Refusing to scaffold: ${formatZodError(check.error).join("; ")}`);
+  }
+  const copy: Record<string, Record<string, string | null>> = opts.theme
+    ? Object.fromEntries(
+        screenIds.map((id, i) => [
+          id,
+          {
+            eyebrow: null,
+            // The hero says what the app says on the store, when it already has a subtitle.
+            headline: (i === 0 && storeSubtitle(root, defaultLocale)) || STARTER_PROMPTS.headline,
+            caption: STARTER_PROMPTS.caption,
+          },
+        ]),
+      )
+    : { home: { eyebrow: null, headline: `${projectName} headline`, caption: null } };
+
+  write(path.join(root, CONFIG_FILENAME), formatJson(configOut, style));
 
   const storeDir = path.join(root, "store");
-  write(
-    path.join(storeDir, "manifest.json"),
-    formatJson(
-      {
-        $schema: `../${toolRel}/schema/manifest.schema.json`,
-        screens: [
-          {
-            id: "home",
-            order: 1,
-            enabled: true,
-            template: "hero-top",
-            source: { filePattern: "{order}-{id}.png", localized: true },
-          },
-        ],
-      },
-      style,
-    ),
-  );
+  write(path.join(storeDir, "manifest.json"), formatJson(manifest, style));
   write(
     path.join(storeDir, "content", `${defaultLocale}.json`),
     formatJson(
       {
         $schema: `../../${toolRel}/schema/content.schema.json`,
         locale: defaultLocale,
-        screens: { home: { eyebrow: null, headline: `${projectName} headline`, caption: null } },
+        screens: copy,
       },
       style,
     ),
@@ -123,7 +146,7 @@ export function initProject(opts: InitOptions): InitResult {
   // Validate what we wrote.
   loadProject(path.join(root, CONFIG_FILENAME));
 
-  return { created, skipped, config };
+  return { created, skipped, config: configOut as ProjectConfigInput };
 
   function write(abs: string, text: string) {
     const rel = displayRelative(root, abs);
@@ -139,6 +162,14 @@ export function initProject(opts: InitOptions): InitResult {
   function keep(dir: string) {
     write(path.join(dir, ".gitkeep"), "");
   }
+}
+
+/** The app's store subtitle (fastlane/metadata/<locale>/subtitle.txt), when it has one. */
+function storeSubtitle(root: string, locale: string): string | undefined {
+  const file = path.join(root, "fastlane", "metadata", locale, "subtitle.txt");
+  if (!fileExists(file)) return undefined;
+  const text = fs.readFileSync(file, "utf8").trim();
+  return text || undefined;
 }
 
 function defaultToolRelPath(appRoot: string): string {

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { isStarterPrompt } from "./themes";
 import { appFacts, type AppFacts } from "./app-facts";
 import { findAscKey } from "./asc/auth";
 import { type Project } from "./config";
@@ -180,7 +181,27 @@ function checkPlaceholders(project: Project): ReadinessCheck {
       if (hits.length) f.fail(`${displayRelative(project.root, file)}: ${hits.join(", ")}`);
     }
   }
+  // A theme's starter copy ("What does this screen let you do?") is a prompt, never a caption.
+  for (const file of listTextFiles(path.join(project.root, project.config.paths.content))) {
+    if (!file.endsWith(".json")) continue;
+    const prompts = starterFields(file);
+    if (prompts.length) f.fail(`${displayRelative(project.root, file)}: starter copy in ${prompts.join(", ")}`);
+  }
   return f.check("placeholders", "No template placeholders left", "see starter-template/NEW-APP.md section 2");
+}
+
+/** `screen.field` of every field still holding a theme's starter prompt. */
+function starterFields(file: string): string[] {
+  try {
+    const content = JSON.parse(fs.readFileSync(file, "utf8")) as { screens?: Record<string, Record<string, unknown>> };
+    return Object.entries(content.screens ?? {}).flatMap(([id, fields]) =>
+      Object.entries(fields ?? {})
+        .filter(([, v]) => isStarterPrompt(v))
+        .map(([k]) => `${id}.${k}`),
+    );
+  } catch {
+    return [];
+  }
 }
 
 function listTextFiles(p: string): string[] {

@@ -3,7 +3,8 @@ import type { Project } from "../config";
 import { directionForLocale } from "../locales";
 import { fileExists } from "../paths";
 import { buildJob } from "../render-plan";
-import { safeAreaOf } from "../targets";
+import { safeAreaOf, type TargetProfile } from "../targets";
+import { paletteFrom, rgba } from "../color";
 import { formatZodError, screenSchema, type LocaleContent, type ScreenDefinition } from "../schema";
 import { IN_PAGE_CHECKS_SOURCE } from "./checks";
 import { FIT_SOURCE } from "./fit";
@@ -56,7 +57,7 @@ export function previewHtml(
   };
   const sourceExists = !job.sourceError && fileExists(job.sourcePath);
   const { html } = renderArtworkHtml(project, job, content, {
-    sourceImage: sourceExists ? urls.sourceImage(job.sourcePath) : MISSING_SOURCE_DATA_URI,
+    sourceImage: sourceExists ? urls.sourceImage(job.sourcePath) : missingCapture(project, job.target),
     fontUrl: urls.fontUrl,
     assetUrl: urls.assetUrl,
     frameUrl: urls.frameUrl,
@@ -95,12 +96,39 @@ export function previewHtml(
   };
 }
 
-/** 1x1 transparent PNG; the checker reports a missing image as naturalWidth 0 only when the load fails, so mark it via data-missing instead. */
-const MISSING_SOURCE_DATA_URI =
-  "data:image/svg+xml;utf8," +
-  encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="1300" viewBox="0 0 600 1300"><rect width="600" height="1300" fill="#222"/><text x="300" y="640" fill="#bbb" font-family="system-ui" font-size="40" text-anchor="middle">raw capture missing</text></svg>`,
-  );
+/**
+ * What the phone shows until a capture is in: a sketch of an app screen in the
+ * app's colours, the right way round for the device, so a new page already
+ * reads like a listing. Preview only; generating still needs the real capture.
+ */
+export function missingCapture(project: Project, target: TargetProfile): string {
+  const b = project.config.brand;
+  const p = paletteFrom(b.accent ?? b.primary);
+  const landscape = target.orientation === "landscape";
+  const tablet = target.family === "ipad" || target.family === "tablet";
+  const [w, h] = landscape ? [1300, tablet ? 975 : 600] : [600, tablet ? 800 : 1300];
+  const pad = Math.round(Math.min(w, h) * 0.07);
+  const card = (x: number, y: number, cw: number, ch: number, fill: string) =>
+    `<rect x="${x}" y="${y}" width="${cw}" height="${ch}" rx="${Math.round(Math.min(w, h) * 0.04)}" fill="${fill}"/>`;
+  const top = Math.round(h * (landscape ? 0.12 : 0.1));
+  const inner = w - 2 * pad;
+  const rows = landscape
+    ? card(pad, top, inner * 0.48, h * 0.5, p.accent) +
+      card(pad + inner * 0.52, top, inner * 0.48, h * 0.23, p.deep) +
+      card(pad + inner * 0.52, top + h * 0.27, inner * 0.48, h * 0.23, p.deep)
+    : card(pad, top + h * 0.08, inner, h * 0.24, p.accent) +
+      card(pad, top + h * 0.35, inner * 0.48, h * 0.16, p.deep) +
+      card(pad + inner * 0.52, top + h * 0.35, inner * 0.48, h * 0.16, p.deep) +
+      card(pad, top + h * 0.54, inner, h * 0.1, p.deep) +
+      card(pad, top + h * 0.67, inner, h * 0.1, p.deep);
+  const title = landscape ? "" : card(pad, top, inner * 0.55, h * 0.035, rgba(p.accentLight, 0.9));
+  const label = Math.round(Math.min(w, h) * 0.045);
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">` +
+    `<rect width="${w}" height="${h}" fill="${p.night}"/>${title}${rows}` +
+    `<text x="${w / 2}" y="${h - pad - label}" fill="${p.accentLight}" font-family="system-ui" font-size="${label}" text-anchor="middle">Drop a capture here</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
 
 /**
  * Editor-only: drag the device to move it (plain), tilt it (alt) or scale it

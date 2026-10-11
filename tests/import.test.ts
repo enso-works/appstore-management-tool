@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { statedAccent } from "../lib/accent";
 import { loadProject } from "../lib/config";
 import { findImportCandidates, importApp, ImportError, inspectApp } from "../lib/import";
 import { listRegistered } from "../lib/registered";
@@ -228,13 +229,14 @@ describe("a native app with its Xcode project at the top", () => {
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  it("is read from an XcodeGen project.yml: name, bundle id, orientation and iPad", () => {
+  it("is read from an XcodeGen project.yml: name, bundle id, orientation, iPad and accent", () => {
     const proposal = inspectApp(root);
     expect(proposal.kind).toBe("native-ios");
     expect(proposal.projectName).toBe("notes");
     expect(proposal.bundleId).toBe("com.x.notes");
     expect(proposal.orientation).toBe("landscape");
     expect(proposal.ipad).toBe(true);
+    expect(statedAccent(root)).toEqual({ hex: "#5B4BF0", source: "asset catalog AccentColor" });
   });
 
   it("prefers the generated project when there is one", () => {

@@ -13,7 +13,8 @@ import { fontsLockSchema, formatZodError, type FontsLock } from "./schema";
  * files — never fonts.googleapis.com — so exports are deterministic and offline.
  *
  * Resolution order for a family: app store/assets/fonts/<slug>/ → the tool's
- * bundled assets/fonts/<slug>/ (Inter + Noto fallbacks) → missing.
+ * bundled assets/fonts/<slug>/ (Inter + Noto fallbacks) → the themes' fonts in
+ * assets/fonts/themes/<slug>/ → missing.
  */
 
 export const FONTS_LOCK = "fonts.lock.json";
@@ -45,6 +46,14 @@ export function bundledFontsDir(): string {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "assets", "fonts");
 }
 
+/**
+ * The themes' fonts (lib/themes.ts). Used when a config names one, never added
+ * to every app's fallback stack the way Inter and the Noto fallbacks are.
+ */
+export function themeFontsDir(): string {
+  return path.join(bundledFontsDir(), "themes");
+}
+
 export function appFontsDir(project: Project): string {
   return path.join(project.paths.assets, "fonts");
 }
@@ -67,6 +76,7 @@ export function resolveFont(project: Project | undefined, family: string): Resol
   const candidates: { dir: string; source: "app" | "bundled" }[] = [];
   if (project) candidates.push({ dir: appFontsDir(project), source: "app" });
   candidates.push({ dir: bundledFontsDir(), source: "bundled" });
+  candidates.push({ dir: themeFontsDir(), source: "bundled" });
   for (const c of candidates) {
     const lock = safeLock(c.dir);
     const entry = lock?.fonts.find((f) => f.family.toLowerCase() === family.toLowerCase());
@@ -123,7 +133,10 @@ export function fontFamilyCss(stack: ResolvedFont[]): string {
 }
 
 export function listFonts(project: Project): { app: FontsLock["fonts"]; bundled: FontsLock["fonts"] } {
-  return { app: safeLock(appFontsDir(project))?.fonts ?? [], bundled: safeLock(bundledFontsDir())?.fonts ?? [] };
+  return {
+    app: safeLock(appFontsDir(project))?.fonts ?? [],
+    bundled: [...(safeLock(bundledFontsDir())?.fonts ?? []), ...(safeLock(themeFontsDir())?.fonts ?? [])],
+  };
 }
 
 /** Verify every file in a resolved font exists and matches its checksum. */

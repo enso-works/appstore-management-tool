@@ -1,10 +1,15 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
-import { ConfigError, loadProject, resolveProjectArg, type Project } from "../lib/config";
+import { ConfigError, loadProject, readJsonFile, resolveProjectArg, type Project } from "../lib/config";
 import { formatIssue, type Issue } from "../lib/issues";
 import { ImportError, inspectApp, targetsFor, type AppProposal } from "../lib/import";
 import { initProject } from "../lib/init";
+import { accentOf } from "../lib/accent";
+import { isHexColor } from "../lib/color";
+import { themeChanges, ThemeError } from "../lib/apply-theme";
+import { getTheme, THEMES } from "../lib/themes";
+import { writeJsonAtomic } from "../lib/server/projects";
 import { readinessReport, type ReadinessReport } from "../lib/readiness";
 import { defaultWorkspaceRoot, discoverProjects, isFallbackListing, listProjects } from "../lib/registry";
 import { listStale, pruneStale, register, registryPath, unregister } from "../lib/registered";
@@ -178,15 +183,19 @@ program
   .option("--default-locale <locale>", "default locale (default: en-US if present)")
   .option("--landscape", "landscape store sets (default: the app's own orientation)")
   .option("--portrait", "portrait store sets (default: the app's own orientation)")
+  .option("--theme <id>", `start with five screens in a theme: ${THEMES.map((t) => t.id).join(", ")}`)
+  .option("--accent <hex>", "the theme's colour (default: the app's own colour, or its icon's)")
   .option("--force", "overwrite existing files")
   .action(
-    (opts: {
+    async (opts: {
       project?: string;
       name?: string;
       locales?: string;
       defaultLocale?: string;
       landscape?: boolean;
       portrait?: boolean;
+      theme?: string;
+      accent?: string;
       force?: boolean;
     }) => {
       const appRoot = path.resolve(opts.project ?? process.cwd());
@@ -209,6 +218,7 @@ program
         console.error(err.message);
         process.exit(2);
       }
+      const theme = await themeOption(appRoot, opts.theme, opts.accent);
       const orientation = opts.landscape ? "landscape" : opts.portrait ? "portrait" : proposal.orientation;
       const locales = opts.locales
         ?.split(",")
@@ -222,8 +232,10 @@ program
         defaultLocale: opts.defaultLocale ?? (locales ? undefined : proposal.defaultLocale),
         orientation,
         targets: targetsFor({ orientation, ipad: proposal.ipad, play: proposal.play }),
+        theme: theme && { id: theme.id, accent: theme.accent },
         force: opts.force,
       });
+      if (theme) console.log(`theme ${theme.id} in ${theme.accent} (${theme.accentSource})`);
       const { sources } = proposal;
       console.log(`name ${sources.projectName}, locales ${sources.locales}, orientation ${sources.orientation},`);
       console.log(`iPad ${sources.ipad}, Google Play ${sources.play}\n`);
@@ -408,6 +420,85 @@ program
     for (const f of r.deleted) console.log(`deleted  ${f}`);
     for (const f of r.missing) console.log(`missing  ${f} (already gone)`);
     console.log(r.manifestRemoved ? "manifest removed" : "nothing to clean");
+  });
+
+/** --theme and --accent, checked; the accent defaults to the app's own colour. */
+async function themeOption(
+  root: string,
+  id: string | undefined,
+  accent: string | undefined,
+): Promise<{ id: string; accent: string; accentSource: string } | undefined> {
+  if (!id) {
+    if (accent) {
+      console.error("--accent needs --theme");
+      process.exit(2);
+    }
+    return undefined;
+  }
+  if (!getTheme(id)) {
+    console.error(`Unknown theme "${id}". Themes: ${THEMES.map((t) => t.id).join(", ")}`);
+    process.exit(2);
+  }
+  if (accent !== undefined) {
+    if (!isHexColor(accent)) {
+      console.error(`--accent takes a hex colour such as "#3FA69F", not "${accent}"`);
+      process.exit(2);
+    }
+    return { id, accent: accent.startsWith("#") ? accent : `#${accent}`, accentSource: "--accent" };
+  }
+  const guess = await accentOf(root);
+  return { id, accent: guess.hex, accentSource: guess.source };
+}
+
+const theme = program
+  .command("theme")
+  .description("Starter themes: a finished look for every screen, drawn in the app's colour");
+
+theme
+  .command("list")
+  .description("List the themes")
+  .action(() => {
+    for (const t of THEMES) console.log(`${t.id.padEnd(8)} ${t.description} (headlines in ${t.headlineFont.family})`);
+  });
+
+theme
+  .command("apply <id>")
+  .description(
+    "Restyle every screen and the brand colours and fonts in a theme; copy, captures, layers and order stay as they are",
+  )
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--accent <hex>", "the theme's colour (default: the app's own colour, or its icon's)")
+  .option("--dry-run", "show what would change, write nothing")
+  .action(async (id: string, opts: { project?: string; accent?: string; dryRun?: boolean }) => {
+    const project = openProject(opts.project);
+    const chosen = await themeOption(project.root, id, opts.accent);
+    if (!chosen) return;
+    let changes;
+    try {
+      changes = themeChanges(
+        readJsonFile(project.configPath) as Record<string, unknown>,
+        readJsonFile(project.paths.manifest) as Record<string, unknown>,
+        chosen.id,
+        chosen.accent,
+      );
+    } catch (err) {
+      if (!(err instanceof ThemeError)) throw err;
+      console.error(err.message);
+      process.exit(2);
+    }
+    const t = getTheme(chosen.id)!;
+    console.log(`${t.name} in ${chosen.accent} (${chosen.accentSource}), headlines in ${t.headlineFont.family}`);
+    console.log(`restyled: ${changes.restyled.join(", ") || "none"}`);
+    if (changes.recoloured.length) console.log(`colours only: ${changes.recoloured.join(", ")}`);
+    if (opts.dryRun) {
+      console.log("\nDry run: nothing written.");
+      return;
+    }
+    writeJsonAtomic(project.configPath, changes.config);
+    writeJsonAtomic(project.paths.manifest, changes.manifest);
+    console.log(
+      `\nWrote ${displayRelative(project.root, project.configPath)} and ${displayRelative(project.root, project.paths.manifest)}.`,
+    );
   });
 
 const fonts = program.command("fonts").description("Manage local font files (downloaded once from Google Fonts)");

@@ -1,0 +1,113 @@
+{
+  "version": 1,
+  "fonts": [
+    {
+      "family": "Archivo",
+      "source": "google",
+      "files": [
+        {
+          "path": "archivo/archivo-700.ttf",
+          "weight": 700,
+          "style": "normal",
+          "sha256": "bed60488c2f5c0b24e01d931760b6f3e9a82619dcd081ed9bff643d9f4fd9e3d"
+        },
+        {
+          "path": "archivo/archivo-800.ttf",
+          "weight": 800,
+          "style": "normal",
+          "sha256": "745c7f810c448f256b66e1beaf8d6ccc2be98c01e531a1da8b1e8cf805a5b857"
+        }
+      ],
+      "license": "archivo/LICENSE.txt"
+    },
+    {
+      "family": "Instrument Serif",
+      "source": "google",
+      "files": [
+        {
+          "path": "instrument-serif/instrument-serif-400.ttf",
+          "weight": 400,
+          "style": "normal",
+          "sha256": "a99e3db50076202713812ed541feeb23ffeebb61db1fa6b1cf48fe590d37ef18"
+        }
+      ],
+      "license": "instrument-serif/LICENSE.txt"
+    },
+    {
+      "family": "Manrope",
+      "source": "google",
+      "files": [
+        {
+          "path": "manrope/manrope-700.ttf",
+          "weight": 700,
+          "style": "normal",
+          "sha256": "b9584e099e0e7f1e1e914c3037aabb9010c50346a3ce8df5eeeeecc0563044d8"
+        },
+        {
+          "path": "manrope/manrope-800.ttf",
+          "weight": 800,
+          "style": "normal",
+          "sha256": "b8f802f05b322a7345805f5b89f8bb976604cc719a91530918d5ce3c47160950"
+        }
+      ],
+      "license": "manrope/LICENSE.txt"
+    },
+    {
+      "family": "Nunito",
+      "source": "google",
+      "files": [
+        {
+          "path": "nunito/nunito-800.ttf",
+          "weight": 800,
+          "style": "normal",
+          "sha256": "c5776505c7b3df3c3ca763477b795d6bbc6517760bede0462ab77d1fb44954a6"
+        },
+        {
+          "path": "nunito/nunito-900.ttf",
+          "weight": 900,
+          "style": "normal",
+          "sha256": "9caa6d5464d4438c3092a05d47952099e208862cacd5f655acb64012a1a15e78"
+        }
+      ],
+      "license": "nunito/LICENSE.txt"
+    },
+    {
+      "family": "Poppins",
+      "source": "google",
+      "files": [
+        {
+          "path": "poppins/poppins-600.ttf",
+          "weight": 600,
+          "style": "normal",
+          "sha256": "dae40ca7b35fe7501bda2e4140a6860b1db47330be5d3c8ab6971fd83a70e9a5"
+        },
+        {
+          "path": "poppins/poppins-700.ttf",
+          "weight": 700,
+          "style": "normal",
+          "sha256": "1984efdda0fbe207d7ac20feac2ba7c2768c92a90094b02a206c9d58cc30ff2e"
+        }
+      ],
+      "license": "poppins/LICENSE.txt"
+    },
+    {
+      "family": "Space Grotesk",
+      "source": "google",
+      "files": [
+        {
+          "path": "space-grotesk/space-grotesk-600.ttf",
+          "weight": 600,
+          "style": "normal",
+          "sha256": "6c0346b8d297ebdc225832833e03e884a26ad99d265ecd3924d46e1ba285ea87"
+        },
+        {
+          "path": "space-grotesk/space-grotesk-700.ttf",
+          "weight": 700,
+          "style": "normal",
+          "sha256": "3e756954468ff1cb302dae0414262e72f76a67d87bef3fa1f3226cd0fb9b2d85"
+        }
+      ],
+      "license": "space-grotesk/LICENSE.txt"
+    }
+  ]
+}

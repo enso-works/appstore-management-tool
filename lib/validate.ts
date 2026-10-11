@@ -1,3 +1,4 @@
+import { isStarterPrompt } from "./themes";
 import { type Project, CONFIG_FILENAME, sourceDeviceFor, validateConfigSemantics } from "./config";
 import { loadContent, loadManifest } from "./content";
 import { IssueList } from "./issues";
@@ -570,6 +571,15 @@ function validateContent(project: Project, manifest: Manifest, content: Map<stri
               hint: `set screens.${screen.id}.${f} (required fields cannot be null; null is only for optional fields)`,
             },
           );
+        }
+      }
+      for (const [f, v] of Object.entries(fields)) {
+        if (isStarterPrompt(v)) {
+          issues.warn("content.starter-copy", `${screen.id}.${f} in ${locale} is still the theme's prompt: "${v}"`, {
+            key,
+            file,
+            hint: "write the screen's own copy; readiness fails until every prompt is replaced",
+          });
         }
       }
       const slices = screen.panorama?.slices ?? 1;
