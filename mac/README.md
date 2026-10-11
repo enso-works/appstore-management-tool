@@ -15,7 +15,8 @@ sh mac/docs-shots.sh       # retakes docs/images/app-*.png (screen unlocked)
 
 ## The window
 
-- **Sidebar**: All Apps, then each app with its sections. Import with + or Command-O.
+- **Sidebar**: All Apps, then each app with its sections. Import with + or Command-O; the
+  Look step starts the app in a theme, drawn in the colour found in the app, or plain.
 - **Design**: the page's screens as thumbnails (drag to reorder, right-click for more, drop
   an image from Finder to make it the capture), the canvas, and the inspector in tabs: Text,
   Layout, Background, Layers, Screen. Click the phone or text on the canvas to select it,
@@ -28,6 +29,8 @@ sh mac/docs-shots.sh       # retakes docs/images/app-*.png (screen unlocked)
 - **Ship**: checks with the way to fix each, a review of every generated file (Quick Look on
   click), and the fastlane uploads.
 - **Settings**: devices, languages, brand colours, fonts, the App Store Connect key.
+- **Screen > Theme...** (or Command-K): restyle the app in a theme, previewed in its own
+  captures. Copy, captures, layers and order stay; Command-Z undoes it.
 
 Edits save themselves a moment after you stop; Command-Z undoes them. Unsaved edits are
 written before the engine restarts or the app quits.

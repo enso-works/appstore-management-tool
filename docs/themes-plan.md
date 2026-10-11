@@ -96,7 +96,7 @@ them, otherwise with demo captures from `fixtures/`.
 | #   | What lands                                                                                                                                                                                                                                                           | Size |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
 | 1   | Done: engine: `lib/themes.ts` with the six themes, accent from the app and its icon, `applyTheme`, `init --theme`, `theme list/apply`, the placeholder capture; tests that every theme validates and renders on every device family, left to right and right to left | M    |
-| 2   | Mac app: the Look step in Import App, **Theme...** in Design and Command-K, previews from the engine                                                                                                                                                                 | M    |
+| 2   | Done: Mac app: the Look step in Import App, **Theme...** in Design and Command-K, previews from the engine                                                                                                                                                           | M    |
 | 3   | Docs: a Themes page with a contact sheet per theme, rendered by a script; README and the browser editor's import                                                                                                                                                     | S    |
 
 ## Decisions (2026-10-11)
@@ -118,3 +118,17 @@ them, otherwise with demo captures from `fixtures/`.
   stopped the screen rendering. A name no template knows is still an error.
 - The capture placeholder is a sketch of an app screen in the app's colours, in the editor
   only; generating still needs real captures.
+
+## Phase 2 notes (2026-10-11)
+
+- The engine renders the previews: `GET /api/themes/preview?theme=&accent=` draws the first
+  three screens in the theme, from the app's own captures and copy (`&project=`) or, before
+  an app is imported, the five starter screens with sample copy and the capture sketch.
+  One Chromium serves every preview; each takes about two seconds.
+- `POST /api/projects/<name>/theme` applies a theme and answers with the config and manifest
+  from before; `PUT` puts them back. The Mac app's Command-Z is that `PUT`, registered after
+  the reload a theme causes.
+- Import App's Look step offers Plain (one screen, as before) and the six themes, Aurora
+  selected, in the colour found in the app.
+- The Mac UI was built and its calls tested against the engine, but not seen on screen yet:
+  the screen was locked. `notify theme` (the `theme` debug hook) opens the sheet for a check.

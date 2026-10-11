@@ -87,6 +87,11 @@ last run: what changed, what was skipped, and the log.
 
 Command-K jumps to any app, section, screen, page, language or device, or runs an action.
 
+**Themes** make the first look for you. Import App starts an app in one of six (Aurora, Bold,
+Paper, Swing, Split, Card), drawn in the app's own colour, read from `app.json`, the asset
+catalog or the icon; **Screen > Theme...** restyles an app you already have, previewed in its
+own captures, and Command-Z undoes it. Copy, captures and layers are never touched.
+
 ### A phone that looks like one
 
 The capture sits in a drawn iPhone body: titanium band, glass border, Dynamic Island, buttons in
