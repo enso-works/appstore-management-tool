@@ -1,6 +1,10 @@
 import { createGetUrl } from "fumadocs-core/source";
 
 export const appName = "store-shots";
+/** Where the site is served (store-shots.bavrk.com, deployed from enso-works/bavrk). */
+export const siteUrl = "https://store-shots.bavrk.com";
+export const summary =
+  "App Store and Google Play screenshots, built from your app's real captures and checked against the rules that get listings rejected.";
 export const docsRoute = "/docs";
 export const docsImageRoute = "/og/docs";
 export const docsContentRoute = "/llms.mdx/docs";
