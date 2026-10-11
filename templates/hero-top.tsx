@@ -181,7 +181,7 @@ export function renderTextAndDevice(
             fontSize={headlineSize}
             lineHeight={1.08}
             maxLines={headlineMaxLines}
-            weight={700}
+            weight={brand.headlineWeight ?? 700}
             align={align}
             fitMinScale={0.7}
             fontFamily={brand.headlineFontStack}

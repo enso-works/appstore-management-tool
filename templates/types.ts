@@ -27,6 +27,8 @@ export interface BrandTheme {
   fontStack: string;
   /** Stack for headlines when brand.headlineFont is set; otherwise undefined (inherit fontStack). */
   headlineFontStack?: string;
+  /** Headline weight: the heaviest weight listed for brand.headlineFont, else 700. */
+  headlineWeight?: number;
   primary: string;
   onPrimary: string;
   /** brand.accent: eyebrow and caption colour when set. */

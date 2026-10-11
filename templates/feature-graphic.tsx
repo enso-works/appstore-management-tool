@@ -98,7 +98,7 @@ export function render(input: TemplateRenderInput<CommonOverrides>): ReactElemen
           fontSize={headlineSize}
           lineHeight={1.1}
           maxLines={2}
-          weight={700}
+          weight={brand.headlineWeight ?? 700}
           align={align}
           fitMinScale={0.7}
           fontFamily={brand.headlineFontStack}

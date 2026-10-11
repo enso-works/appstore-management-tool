@@ -37,6 +37,8 @@ export function brandThemeOf(project: Project, stack?: ResolvedFont[]): BrandThe
     fontFamily: b.font.family,
     fontStack: fontFamilyCss(resolved),
     headlineFontStack: headlineFirst ? fontFamilyCss(headlineFirst) : undefined,
+    // A display face with one weight is drawn in that weight, never a synthesised bold.
+    headlineWeight: b.headlineFont ? Math.max(...b.headlineFont.weights) : undefined,
     primary: b.primary,
     onPrimary: b.onPrimary,
     accent: b.accent,

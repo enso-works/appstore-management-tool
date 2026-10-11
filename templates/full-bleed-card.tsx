@@ -115,7 +115,7 @@ export function render(input: TemplateRenderInput<Overrides>): ReactElement {
           fontSize={headlineSize}
           lineHeight={1.1}
           maxLines={lines}
-          weight={700}
+          weight={brand.headlineWeight ?? 700}
           align={align}
           fitMinScale={0.7}
           fontFamily={brand.headlineFontStack}
