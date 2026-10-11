@@ -1,0 +1,76 @@
+---
+title: Captures
+description: Put your app's real screens into the screenshots, by dropping a file or straight from a simulator.
+---
+
+A capture is a plain screenshot of your app, from a simulator or a device. The tool puts it in
+the device body and around it builds the screenshot; it never edits the capture itself.
+
+## Drop it in
+
+Drop a PNG or JPEG from Finder on a screen in the list, or on the canvas. It becomes that
+screen's capture for the device family and language shown.
+
+- The file is checked before anything is replaced: a broken image never replaces a good one.
+- The capture it replaces is kept, with a date, in `store/generated/replaced-captures/`.
+- If the image's shape does not match the device (a landscape capture on a portrait screen),
+  you are told straight away.
+
+**Choose Capture...**, in the screen's right-click menu or the **Screen** tab, does the same
+with a file dialog. A screen with no capture shows "raw capture missing" on the canvas, and the
+status line reports it.
+
+## One per language, or one for all
+
+Captures are per language by default, so the German screenshots show the app in German. Turn
+off **One per language** in the **Screen** tab and every language uses the default language's
+capture: right for a game, a camera, or anything without text on screen.
+
+## From a simulator
+
+`store-shots capture` screenshots a booted simulator and saves the file under the name the
+screen expects:
+
+```sh
+store-shots capture --screen home --device iphone --clean-status-bar
+store-shots capture --screen home --device ipad --locale de-DE
+```
+
+`--clean-status-bar` sets the time to 9:41 with full battery and signal first. `--list` shows
+the booted simulators; `--udid` picks one when several are booted.
+
+### Every screen, every language, unattended
+
+Give each screen a deep link to the place in the app it shows, and the tool can walk through
+them on its own:
+
+```json
+{ "id": "session", "order": 3, "template": "hero-top", "source": { "deepLink": "braele://session/478" } }
+```
+
+```sh
+store-shots capture --all                  # every screen with a deep link, in order
+store-shots capture --locales all          # the same in every language
+```
+
+For each language it switches the simulator's language, opens each deep link, waits for the
+screen to settle and captures it. `capture` in the config controls the rest:
+
+- `state`: entries written into the app's AsyncStorage before the run, so no screen shows an
+  empty streak or the onboarding. `{today}` and `{today-3}` become dates at run time, so a
+  seeded streak never goes stale.
+- `appleLanguages`: the iOS language for a store language, when the two differ.
+- `settleSeconds` and `languageSettleSeconds`: how long to wait after a deep link and after a
+  language switch.
+
+## In the files
+
+```text
+store/raw/<device>/<locale>/<order>-<id>.png
+store/raw/iphone/en-US/01-home.png
+store/raw/ipad/de-DE/03-session.png
+```
+
+`<device>` is the family (`iphone` or `ipad`): one iPhone capture serves every iPhone size,
+the header and search images, iPhone Duo and in-app events. The name follows the screen's
+**File** pattern, which can use `{order}`, `{id}`, `{locale}`, `{device}` and `{target}`.

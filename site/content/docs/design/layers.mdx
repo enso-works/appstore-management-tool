@@ -1,0 +1,63 @@
+---
+title: Layers and art
+description: Images and text placed freely above the template, per device, and the art pipeline that makes them.
+---
+
+Any screen can carry image and text layers above the template: a badge, a logo, a review quote,
+or a character standing in front of the phone.
+
+## Add and place
+
+In the inspector's **Layers** tab, **Add Image** picks art from `store/assets` by name, and
+**Add Text** adds a line of your own. Pick a layer in the list or on the canvas, then:
+
+- drag it to move it, and use its handles to rotate and resize it (see
+  [The canvas](/docs/design/canvas));
+- set **Across**, **Down**, **Width**, **Rotation** and **Opacity** exactly;
+- for text, its **Weight**, **Alignment**, and **Font** (body or headline).
+
+Delete removes the picked layer; Command-Z brings it back.
+
+## Per device
+
+A layer shows on **Every device** by default. Turn that off to choose the devices it draws on:
+a wide iPhone canvas and a squarer iPad canvas want different positions, so the usual way is
+one layer per device family, each placed for its canvas.
+
+## Art from code
+
+Rallo's players are rendered in Blender from the game's own rigged model and animations, and
+the scripts that make them live in the app, in `store/scenes/`. `scenes` in the config lists them
+as steps:
+
+```json
+"scenes": {
+  "steps": [
+    { "id": "characters", "blender": "store/scenes/characters.py", "args": ["{work}/chars"],
+      "inputs": ["public/models/nole.glb"] },
+    { "id": "post", "python": "store/scenes/post.py", "needs": ["characters"],
+      "outputs": ["store/assets/characters/serve.png"] }
+  ]
+}
+```
+
+```sh
+store-shots scenes list
+store-shots scenes render              # the steps whose scripts or inputs changed
+store-shots scenes render characters   # one step
+store-shots scenes render --quick      # a quarter-size draft
+```
+
+Blender runs headless, then any post-processing. A step runs again only when its script or its
+inputs change, so updating the model re-renders the art and leaves the rest alone.
+
+## In the files
+
+Layers are part of the screen in `store/manifest.json`:
+
+```json
+"layers": [
+  { "id": "serve-1", "type": "image", "asset": "characters/serve.png",
+    "x": 0.72, "y": 0.64, "width": 0.5, "targets": ["iphone-6.9-2868x1320"] }
+]
+```

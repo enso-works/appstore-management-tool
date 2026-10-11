@@ -1,0 +1,68 @@
+---
+title: Install
+description: Build the Mac app from source, or use the engine and CLI on their own.
+---
+
+## The Mac app
+
+You need macOS 14 or later, Xcode, Node 22 and XcodeGen.
+
+```sh
+git clone https://github.com/enso-works/appstore-management-tool.git store-shots
+cd store-shots && npm ci
+brew install xcodegen
+sh mac/build.sh --open        # builds mac/build/Store Shots.app and opens it
+```
+
+Move `Store Shots.app` to Applications if you like; it remembers the checkout it was built
+from. You can point it at another one in **Settings**.
+
+### The engine
+
+The Mac app's controls are native; the canvas and everything behind it (templates, rendering,
+checks, App Store Connect, fastlane) are the engine, a Node app in the same checkout.
+
+- If an engine is already running on ports 3000 to 3009 (`store-shots open` or `npm run dev`),
+  the app uses it and leaves it running when you quit.
+- Otherwise the app starts one from the checkout and stops it on quit.
+- **Engine > Show Engine Log** (Shift-Command-L) shows its output. The log is also in
+  `~/Library/Logs/Store Shots/editor.log`.
+
+## Only the command line
+
+The engine and the CLI run on any OS with Node 22. Capturing from a simulator needs Xcode.
+
+```sh
+git clone https://github.com/enso-works/appstore-management-tool.git store-shots
+cd store-shots && npm ci
+npx store-shots --help
+```
+
+`npx store-shots` works inside the checkout. To run `store-shots` from anywhere, link it once:
+
+```sh
+npm link
+store-shots projects
+```
+
+## The browser editor
+
+```sh
+store-shots open          # the app in the current folder
+store-shots open Rallo    # or one from your list, by name
+```
+
+This starts the engine and opens the editor in your browser. It has the same canvas as the
+Mac app, with fewer conveniences around it.
+
+## Fonts
+
+Generating needs the app's fonts as local files, so every render uses exactly the same glyphs.
+The tool downloads them once from Google Fonts into `store/assets/fonts`:
+
+```sh
+store-shots fonts add "Space Grotesk"
+store-shots fonts check
+```
+
+In the Mac app, **Settings > Fonts** does the same.

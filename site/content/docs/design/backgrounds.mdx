@@ -1,0 +1,60 @@
+---
+title: Backgrounds
+description: A colour, a gradient or any CSS, with a pattern or an image on top, per screen or for the whole app.
+---
+
+The inspector's **Background** tab sets what is behind the phone and the text.
+
+## Fill
+
+- **App Default**: the app's background, from **Settings** or the brand colour.
+- **Colour**: one colour, with the system colour picker.
+- **Gradient**: two colours and an angle.
+- **CSS**: any CSS background, for anything the other three cannot do (several gradients,
+  radial ones, stops).
+
+## On top
+
+Over the fill goes a pattern (**Waves**, **Dots**, **Grid**, each with its own colour) or an
+image from `store/assets`. **Add Image...** copies a PNG, JPEG or WebP into
+`store/assets/backgrounds` and uses it.
+
+## Across the strip
+
+A backdrop that runs on from one screen to the next can be made two ways:
+
+- **One picture, spread over the strip.** Set `span` on the app's default background in the
+  config, and each screen shows its own part of it:
+
+  ```json
+  "brand": {
+    "background": { "backgroundImage": "asset:backgrounds/stadium.png", "span": true }
+  }
+  ```
+
+  Patterns keep their tile size across the strip, so their rows run on too.
+
+- **One picture per screen, made to line up.** The stadium behind Rallo's screenshots is eight
+  images rendered from one Blender scene (see [Layers and art](/docs/design/layers#art-from-code)),
+  each set as its screen's background image.
+
+## For every screen
+
+- **Use for Every Screen** makes this screen's background the app's default, used by every
+  screen that has none of its own.
+- **Clear Every Screen's Own Background** takes each screen's own background away, so they all
+  show the app's default.
+
+## In the files
+
+```json
+"overrides": {
+  "background": "linear-gradient(160deg, #6946F4, #312A91)",
+  "backgroundImage": "pattern:dots",
+  "patternColor": "rgba(255,255,255,0.08)"
+}
+```
+
+`backgroundImage` is `asset:<file in store/assets>`, `none`, or `pattern:<name>`. Besides the
+three in the menu, the config takes `lines`, `zigzag`, `rings`, `crosses`, `checker` and
+`noise`, and `patternScale` (0.25 to 4) sizes the tiles.

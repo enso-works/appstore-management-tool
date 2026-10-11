@@ -1,0 +1,47 @@
+---
+title: The canvas
+description: Pick, move, tilt and scale the phone, the text and the art, right on the render.
+---
+
+The canvas is not a mock-up of the screenshot: it is the same render the files are made from,
+at the device's real size, scaled to fit the window. What you see is what the store gets.
+
+## Pick and move
+
+Click the phone, a block of text or a layer to pick it. Clicking text also marks its field in
+the inspector's **Text** tab. A dashed outline shows what a click would pick.
+
+| On the canvas        | Phone                  | Text                   | Layer                  |
+| -------------------- | ---------------------- | ---------------------- | ---------------------- |
+| Drag                 | Move                   | Move                   | Move                   |
+| Option-drag          | Tilt                   |                        |                        |
+| Shift-drag           | Scale                  |                        |                        |
+| Round handle (right) | Tilt                   |                        | Rotate                 |
+| Square handle        | Scale                  |                        | Resize                 |
+| Arrow keys           | Nudge                  | Nudge                  | Nudge                  |
+| Shift-arrow keys     | Nudge 10 times further | Nudge 10 times further | Nudge 10 times further |
+| Delete               |                        |                        | Delete layer           |
+
+Dragging the background pans the view. Every move becomes a value in the inspector's
+**Layout** or **Layers** tab, where you can type it exactly or put it back to the template's
+default.
+
+## Sizes and positions are relative
+
+Positions are stored as fractions of the screen, not pixels, so a layout made on the iPhone 6.9"
+canvas lands in the same place on the 6.1" one. Devices with a different shape (iPad, landscape,
+the header image) usually want their own positions: an iPhone and an iPad canvas are far apart
+in shape. Layers can be limited to some devices for exactly this; see
+[Layers and art](/docs/design/layers).
+
+## Guides and the store's look
+
+- **Guides** (Option-Command-G, or `g` on the canvas) draws the safe padding, the centre lines
+  and thirds. On header images it also draws the 21:9 and 3:2 crops App Store Connect makes.
+- **App Store look** shows the screens as the store does: on a dark page, with rounded corners.
+  It changes only the view, never the files.
+
+## Zoom
+
+Command-= zooms in, Command-- out, Command-0 shows actual size and Command-9 fits the window.
+The zoom menu in the toolbar does the same.

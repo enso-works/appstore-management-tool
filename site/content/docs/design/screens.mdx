@@ -1,0 +1,61 @@
+---
+title: Screens and order
+description: Add, order, duplicate and remove screens, and set what each one is.
+---
+
+The list on the left of Design shows the page's screens in the order the store shows them,
+each as a thumbnail of the device and language you picked.
+
+- **Drag** a screen to move it.
+- **Add Screen** at the foot of the list asks for an id (`settings`, `paywall`). The id names
+  the screen's copy, captures and files, so keep it short and stable.
+- **Drop an image** from Finder on a screen to make it the capture. See
+  [Captures](/docs/design/captures).
+
+Right-click a screen for more:
+
+| Item                                     | What it does                                                                  |
+| ---------------------------------------- | ----------------------------------------------------------------------------- |
+| Show Alone                               | Switches the canvas to this screen, in the one-screen view                    |
+| Remove from This Page / Add to This Page | On a custom page or test, takes it off or puts it on the page                 |
+| Choose Capture...                        | Picks the capture file for this device and language                           |
+| Duplicate                                | A copy with its layout, layers and copy, as `<id>-copy`                       |
+| Delete Screen...                         | Removes it. Its copy stays in the content files, and Command-Z brings it back |
+
+Screens that make only the header, search results or in-app event images are listed apart,
+under **Header, Search and Events**: they take no screenshot position.
+
+## The Screen tab
+
+The inspector's **Screen** tab holds what the screen is, rather than how it looks:
+
+- **On the default page**: off keeps the screen out of the default page's screenshots. It can
+  still be on a custom page or test, or make a header image.
+- **Shows Dark Mode**: marks a screen whose capture is in Dark Mode. Readiness asks for one
+  when the app follows the system appearance.
+- **Slides**: one screenshot, or two or three as one wide picture. A wide screen is designed as
+  one image and cut into consecutive screenshots, so art and backgrounds run on across them.
+  Each slide has its own copy fields (`headline`, `headline2`, `headline3`).
+- **Capture**: the capture's file name and whether there is one per language. See
+  [Captures](/docs/design/captures).
+- **Devices**: every screenshot size, or a chosen few. A screen that names the header, search
+  or event devices here is what makes those images.
+
+## In the files
+
+Screens live in `store/manifest.json`, in order:
+
+```json
+{
+  "id": "home",
+  "order": 1,
+  "enabled": true,
+  "template": "hero-top",
+  "source": { "filePattern": "{order}-{id}.png", "localized": true },
+  "overrides": { "background": "linear-gradient(160deg, #6946F4, #312A91)" }
+}
+```
+
+`enabled` is **On the default page**, `targets` lists the devices when the screen is limited
+to some, `appearance: "dark"` is **Shows Dark Mode**, and `panorama: { "slices": 2 }` is a wide
+screen.

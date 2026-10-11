@@ -1,0 +1,68 @@
+---
+title: Copy and fit
+description: Write the text per language, see the room left in each field, and let the fitter handle the rest.
+---
+
+A screen's text is in the inspector's **Text** tab: one field per piece of copy the template
+has, usually an eyebrow, a headline and a caption. The language is the one in the toolbar.
+
+## Room left
+
+Under each field is a count such as **38 of about 52**: about 52 characters fit in this
+template, on this device, before the text has to shrink. The number moves with the layout:
+make the text column narrower and it drops.
+
+When text is longer than its room, the fitter shrinks the font, step by step, down to the
+smallest size the template allows. If it still does not fit, the status line reports an
+overflow, and a build reports it as an error. Nothing is silently cut off.
+
+## Languages
+
+- A language with no copy for a field shows the default language's text under it. **Use This**
+  copies it in, to translate.
+- A language with no content file at all offers **Create from** the default language, which
+  makes the file with every field filled in, ready to translate.
+- **Leave Empty** marks a field as empty on purpose, so it is not reported as missing. **Add
+  Text** brings it back.
+- Right-to-left languages (Arabic, Hebrew) mirror the layout: text and phone swap sides.
+
+The [Languages view](/docs/design/views#languages) shows one screen in every language at once,
+which is the quickest way to catch the one translation that runs long.
+
+## Copy per page
+
+While a custom product page or a test is shown, the copy you edit belongs to that page. Every
+field you leave alone comes from the default page. A note at the top of the tab says when this
+is the case.
+
+## Glyphs
+
+Every character of every language is checked against the fonts you render with. A missing
+glyph (Arabic in a Latin-only font, say) is reported with the characters it affects, before a
+file shows a box where a letter should be. The fix is a fallback font: download one, then list it
+in `brand.font.fallbacks` in the config.
+
+```sh
+store-shots fonts add "Noto Sans Arabic"
+```
+
+## In the files
+
+Copy lives in `store/content/<locale>.json`, one file per language:
+
+```json
+{
+  "locale": "en-US",
+  "direction": "ltr",
+  "screens": {
+    "home": {
+      "eyebrow": "A calmer day",
+      "headline": "Plan everything in one place",
+      "caption": "Tasks, reminders, and notes that stay in sync."
+    }
+  }
+}
+```
+
+A field set to `null` is empty on purpose. A wide screen's slides use `headline2`,
+`headline3` and so on.

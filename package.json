@@ -43,7 +43,9 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "site": "npm --prefix site run dev",
+    "site:build": "npm --prefix site run build"
   },
   "dependencies": {
     "@uiw/react-color": "^2.10.3",

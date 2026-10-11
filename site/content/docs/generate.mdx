@@ -1,0 +1,53 @@
+---
+title: Generate
+description: Render every screenshot the store needs, at its exact size, and see what changed.
+---
+
+**Generate** (Command-G) renders every device, language and screen. The menu next to it renders
+only the screen shown (Shift-Command-G) and opens the last run: what changed, what was skipped,
+and the log.
+
+Every file is an opaque PNG at the exact pixel size the store accepts, and its size is checked
+before it is written. A screen whose inputs (copy, capture, art, layout, fonts) have not
+changed since the last run is skipped (`--force` renders it anyway).
+
+## Where the files go
+
+```text
+fastlane/screenshots/<locale>/                 iOS, uploaded by fastlane deliver
+fastlane/metadata/android/<locale>/images/     Google Play, uploaded by fastlane supply
+store/generated/sets/<page>/<locale>/          custom product pages and tests
+store/generated/duo/<locale>/                  iPhone Duo
+store/generated/events/                        in-app events
+```
+
+The tool records every file it writes in `.store-shots-manifest.json`. A full run deletes the
+files of the last run that are no longer planned (a screen you removed, a language you dropped),
+and only those: a file you put in `fastlane/screenshots` yourself is left alone.
+`store-shots clean` removes everything the tool wrote, by the same record.
+
+## Before it renders
+
+Generate runs the same checks as the status at the foot of the canvas: text that overflows at
+its smallest allowed size, text over the device, missing glyphs, missing copy, missing
+captures. An error in one screen skips the files that need it; an error that touches
+everything, such as a broken config or a missing font, stops the run. With `--strict`, any
+error or warning stops it.
+
+## From the command line
+
+```sh
+store-shots generate                          # everything
+store-shots generate --locale de-DE           # one language
+store-shots generate --screen home,settings   # some screens
+store-shots generate --target ipad-13-2064x2752
+store-shots generate --set anxiety            # one custom product page or test
+store-shots generate --dry-run                # the plan, nothing rendered
+store-shots generate --force                  # re-render even unchanged screens
+```
+
+`--json` prints a summary a script can read. Exit codes: `0` ok, `1` validation or readiness
+failed, `2` usage or config error.
+
+To look at a run as a whole, `store-shots sheet` writes one contact sheet per language and
+device into `store/generated/sheets/`.

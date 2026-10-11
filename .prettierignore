@@ -8,3 +8,9 @@ package-lock.json
 mac/build/
 mac/.build/
 mac/.swiftpm/
+site/node_modules/
+site/.next/
+site/.source/
+site/out/
+site/public/images/
+site/next-env.d.ts
