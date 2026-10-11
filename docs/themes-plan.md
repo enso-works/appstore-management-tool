@@ -97,7 +97,7 @@ them, otherwise with demo captures from `fixtures/`.
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
 | 1   | Done: engine: `lib/themes.ts` with the six themes, accent from the app and its icon, `applyTheme`, `init --theme`, `theme list/apply`, the placeholder capture; tests that every theme validates and renders on every device family, left to right and right to left | M    |
 | 2   | Done: Mac app: the Look step in Import App, **Theme...** in Design and Command-K, previews from the engine                                                                                                                                                           | M    |
-| 3   | Docs: a Themes page with a contact sheet per theme, rendered by a script; README and the browser editor's import                                                                                                                                                     | S    |
+| 3   | Done: docs: a Themes page with a contact sheet per theme, rendered by a script; README and the browser editor's import                                                                                                                                               | S    |
 
 ## Decisions (2026-10-11)
 

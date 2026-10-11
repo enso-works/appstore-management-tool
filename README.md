@@ -92,6 +92,8 @@ Paper, Swing, Split, Card), drawn in the app's own colour, read from `app.json`,
 catalog or the icon; **Screen > Theme...** restyles an app you already have, previewed in its
 own captures, and Command-Z undoes it. Copy, captures and layers are never touched.
 
+![The Paper theme on hush's iOS app: warm off-white, dark serif headlines, the app's purple in the small type](docs/images/theme-paper.png)
+
 ### A phone that looks like one
 
 The capture sits in a drawn iPhone body: titanium band, glass border, Dynamic Island, buttons in
@@ -327,6 +329,7 @@ npm test && npm run typecheck && npm run lint && npm run format:check
 cd mac && swift test           # the Mac app's model: JSON, document, edits and undo
 sh mac/docs-shots.sh           # retake the Mac app images in docs/images
 npm run site                   # the docs site on :3120 (once: npm ci --prefix site)
+npm run theme-shots            # retake docs/images/theme-*.png (from hush's iOS app by default)
 npm run schemas                # regenerate schema/ from lib/schema.ts
 npm run fixtures               # regenerate fixtures/demo-app
 ```
