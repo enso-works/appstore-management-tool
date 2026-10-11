@@ -11,6 +11,10 @@ import AppKit
 ///   notify com.bavrk.storeshots.debug "live:<country|off>"   (the live listing under the strip)
 ///   notify com.bavrk.storeshots.debug "size:<width>:<height>"   (window content size, points)
 ///   notify com.bavrk.storeshots.debug "snapshot:/path/to/file.png"   (blank while the screen is locked)
+///   notify com.bavrk.storeshots.debug "snapshot-sheet:/path/to/file.png"   (the sheet open on the window)
+///   notify com.bavrk.storeshots.debug "import:/path/to/app"   (Import App with that folder read)
+///   notify com.bavrk.storeshots.debug "theme"   (Screen > Theme... for the app shown)
+///   notify com.bavrk.storeshots.debug "apply-theme:<id>:<#hex>"   (as Apply in that sheet; undo/redo follow)
 @MainActor
 enum DebugHooks {
   static var workspace: Workspace?
@@ -51,8 +55,12 @@ enum DebugHooks {
       if let d = workspace?.currentDocument {
         Task { await d.saveCapture(URL(fileURLWithPath: parts[2]), screen: parts[1]) }
       }
+    case "import" where parts.count >= 2:
+      workspace?.importRequest = parts.dropFirst().joined(separator: ":")
     case "theme":
       workspace?.currentDocument?.showThemeSheet = true
+    case "apply-theme" where parts.count == 3:
+      if let d = workspace?.currentDocument { Task { try? await d.applyTheme(parts[1], accent: parts[2]) } }
     case "undo":
       workspace?.currentDocument?.undoManager?.undo()
     case "redo":
@@ -69,6 +77,8 @@ enum DebugHooks {
       workspace?.currentDocument?.liveCountry = parts[1] == "off" ? nil : parts[1]
     case "snapshot" where parts.count == 2:
       snapshot(to: parts[1])
+    case "snapshot-sheet" where parts.count == 2:
+      snapshot(to: parts[1], sheet: true)
     default:
       break
     }
@@ -77,8 +87,10 @@ enum DebugHooks {
   /// The window as the window server composes it (glass included). An app may capture its
   /// own windows without screen-recording rights; the call is looked up at run time because
   /// the macOS 15 SDK hides it.
-  private static func snapshot(to path: String) {
-    guard let window = NSApp.windows.first(where: { $0.isVisible && $0.title != "" && $0.contentView != nil }),
+  /// The main window, or with `sheet` the sheet open on it (a window of its own).
+  private static func snapshot(to path: String, sheet: Bool = false) {
+    guard let main = NSApp.windows.first(where: { $0.isVisible && $0.title != "" && $0.contentView != nil }),
+      let window = sheet ? main.attachedSheet : main,
       let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage")
     else { return }
     typealias Create = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
