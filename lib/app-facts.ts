@@ -298,7 +298,8 @@ function appSettings(blocks: string[], setting: (block: string, key: string) => 
   return {
     bundleId,
     ipad: app.some((s) => (s.families ?? "").split(",").includes("2")),
-    version: app.map((s) => s.version).find((v) => v && !v.includes("$(")),
+    // XcodeGen and many projects set the version once, for the project, not per target.
+    version: [...app, ...settings].map((s) => s.version).find((v) => v && !v.includes("$(")),
     iconSet: app.map((s) => s.iconSet).find(Boolean),
     displayName: app.map((s) => s.displayName).find((v) => v && !v.includes("$(")),
     orientation: orientations

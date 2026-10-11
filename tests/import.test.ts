@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { statedAccent } from "../lib/accent";
+import { appFacts } from "../lib/app-facts";
 import { loadProject } from "../lib/config";
 import { findImportCandidates, importApp, ImportError, inspectApp } from "../lib/import";
 import { listRegistered } from "../lib/registered";
@@ -203,6 +204,9 @@ describe("a native app with its Xcode project at the top", () => {
       path.join(root, "project.yml"),
       [
         "name: Notes",
+        "settings:",
+        "  base:",
+        '    MARKETING_VERSION: "1.0"',
         "targets:",
         "  NotesApp:",
         "    type: application",
@@ -236,6 +240,7 @@ describe("a native app with its Xcode project at the top", () => {
     expect(proposal.bundleId).toBe("com.x.notes");
     expect(proposal.orientation).toBe("landscape");
     expect(proposal.ipad).toBe(true);
+    expect(appFacts(root).version).toEqual({ value: "1.0", source: "Xcode project MARKETING_VERSION" });
     expect(statedAccent(root)).toEqual({ hex: "#5B4BF0", source: "asset catalog AccentColor" });
   });
 
