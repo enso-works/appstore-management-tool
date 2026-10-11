@@ -74,6 +74,8 @@ export interface ImportChoices {
   orientation?: Orientation;
   ipad?: boolean;
   play?: boolean;
+  /** Start with five screens in a starter theme (lib/themes.ts), in this accent colour. */
+  theme?: { id: string; accent: string };
 }
 
 export interface ImportResult {
@@ -231,6 +233,7 @@ export function importApp(choices: ImportChoices): ImportResult {
       ipad: choices.ipad ?? proposal.ipad,
       play: choices.play ?? proposal.play,
     }),
+    theme: choices.theme,
   });
   const entry = register(proposal.root, choices.name);
   return { entry, registeredOnly: false, created: result.created, skipped: result.skipped };

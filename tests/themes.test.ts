@@ -16,6 +16,9 @@ import { projectConfigSchema } from "../lib/schema";
 import { getTarget } from "../lib/targets";
 import { isStarterPrompt, STARTER_PROMPTS, STARTER_SCREEN_IDS, THEMES } from "../lib/themes";
 import { validateProject } from "../lib/validate";
+import type { ExportRenderer } from "../lib/render/export";
+import { applyThemeToProject, restoreTheme, themeChoice } from "../lib/server/themes";
+import { themePreview } from "../lib/theme-preview";
 import { getTemplateModule } from "../templates";
 import { editJson, readJson, tempFixture, writeJson, type AnyJson } from "./helpers";
 
@@ -304,5 +307,58 @@ describe("the capture placeholder", () => {
     } finally {
       fx.cleanup();
     }
+  });
+});
+
+describe("the editors' theme calls", () => {
+  let fx: ReturnType<typeof tempFixture>;
+  beforeEach(() => (fx = tempFixture()));
+  afterEach(() => fx.cleanup());
+
+  it("apply answers with what it replaced, and restoring that puts the files back exactly", () => {
+    const configFile = path.join(fx.root, "store-shots.config.json");
+    const manifestFile = path.join(fx.root, "store/manifest.json");
+    const before = [fs.readFileSync(configFile, "utf8"), fs.readFileSync(manifestFile, "utf8")];
+    const project = loadProject(configFile);
+    const applied = applyThemeToProject(project, "bold", "#E5484D");
+    expect(applied.restyled).toEqual(["home", "planning"]);
+    expect(readJson<AnyJson>(configFile).brand.headlineFont.family).toBe("Archivo");
+    restoreTheme(project, applied.previous.config, applied.previous.manifest);
+    expect([fs.readFileSync(configFile, "utf8"), fs.readFileSync(manifestFile, "utf8")]).toEqual(before);
+  });
+
+  it("refuses an unknown theme, a colour that is not one, and an invalid restore", () => {
+    expect(() => themeChoice("nope", "#ffffff")).toThrow(/Unknown theme/);
+    expect(() => themeChoice("paper", "red")).toThrow(/hex/);
+    expect(themeChoice("paper", "E5484D").accent).toBe("#E5484D");
+    const project = loadProject(path.join(fx.root, "store-shots.config.json"));
+    expect(() => restoreTheme(project, { targets: [] }, { screens: [] })).toThrow(/Invalid config/);
+  });
+
+  it("previews the first screens side by side, from the app or as a new app starts", async () => {
+    const pages: string[] = [];
+    const renderer = {
+      render: async (_key: string, html: string, target: { width: number; height: number }) => {
+        pages.push(html);
+        const png = await sharp({
+          create: { width: target.width, height: target.height, channels: 3, background: "#336699" },
+        })
+          .png()
+          .toBuffer();
+        return { png } as unknown as Awaited<ReturnType<ExportRenderer["render"]>>;
+      },
+    } as unknown as ExportRenderer;
+    const project = loadProject(path.join(fx.root, "store-shots.config.json"));
+    const fromApp = await sharp(
+      await themePreview(renderer, { theme: "paper", accent: "#E5484D", project, height: 200 }),
+    ).metadata();
+    expect(fromApp.height).toBe(200);
+    expect(pages).toHaveLength(2);
+    expect(pages[0]).toContain("Instrument Serif");
+    pages.length = 0;
+    await themePreview(renderer, { theme: "swing", accent: "#E5484D", orientation: "landscape", height: 120 });
+    expect(pages).toHaveLength(3);
+    expect(pages[0]).toContain("The one line that sells it");
+    expect(pages[0]).toContain(encodeURIComponent("Drop a capture here"));
   });
 });

@@ -6,10 +6,12 @@ import {
   resolveAppPath,
   type ImportChoices,
 } from "@/lib/import";
+import { accentOf } from "@/lib/accent";
 import { ScaffoldError } from "@/lib/init";
 import { defaultWorkspaceRoot } from "@/lib/registry";
 import { handle, json } from "@/lib/server/http";
 import { HttpError } from "@/lib/server/projects";
+import { themeChoice } from "@/lib/server/themes";
 
 export const dynamic = "force-dynamic";
 
@@ -18,20 +20,22 @@ export const dynamic = "force-dynamic";
  * GET              -> apps near the tool that are not in the list yet.
  */
 export async function GET(req: Request) {
-  return handle(() => {
+  return handle(async () => {
     const dir = new URL(req.url).searchParams.get("path");
     if (!dir) {
       const workspace = defaultWorkspaceRoot();
       return json({ workspace, candidates: findImportCandidates(workspace) });
     }
-    return json(guard(() => inspectApp(resolveAppPath(dir))));
+    const proposal = guard(() => inspectApp(resolveAppPath(dir)));
+    // The colour a starter theme would draw in: what the app states, else its icon's.
+    return json({ ...proposal, accent: await accentOf(proposal.root) });
   });
 }
 
-/** POST { root, name?, projectName?, locales?, defaultLocale?, orientation?, ipad?, play? } -> import it. */
+/** POST { root, name?, projectName?, locales?, defaultLocale?, orientation?, ipad?, play?, theme?, accent? } -> import it. */
 export async function POST(req: Request) {
   return handle(async () => {
-    const body = (await req.json()) as Partial<ImportChoices>;
+    const body = (await req.json()) as Partial<ImportChoices> & { theme?: unknown; accent?: unknown };
     if (typeof body.root !== "string" || !body.root) throw new HttpError(400, "root (the app directory) is required");
     if (
       body.locales !== undefined &&
@@ -43,6 +47,7 @@ export async function POST(req: Request) {
       throw new HttpError(400, 'orientation must be "portrait" or "landscape"');
     }
     const root = body.root;
+    const theme = body.theme ? themeChoice(body.theme, body.accent) : undefined;
     const result = guard(() =>
       importApp({
         root: resolveAppPath(root),
@@ -53,6 +58,7 @@ export async function POST(req: Request) {
         orientation: body.orientation,
         ipad: typeof body.ipad === "boolean" ? body.ipad : undefined,
         play: typeof body.play === "boolean" ? body.play : undefined,
+        theme: theme && { id: theme.theme, accent: theme.accent },
       }),
     );
     return json(result);
