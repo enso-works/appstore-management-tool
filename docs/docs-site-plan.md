@@ -1,7 +1,7 @@
 # Docs site plan
 
-The README is the front door; the docs site is the manual. This plan is for review: nothing
-here is built yet.
+The README is the front door; the docs site is the manual. Phase 1 is built (`site/`); phases
+2 to 4 are not.
 
 ## Where it lives and how it is built
 
@@ -40,14 +40,29 @@ devices table are built from the code at site build time, so they cannot drift.
 
 | #   | What lands                                                                                                       | Size |
 | --- | ---------------------------------------------------------------------------------------------------------------- | ---- |
-| 1   | `site/` with Fumadocs, theme, navigation; Start and Design pages; local preview with `npm run site`              | M    |
+| 1   | Done: `site/` with Fumadocs, theme, navigation; Start and Design pages; local preview with `npm run site`        | M    |
 | 2   | Devices, Pages, Listing, Ship, App Store Connect; the existing `docs/*.md` moved in (the repo links to the site) | M    |
 | 3   | Generated reference: CLI, files, devices; a test that fails when a command or schema has no page                 | S    |
 | 4   | Hosting: DNS, Caddy, deploy workflow; the README and package homepage link to the site                           | S    |
 
+## Running it
+
+```sh
+npm ci --prefix site     # once: the site has its own install
+npm run site             # http://localhost:3120, with docs/images copied in
+npm run site:build       # the static site in site/out
+```
+
+Its own `package.json` keeps Fumadocs out of the engine's dependencies; the root `tsconfig`,
+ESLint and Prettier ignore what the site builds.
+
 ## Open questions
 
-- The domain: `store-shots.bavrk.com`, or a path on bavrk.com (`bavrk.com/store-shots`)?
-- The product name on the site: "store-shots" (the repo) or "Store Shots" (the Mac app)?
-- Should the site also offer the built Mac app as a download, or stay build-from-source until
-  the app is signed and notarized?
+Phase 1 went ahead on the defaults below; each is one line to change.
+
+- The domain: `store-shots.bavrk.com`, or a path on bavrk.com (`bavrk.com/store-shots`)? A path
+  needs `basePath` in `site/next.config.mjs`. Decided in phase 4.
+- The product name on the site: "store-shots", as in the README, for now (`appName` in
+  `site/lib/shared.ts`). "Store Shots" is the Mac app's name.
+- The Mac app as a download: the site says build from source until the app is signed and
+  notarized.

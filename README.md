@@ -311,6 +311,7 @@ schema/       JSON Schemas for the files in your app
 fixtures/     the demo app the tests use
 tests/        vitest
 docs/         templates, troubleshooting, the canvas bridge, roadmap
+site/         the docs site (Fumadocs, static export)
 ```
 
 ## Development
@@ -319,6 +320,7 @@ docs/         templates, troubleshooting, the canvas bridge, roadmap
 npm test && npm run typecheck && npm run lint && npm run format:check
 cd mac && swift test           # the Mac app's model: JSON, document, edits and undo
 sh mac/docs-shots.sh           # retake the Mac app images in docs/images
+npm run site                   # the docs site on :3120 (once: npm ci --prefix site)
 npm run schemas                # regenerate schema/ from lib/schema.ts
 npm run fixtures               # regenerate fixtures/demo-app
 ```
