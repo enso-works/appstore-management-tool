@@ -7,15 +7,18 @@
     },
     "projectName": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "The app's name in the editors and in contact sheets."
     },
     "bundleId": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "description": "The iOS bundle id, for App Store Connect."
     },
     "defaultLocale": {
       "type": "string",
-      "pattern": "^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
+      "pattern": "^[a-z]{2,3}(-[A-Za-z]{2,4})?$",
+      "description": "The language other languages start from, and whose copy and captures fill gaps."
     },
     "locales": {
       "minItems": 1,
@@ -23,7 +26,8 @@
       "items": {
         "type": "string",
         "pattern": "^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
-      }
+      },
+      "description": "Every App Store language the app's screenshots and listing are made in (e.g. en-US, de-DE)."
     },
     "paths": {
       "default": {},
@@ -32,50 +36,60 @@
         "manifest": {
           "default": "store/manifest.json",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "The screens and pages."
         },
         "content": {
           "default": "store/content",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "The copy, one file per language."
         },
         "raw": {
           "default": "store/raw",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "The captures, by device family and language."
         },
         "assets": {
           "default": "store/assets",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Fonts, logos, backgrounds and layer art."
         },
         "outputScreenshots": {
           "default": "fastlane/screenshots",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Where the App Store screenshots go, for fastlane `deliver`."
         },
         "outputPlay": {
           "default": "fastlane/metadata/android",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Google Play (`supply`) metadata root; screenshots go under <locale>/images/phoneScreenshots/."
         },
         "metadata": {
           "default": "fastlane/metadata",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "The store text, one folder per language, for fastlane `deliver`."
         },
         "generated": {
           "default": "store/generated",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Pages, iPhone Duo, header and search images, events, contact sheets; not committed."
         },
         "previews": {
           "default": "store/previews",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "App Preview videos, <previews>/<locale>/*.mp4|m4v|mov; readiness checks them and `asc push default` uploads them."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Where the tool reads and writes, relative to the app; the defaults suit nearly every app."
     },
     "targets": {
       "minItems": 1,
@@ -102,7 +116,8 @@
           "search-3840x2560",
           "universal-5244x2950"
         ]
-      }
+      },
+      "description": "The devices to render for, by id (`iphone-6.9-1320x2868`, `header-3840x1646`, ...)."
     },
     "sourceDevices": {
       "default": {},
@@ -113,7 +128,8 @@
       "additionalProperties": {
         "type": "string",
         "minLength": 1
-      }
+      },
+      "description": "target id -> raw capture device folder name under paths.raw"
     },
     "brand": {
       "default": {},
@@ -126,7 +142,8 @@
             "family": {
               "default": "Inter",
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "The font family, as Google Fonts names it, or a family added locally."
             },
             "source": {
               "default": "google",
@@ -134,7 +151,8 @@
               "enum": [
                 "google",
                 "local"
-              ]
+              ],
+              "description": "Where `store-shots fonts add` gets it from."
             },
             "weights": {
               "default": [
@@ -148,7 +166,8 @@
                 "type": "integer",
                 "minimum": 100,
                 "maximum": 900
-              }
+              },
+              "description": "The weights downloaded; headlines use the heaviest a headline font lists."
             },
             "fallbacks": {
               "default": [],
@@ -156,10 +175,12 @@
               "items": {
                 "type": "string",
                 "minLength": 1
-              }
+              },
+              "description": "Extra families tried after `family`, in order (must be local: `fonts add`). Bundled fallbacks are appended automatically."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "The body font."
         },
         "headlineFont": {
           "type": "object",
@@ -167,7 +188,8 @@
             "family": {
               "default": "Inter",
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "The font family, as Google Fonts names it, or a family added locally."
             },
             "source": {
               "default": "google",
@@ -175,7 +197,8 @@
               "enum": [
                 "google",
                 "local"
-              ]
+              ],
+              "description": "Where `store-shots fonts add` gets it from."
             },
             "weights": {
               "default": [
@@ -189,7 +212,8 @@
                 "type": "integer",
                 "minimum": 100,
                 "maximum": 900
-              }
+              },
+              "description": "The weights downloaded; headlines use the heaviest a headline font lists."
             },
             "fallbacks": {
               "default": [],
@@ -197,53 +221,65 @@
               "items": {
                 "type": "string",
                 "minLength": 1
-              }
+              },
+              "description": "Extra families tried after `family`, in order (must be local: `fonts add`). Bundled fallbacks are appended automatically."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Optional display face for headlines (e.g. a serif); body copy keeps `font`."
         },
         "background": {
           "type": "object",
           "properties": {
             "background": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Any CSS background: a colour, a gradient, several layered."
             },
             "backgroundImage": {
               "type": "string",
-              "pattern": "^(asset:[^\\s]+|pattern:(waves|dots|grid|lines|zigzag|rings|crosses|checker|noise)|none)$"
+              "pattern": "^(asset:[^\\s]+|pattern:(waves|dots|grid|lines|zigzag|rings|crosses|checker|noise)|none)$",
+              "description": "Over the background: \"asset:<file in store/assets>\", \"pattern:<waves, dots, grid, lines, zigzag, rings, crosses, checker or noise>\", or \"none\"."
             },
             "patternColor": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "description": "Line colour of a pattern (any CSS colour; noise ignores it)."
             },
             "patternScale": {
               "type": "number",
               "minimum": 0.25,
-              "maximum": 4
+              "maximum": 4,
+              "description": "Size of a pattern's tiles, 0.25 to 4 times the default."
             },
             "span": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Stretch the project-default background across the whole screenshot strip (each screen shows its slice)."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "Project-wide default background; screens inherit it unless they override (backgroundImage \"none\" opts out of a texture)."
         },
         "primary": {
           "default": "#111111",
           "type": "string",
-          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$"
+          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$",
+          "description": "The brand colour: the default background, and Full Bleed Card's card."
         },
         "onPrimary": {
           "default": "#FFFFFF",
           "type": "string",
-          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$"
+          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$",
+          "description": "The text colour on `primary`."
         },
         "accent": {
           "type": "string",
-          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$"
+          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$",
+          "description": "Colour for the eyebrow and caption (a sub-line in a second colour); default: the text colour."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "The app's look: fonts, colours and the default background. A theme sets these."
     },
     "output": {
       "default": {},
@@ -254,19 +290,23 @@
           "type": "string",
           "enum": [
             "png"
-          ]
+          ],
+          "description": "The file format; PNG only for now."
         },
         "backgroundColor": {
           "default": "#FFFFFF",
           "type": "string",
-          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$"
+          "pattern": "^#([0-9a-fA-F]{6}|[0-9a-fA-F]{8}|[0-9a-fA-F]{3})$",
+          "description": "The colour transparency is flattened onto, since the stores refuse alpha."
         },
         "cleanBeforeRender": {
           "default": true,
-          "type": "boolean"
+          "type": "boolean",
+          "description": "A full run deletes the files of the last run that are no longer planned."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "How the files are written."
     },
     "validation": {
       "default": {},
@@ -274,19 +314,23 @@
       "properties": {
         "strictTranslations": {
           "default": true,
-          "type": "boolean"
+          "type": "boolean",
+          "description": "A missing translation is an error (true) or a warning (false)."
         },
         "failOnOverflow": {
           "default": true,
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Text that overflows at its smallest allowed size is an error (true) or a warning."
         },
         "failOnAlpha": {
           "default": true,
-          "type": "boolean"
+          "type": "boolean",
+          "description": "A rendered file with transparency is an error (true) or a warning."
         },
         "failOnTextOverlap": {
           "default": false,
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Text overlapping the device shell is a warning by default (designers do it on purpose); true makes it an error."
         },
         "screensPerTarget": {
           "default": {},
@@ -296,19 +340,23 @@
               "default": 3,
               "type": "integer",
               "minimum": 1,
-              "maximum": 10
+              "maximum": 10,
+              "description": "Fewer is reported."
             },
             "max": {
               "default": 10,
               "type": "integer",
               "minimum": 1,
-              "maximum": 10
+              "maximum": 10,
+              "description": "More is reported."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "How many screenshots each device and language should have (Apple takes 1 to 10)."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "How strict the checks are."
     },
     "metadata": {
       "default": {},
@@ -316,7 +364,8 @@
       "properties": {
         "manage": {
           "default": true,
-          "type": "boolean"
+          "type": "boolean",
+          "description": "The tool edits and checks the store text; false leaves it to you."
         },
         "fields": {
           "default": [
@@ -344,10 +393,12 @@
               "marketing_url",
               "privacy_url"
             ]
-          }
+          },
+          "description": "The fields Listing shows and readiness requires."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "The store text in fastlane/metadata."
     },
     "presets": {
       "default": {},
@@ -362,7 +413,8 @@
           "type": "string"
         },
         "additionalProperties": {}
-      }
+      },
+      "description": "Named override presets applied to screens from the editor (\"apply preset\")."
     },
     "capture": {
       "default": {},
@@ -375,12 +427,14 @@
             "type": "string",
             "minLength": 1
           },
-          "additionalProperties": {}
+          "additionalProperties": {},
+          "description": "AsyncStorage entries written into the simulator's app container before\neach capture run, so screens never show an empty streak or onboarding.\nValues are stored as JSON; strings are written through unchanged.\n`{today}` and `{today-N}` in any string resolve to YYYY-MM-DD at run\ntime, which keeps a seeded streak from going stale between runs."
         },
         "storageDir": {
           "default": "RCTAsyncLocalStorage_V1",
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Folder under Library/Application Support/<bundleId> that holds AsyncStorage."
         },
         "appleLanguages": {
           "default": {},
@@ -392,29 +446,34 @@
           "additionalProperties": {
             "type": "string",
             "minLength": 1
-          }
+          },
+          "description": "App Store locale -> iOS AppleLanguages value, when the two differ."
         },
         "settleSeconds": {
           "default": 2,
           "type": "number",
           "minimum": 0,
-          "maximum": 60
+          "maximum": 60,
+          "description": "Seconds to wait after opening a deep link before the screenshot."
         },
         "languageSettleSeconds": {
           "default": 8,
           "type": "number",
           "minimum": 0,
-          "maximum": 120
+          "maximum": 120,
+          "description": "Seconds to wait for SpringBoard after switching the simulator language."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Automated capture: how to put the simulator into a known state (plan section 7.5)."
     },
     "scenes": {
       "type": "object",
       "properties": {
         "blender": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Path to the Blender binary (default: $BLENDER, /Applications/Blender.app, or `blender` on PATH)."
         },
         "steps": {
           "minItems": 1,
@@ -424,22 +483,26 @@
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^[a-z0-9][a-z0-9-]*$"
+                "pattern": "^[a-z0-9][a-z0-9-]*$",
+                "description": "The step's name, for `scenes render <step>` and `needs`."
               },
               "blender": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Run as `blender -b --factory-startup` with this script; its arguments follow `--`."
               },
               "python": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Run with `python3 -I`; its arguments are the usual sys.argv[1:]."
               },
               "args": {
                 "default": [],
                 "type": "array",
                 "items": {
                   "type": "string"
-                }
+                },
+                "description": "`{root}`, `{work}` and `{assets}` are replaced with absolute paths."
               },
               "inputs": {
                 "default": [],
@@ -447,7 +510,8 @@
                 "items": {
                   "type": "string",
                   "minLength": 1
-                }
+                },
+                "description": "Files or folders that re-run the step when they change (the script's folder always does)."
               },
               "outputs": {
                 "default": [],
@@ -455,26 +519,30 @@
                 "items": {
                   "type": "string",
                   "minLength": 1
-                }
+                },
+                "description": "Files the step writes; a missing one re-runs it."
               },
               "needs": {
                 "type": "array",
                 "items": {
                   "type": "string"
-                }
+                },
+                "description": "Earlier steps whose output it reads: when one runs, so does this. Default: every earlier step."
               }
             },
             "required": [
               "id"
             ],
             "additionalProperties": false
-          }
+          },
+          "description": "The steps, in order."
         }
       },
       "required": [
         "steps"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "The art pipeline behind store/assets: Blender renders and their post-processing, in order."
     },
     "fastlane": {
       "default": {},
@@ -482,7 +550,8 @@
       "properties": {
         "enabled": {
           "default": true,
-          "type": "boolean"
+          "type": "boolean",
+          "description": "False turns off the lanes and the credentials check."
         },
         "lanes": {
           "default": {},
@@ -490,21 +559,26 @@
           "properties": {
             "validate": {
               "default": "ios validate_metadata",
-              "type": "string"
+              "type": "string",
+              "description": "Checks the store text against the limits."
             },
             "metadata": {
               "default": "ios metadata",
-              "type": "string"
+              "type": "string",
+              "description": "Uploads the store text."
             },
             "screenshots": {
               "default": "ios screenshots",
-              "type": "string"
+              "type": "string",
+              "description": "Uploads the screenshots."
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "description": "The lane names, as `<platform> <lane>`."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "The app's own fastlane lanes the tool may run. It never runs one that builds or submits."
     }
   },
   "required": [

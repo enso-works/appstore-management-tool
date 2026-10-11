@@ -12,20 +12,24 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "The screen's name: lowercase letters, digits and dashes. It names its copy, captures and files."
           },
           "order": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 9007199254740991
+            "maximum": 9007199254740991,
+            "description": "Its position on the default page, from 1."
           },
           "enabled": {
             "default": true,
-            "type": "boolean"
+            "type": "boolean",
+            "description": "On the default page; false keeps it for other pages, or for the header and event pictures."
           },
           "template": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "The template id: hero-top, split-caption, full-bleed-card or feature-graphic."
           },
           "source": {
             "default": {},
@@ -34,24 +38,29 @@
               "filePattern": {
                 "default": "{order}-{id}.png",
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Interpolates {order} {id} {locale} {device} {target}. Relative to raw/<device>/<locale>/."
               },
               "localized": {
                 "default": true,
-                "type": "boolean"
+                "type": "boolean",
+                "description": "false: use the default-locale capture for every locale."
               },
               "deepLink": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Deep link the capture helper opens before screenshotting (capture --all), e.g. \"braele://session/478\"."
               }
             },
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "Where the screen's capture is."
           },
           "targets": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Only for targets listed here; default: all configured targets."
           },
           "panorama": {
             "type": "object",
@@ -59,13 +68,15 @@
               "slices": {
                 "type": "integer",
                 "minimum": 2,
-                "maximum": 3
+                "maximum": 3,
+                "description": "How many screenshots wide: 2 or 3."
               }
             },
             "required": [
               "slices"
             ],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "description": "Panorama: render one artwork `slices` screenshots wide and cut it into\nconsecutive files (order, order+1, ...). The following order numbers are\nreserved for the slices."
           },
           "overrides": {
             "default": {},
@@ -73,7 +84,8 @@
             "propertyNames": {
               "type": "string"
             },
-            "additionalProperties": {}
+            "additionalProperties": {},
+            "description": "The layout and background the inspector sets; see screens[].overrides below."
           },
           "layers": {
             "default": [],
@@ -265,14 +277,16 @@
                   "additionalProperties": false
                 }
               ]
-            }
+            },
+            "description": "Extra image/text elements composited over the template. Text layers read content field <layer id>."
           },
           "appearance": {
             "type": "string",
             "enum": [
               "light",
               "dark"
-            ]
+            ],
+            "description": "What the capture shows. Apple suggests one Dark Mode screenshot when the app supports it; readiness looks for it."
           }
         },
         "required": [
@@ -290,18 +304,21 @@
         "properties": {
           "id": {
             "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]*$"
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "The page's name in the tool: lowercase letters, digits and dashes."
           },
           "kind": {
             "type": "string",
             "enum": [
               "custom",
               "ppo"
-            ]
+            ],
+            "description": "\"custom\" for a custom product page, \"ppo\" for an optimization test treatment."
           },
           "name": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "The page's or treatment's name in App Store Connect, for your reference."
           },
           "screens": {
             "minItems": 1,
@@ -309,22 +326,27 @@
             "items": {
               "type": "string",
               "pattern": "^[a-z0-9][a-z0-9-]*$"
-            }
+            },
+            "description": "Screen ids, in the order the set shows them."
           },
           "deepLink": {
             "type": "string",
-            "pattern": "^[a-z][a-z0-9+.-]*:\\/\\/\\S+$"
+            "pattern": "^[a-z][a-z0-9+.-]*:\\/\\/\\S+$",
+            "description": "Custom product pages: where the app opens when installed from this page (a URL or the app's own scheme)."
           },
           "appIconName": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Optimization treatments: an alternate app icon in the shipped binary (its name in the asset catalog)."
           },
           "experiment": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "Optimization treatments: the experiment (test) it belongs to; treatments with one name share it."
           },
           "ascId": {
-            "type": "string"
+            "type": "string",
+            "description": "App Store Connect's id for this page or treatment, written when the tool first uploads it.\nAn editor sends \"\" to unlink it (the page was deleted there, or the test ended)."
           }
         },
         "required": [

@@ -7,14 +7,16 @@
     },
     "locale": {
       "type": "string",
-      "pattern": "^[a-z]{2,3}(-[A-Za-z]{2,4})?$"
+      "pattern": "^[a-z]{2,3}(-[A-Za-z]{2,4})?$",
+      "description": "The language this file is for, as in the file name."
     },
     "direction": {
       "type": "string",
       "enum": [
         "ltr",
         "rtl"
-      ]
+      ],
+      "description": "Right to left mirrors the layouts; default: from the language."
     },
     "screens": {
       "default": {},
@@ -38,7 +40,8 @@
             }
           ]
         }
-      }
+      },
+      "description": "screen id -> field -> text (null = intentionally empty)"
     },
     "sets": {
       "type": "object",
@@ -84,7 +87,8 @@
           }
         },
         "additionalProperties": false
-      }
+      },
+      "description": "set id -> that page's or treatment's own text in this locale."
     }
   },
   "required": [
