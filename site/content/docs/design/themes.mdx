@@ -4,22 +4,25 @@ description: A finished look for every screen, drawn in your app's own colour, p
 ---
 
 A theme makes the choices that turn a page of screenshots into a listing: fonts, colours, the
-background, where the phone sits on each screen, and the frame. There are six, and every one is
+background, where the phone sits on each screen, and the frame. There are nine, and every one is
 drawn in one colour, your app's.
 
-| Theme  | Look                                                                                  | Headlines        |
-| ------ | ------------------------------------------------------------------------------------- | ---------------- |
-| Aurora | Near-black, two soft glows in your colour that move from screen to screen             | Poppins          |
-| Bold   | Your colour as a solid fill, a heavy headline, a big phone running off the bottom     | Archivo          |
-| Paper  | Warm off-white, dark serif headlines, your colour in the small type                   | Instrument Serif |
-| Swing  | Phones that swing left and right with a slight tilt, on one gradient across the strip | Nunito           |
-| Split  | Text on one side, a big phone off the opposite corner, alternating                    | Manrope          |
-| Card   | The capture fills the screen, the copy on a card in your colour; for games and photos | Space Grotesk    |
+| Theme    | Look                                                                                  | Headlines        |
+| -------- | ------------------------------------------------------------------------------------- | ---------------- |
+| Aurora   | Near-black, two soft glows in your colour that move from screen to screen             | Poppins          |
+| Bold     | Your colour as a solid fill, a heavy headline, a big phone running off the bottom     | Archivo          |
+| Paper    | Warm off-white, dark serif headlines, your colour in the small type                   | Instrument Serif |
+| Clean    | White, a near-black headline, your colour only in the small type                      | Inter Tight      |
+| Night    | Flat near-black, a white headline from the left, a thin line of your colour on top    | Sora             |
+| Swing    | Phones that swing left and right with a slight tilt, on one gradient across the strip | Nunito           |
+| Split    | Text on one side, a big phone off the opposite corner, alternating                    | Manrope          |
+| Card     | The capture fills the screen, the copy on a card in your colour; for games and photos | Space Grotesk    |
+| Panorama | The first screen runs across two screenshots, one big phone over the join             | Outfit           |
 
 The fonts ship with the tool, so a theme works offline and renders the same everywhere. Body text
 keeps your app's font.
 
-Each one below is hush's iOS app, in hush's own purple: the same captures and copy, six looks.
+Each one below is hush's iOS app, in hush's own purple: the same captures and copy, nine looks.
 
 ### Aurora
 
@@ -33,6 +36,14 @@ Each one below is hush's iOS app, in hush's own purple: the same captures and co
 
 ![Paper: warm off-white and dark serif headlines](/images/theme-paper.png)
 
+### Clean
+
+![Clean: white, a near-black headline, the app's colour in the small type](/images/theme-clean.png)
+
+### Night
+
+![Night: flat near-black, white headlines from the left, a thin line of the app's colour](/images/theme-night.png)
+
 ### Swing
 
 ![Swing: phones that swing left and right on one gradient](/images/theme-swing.png)
@@ -45,16 +56,27 @@ Each one below is hush's iOS app, in hush's own purple: the same captures and co
 
 ![Card: the capture fills the screen, the copy on a card](/images/theme-card.png)
 
+### Panorama
+
+![Panorama: the first screen two screenshots wide, one tilted phone across the join](/images/theme-panorama.png)
+
+The first screen becomes a [panorama](/docs/design/screens) two screenshots wide, and the screens after
+it move along one place, in the same order. Each half is a screenshot of its own in the store, so
+the second wants its own copy: `headline2` and `caption2` (hush has none yet, above). A new app
+started in Panorama gets prompts for both. The panorama is only added when every page that shows
+the screen stays within 10 screenshots, and other themes keep it, as they keep a device frame.
+
 ## Your app's colour
 
 The colour is found in the app, in this order:
 
 1. what the app states: Expo's `primaryColor`, the splash or Android adaptive icon background, or
    the asset catalog's `AccentColor`;
-2. the most vivid colour in the app icon, so a small bright detail on a dark icon still counts;
+2. the most vivid colours in the app icon, so a small bright detail on a dark icon still counts;
 3. a neutral blue.
 
-The picker shows where the colour came from, and you can change it. From that one colour each
+The picker shows the app's colours as swatches, the best guess chosen and where each came from,
+then a row of suggested colours and a colour well for any other. From that one colour each
 theme works out its tones (a dark base, a light tint, glows, text with enough contrast), so a
 yellow and a blue both come out right.
 
@@ -81,8 +103,9 @@ captures and copy. **Apply** restyles every screen, the brand colours and the he
 Command-Z puts the app back exactly as it was.
 
 A theme never touches copy, captures, layers, screen ids or their order, and keeps an official
-device frame you picked. Screens made only for the header, search or event pictures keep their
-layout and take the theme's colours.
+device frame and a panorama you made. Panorama is the one theme that adds something: see above.
+Screens made only for the header, search or event pictures keep their layout and take the theme's
+colours.
 
 ```sh
 store-shots theme list
