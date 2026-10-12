@@ -44,12 +44,16 @@ export function statedAccent(root: string): AccentGuess | undefined {
   return statedAccents(root)[0];
 }
 
-/** Colours the app states: Expo's primaryColor, splash or adaptive icon background, the asset catalog's AccentColor. */
+/**
+ * Colours the app states: Expo's primaryColor, the accent in its theme constants,
+ * the splash or adaptive icon background, the asset catalog's AccentColor.
+ */
 export function statedAccents(root: string): AccentGuess[] {
   const expo = readExpoSafely(root);
   const android = expo?.android as { adaptiveIcon?: { backgroundColor?: unknown } } | undefined;
   const candidates: [unknown, string][] = [
     [expo?.primaryColor, "app.json primaryColor"],
+    ...themeFileAccent(root),
     [(expo?.splash as { backgroundColor?: unknown } | undefined)?.backgroundColor, "app.json splash.backgroundColor"],
     [android?.adaptiveIcon?.backgroundColor, "app.json android.adaptiveIcon.backgroundColor"],
     [catalogAccent(root), "asset catalog AccentColor"],
@@ -106,6 +110,19 @@ export async function iconAccents(file: string): Promise<string[]> {
     picked.push(s);
   }
   return picked.map(({ b }) => rgbToHex([b.r / b.n, b.g / b.n, b.b / b.n]));
+}
+
+/** Where an app made from the workspace template keeps its colours: the first `accent: '#hex'` is the light theme's. */
+const THEME_FILES = ["src/constants/theme.ts", "constants/theme.ts"];
+
+function themeFileAccent(root: string): [string, string][] {
+  for (const rel of THEME_FILES) {
+    const file = path.join(root, rel);
+    if (!fileExists(file)) continue;
+    const m = /\baccent\s*:\s*['"](#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3})['"]/.exec(fs.readFileSync(file, "utf8"));
+    if (m) return [[m[1], `${rel} accent`]];
+  }
+  return [];
 }
 
 /** `AccentColor.colorset` in the app's asset catalog, as hex. */

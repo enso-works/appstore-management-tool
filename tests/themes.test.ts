@@ -66,6 +66,16 @@ describe("accent of an app", () => {
     expect(statedAccent(root)).toEqual({ hex: "#3FA69F", source: "app.json android.adaptiveIcon.backgroundColor" });
   });
 
+  it("reads the accent in the theme constants of an app made from the workspace template", () => {
+    writeJson(path.join(root, "app.json"), { expo: { name: "A", splash: { backgroundColor: "#3FA69F" } } });
+    fs.mkdirSync(path.join(root, "src", "constants"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, "src", "constants", "theme.ts"),
+      "export const Colors = {\n  light: {\n    accent: '#bffb18', // Signal\n  },\n  dark: {\n    accent: '#6C88F7',\n  },\n};\n",
+    );
+    expect(statedAccent(root)).toEqual({ hex: "#BFFB18", source: "src/constants/theme.ts accent" });
+  });
+
   it("finds a small vivid detail on a dark icon", async () => {
     const icon = path.join(root, "icon.png");
     const corner = await sharp({ create: { width: 160, height: 160, channels: 3, background: "#B8F21A" } })
