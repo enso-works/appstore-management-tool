@@ -29,6 +29,8 @@ export interface ThemeScreenContext {
   /** Position on the page, 0 = the first screen. */
   index: number;
   orientation: Orientation;
+  /** How many screenshots wide the screen is: 1, or 2 or 3 for a panorama. */
+  slices: number;
 }
 
 export interface ThemeScreen {
@@ -45,6 +47,8 @@ export interface Theme {
   brand: (p: Palette) => ThemeBrand;
   /** Layout and background for the screen at a position on the page. */
   screen: (ctx: ThemeScreenContext) => ThemeScreen;
+  /** The first screen becomes a panorama this many screenshots wide, when the page has room. */
+  heroPanorama?: 2 | 3;
 }
 
 /** Positions that cycle: screen i takes item i mod length. */
@@ -288,7 +292,54 @@ const night: Theme = {
   }),
 };
 
-export const THEMES: Theme[] = [aurora, bold, paper, clean, night, swing, split, card];
+// Panorama: the first screen is two screenshots wide with one big phone across the join, on a
+// gradient that runs across the whole strip.
+const panorama: Theme = {
+  id: "panorama",
+  name: "Panorama",
+  description: "The first screen runs across two screenshots with one big phone over the join, on one gradient",
+  headlineFont: { family: "Outfit", weights: [600, 700] },
+  heroPanorama: 2,
+  brand: (p) => ({
+    primary: p.deep,
+    onPrimary: "#FFFFFF",
+    accent: p.accentLight,
+    background: {
+      background:
+        `radial-gradient(ellipse 45% 60% at 18% 75%, ${rgba(p.accent, 0.55)} 0%, ${rgba(p.accent, 0)} 70%), ` +
+        `linear-gradient(90deg, ${p.deeper} 0%, ${p.deep} 35%, ${p.accentDark} 60%, ${p.deep} 85%, ${p.deeper} 100%)`,
+      backgroundImage: "none",
+      span: true,
+    },
+  }),
+  screen: ({ palette: p, index, orientation, slices }) => {
+    const common = { textColor: "#FFFFFF", accentColor: p.accentLight, shell: "dark" };
+    if (index === 0 && slices > 1) {
+      // Text from the left on the first screenshot; the phone large and tilted over the join.
+      return {
+        template: "hero-top",
+        overrides: {
+          ...common,
+          textAlign: "start",
+          // A sideways screen stays whole: smaller, and less tilted.
+          ...(orientation === "portrait"
+            ? { deviceTilt: -8, screenshotScale: 1.05, screenshotOffsetY: 0.02 }
+            : { deviceTilt: -4, screenshotScale: 0.56 }),
+        },
+      };
+    }
+    return {
+      template: "hero-top",
+      overrides: {
+        ...common,
+        textAlign: "center",
+        ...(orientation === "portrait" ? { screenshotScale: 0.8 } : {}),
+      },
+    };
+  },
+};
+
+export const THEMES: Theme[] = [aurora, bold, paper, clean, night, swing, split, card, panorama];
 
 export function getTheme(id: string): Theme | undefined {
   return THEMES.find((t) => t.id === id);

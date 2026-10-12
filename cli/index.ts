@@ -490,6 +490,11 @@ theme
     console.log(`${t.name} in ${chosen.accent} (${chosen.accentSource}), headlines in ${t.headlineFont.family}`);
     console.log(`restyled: ${changes.restyled.join(", ") || "none"}`);
     if (changes.recoloured.length) console.log(`colours only: ${changes.recoloured.join(", ")}`);
+    if (changes.panorama) {
+      console.log(
+        `${changes.panorama} is now a panorama: write copy for its later slides (headline2, caption2); the screens after it moved along`,
+      );
+    }
     if (opts.dryRun) {
       console.log("\nDry run: nothing written.");
       return;

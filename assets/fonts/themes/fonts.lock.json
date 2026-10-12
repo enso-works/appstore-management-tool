@@ -91,6 +91,25 @@
       "license": "nunito/LICENSE.txt"
     },
     {
+      "family": "Outfit",
+      "source": "google",
+      "files": [
+        {
+          "path": "outfit/outfit-600.ttf",
+          "weight": 600,
+          "style": "normal",
+          "sha256": "8900df5726b5a6f23e723594f11d5ea27e695bd85c884f18d88ed080544fe205"
+        },
+        {
+          "path": "outfit/outfit-700.ttf",
+          "weight": 700,
+          "style": "normal",
+          "sha256": "49dcdf653a004a2575b3de649f5e4c549d774fecddf317812330edd0ad70685a"
+        }
+      ],
+      "license": "outfit/LICENSE.txt"
+    },
+    {
       "family": "Poppins",
       "source": "google",
       "files": [

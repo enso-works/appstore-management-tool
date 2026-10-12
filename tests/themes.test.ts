@@ -159,7 +159,7 @@ describe("themes", () => {
         const p = paletteFrom(accent);
         for (const orientation of ["portrait", "landscape"] as const) {
           for (let index = 0; index < 6; index++) {
-            const look = theme.screen({ palette: p, index, orientation });
+            const look = theme.screen({ palette: p, index, orientation, slices: index === 0 ? 2 : 1 });
             const mod = getTemplateModule(look.template)!;
             expect(mod, `${theme.id} ${look.template}`).toBeDefined();
             expect(mod.descriptor.orientations).toContain(orientation);
@@ -225,6 +225,45 @@ describe("applying a theme", () => {
         }
       }
     }
+  });
+
+  it("Panorama widens the first screen, moves the rest along and keeps their captures", () => {
+    const before = readJson<AnyJson>(manifestFile()).screens as AnyJson[];
+    const changes = apply("panorama");
+    const after = readJson<AnyJson>(manifestFile()).screens as AnyJson[];
+    const first = [...before].sort((a, b) => a.order - b.order)[0];
+    expect(changes.panorama).toBe(first.id);
+    expect(after.find((s) => s.id === first.id).panorama).toEqual({ slices: 2 });
+    for (const s of after) {
+      const was = before.find((b) => b.id === s.id)!;
+      if (s.id === first.id || was.enabled === false || was.order > first.order + 1) {
+        expect(s.order, s.id).toBe(was.order);
+        continue;
+      }
+      // Moved along: its capture keeps the name it had.
+      expect(s.order, s.id).toBeGreaterThan(was.order);
+      expect(s.source.filePattern, s.id).not.toContain("{order}");
+      expect(s.source.filePattern, s.id).toContain(String(was.order).padStart(2, "0"));
+    }
+    expect(validateProject(loadProject(configFile())).issues.errors).toEqual([]);
+
+    // Another theme keeps the panorama, as it keeps an official frame.
+    apply("swing");
+    expect(readJson<AnyJson>(manifestFile()).screens.find((s: AnyJson) => s.id === first.id).panorama).toEqual({
+      slices: 2,
+    });
+  });
+
+  it("Panorama leaves the first screen alone when the page has no room", () => {
+    const enabled = (readJson<AnyJson>(manifestFile()).screens as AnyJson[]).filter((s) => s.enabled !== false);
+    editJson(configFile(), (c) => {
+      c.validation = { ...c.validation, screensPerTarget: { min: 1, max: enabled.length } };
+    });
+    const before = readJson<AnyJson>(manifestFile()).screens as AnyJson[];
+    const changes = apply("panorama");
+    expect(changes.panorama).toBeUndefined();
+    const after = readJson<AnyJson>(manifestFile()).screens as AnyJson[];
+    expect(after.map((s) => [s.id, s.order, s.panorama])).toEqual(before.map((s) => [s.id, s.order, s.panorama]));
   });
 
   it("restyles screens and brand, and leaves copy, layers, ids, order and official frames alone", () => {
@@ -322,6 +361,23 @@ describe("init with a theme", () => {
     const placeholders = readinessReport(project).checks.find((c) => c.id === "placeholders")!;
     expect(placeholders.status).toBe("fail");
     expect(placeholders.details.join(" ")).toContain("feature-1.headline");
+  });
+
+  it("with Panorama, the hero is two screenshots wide with prompts for both, and captures named as usual", () => {
+    initProject({
+      appRoot: root,
+      toolRelPath: "../tools/store-shots",
+      locales: ["en-US"],
+      theme: { id: "panorama", accent: "#E5484D" },
+    });
+    const manifest = readJson<AnyJson>(path.join(root, "store/manifest.json"));
+    const content = readJson<AnyJson>(path.join(root, "store/content/en-US.json"));
+    expect(manifest.screens.map((s: AnyJson) => s.order)).toEqual([1, 3, 4, 5, 6]);
+    expect(manifest.screens[0].panorama).toEqual({ slices: 2 });
+    for (const s of manifest.screens) expect(s.source.filePattern).toBe("{order}-{id}.png");
+    expect(content.screens.hero.headline2).toBe(STARTER_PROMPTS.headline);
+    expect(content.screens.hero.caption2).toBe(STARTER_PROMPTS.caption);
+    expect(content.screens["feature-1"].headline2).toBeUndefined();
   });
 
   it("without a theme, starts as before: one plain screen", () => {

@@ -99,10 +99,20 @@ export function initProject(opts: InitOptions): InitResult {
   if (opts.theme) {
     const themed = themeChanges(configOut, manifest, opts.theme.id, opts.theme.accent);
     configOut = themed.config;
-    manifest = themed.manifest;
+    // Nothing is captured yet: captures are named by their (possibly moved) order, as usual.
+    manifest = {
+      ...themed.manifest,
+      screens: (themed.manifest.screens as Record<string, unknown>[]).map((s) => ({
+        ...s,
+        source: { filePattern: "{order}-{id}.png", localized: true },
+      })),
+    };
     const check = projectConfigSchema.safeParse(configOut);
     if (!check.success) throw new ScaffoldError(`Refusing to scaffold: ${formatZodError(check.error).join("; ")}`);
   }
+  const slicesOf = (id: string) =>
+    (manifest.screens as { id: string; panorama?: { slices: number } }[]).find((s) => s.id === id)?.panorama?.slices ??
+    1;
   const copy: Record<string, Record<string, string | null>> = opts.theme
     ? Object.fromEntries(
         screenIds.map((id, i) => [
@@ -112,6 +122,13 @@ export function initProject(opts: InitOptions): InitResult {
             // The hero says what the app says on the store, when it already has a subtitle.
             headline: (i === 0 && storeSubtitle(root, defaultLocale)) || STARTER_PROMPTS.headline,
             caption: STARTER_PROMPTS.caption,
+            // A panorama's later slides each read as a screenshot of their own.
+            ...Object.fromEntries(
+              Array.from({ length: slicesOf(id) - 1 }, (_, k) => [
+                [`headline${k + 2}`, STARTER_PROMPTS.headline],
+                [`caption${k + 2}`, STARTER_PROMPTS.caption],
+              ]).flat(),
+            ),
           },
         ]),
       )

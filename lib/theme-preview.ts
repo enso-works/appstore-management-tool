@@ -35,7 +35,14 @@ export interface ThemePreviewOptions {
 }
 
 const SAMPLE_COPY: Record<string, Record<string, string | null>> = {
-  hero: { eyebrow: "YOUR APP", headline: "The one line that sells it", caption: "A short line on why it matters." },
+  hero: {
+    eyebrow: "YOUR APP",
+    headline: "The one line that sells it",
+    caption: "A short line on why it matters.",
+    // The second screenshot of a panorama hero (Panorama).
+    headline2: "And what comes with it",
+    caption2: "Two screens, one picture.",
+  },
   "feature-1": { eyebrow: null, headline: "Show the best screen next", caption: "What it does, in a few words." },
   "feature-2": { eyebrow: "EVERY DAY", headline: "One idea per screen", caption: "Short copy reads at a glance." },
   "feature-3": { eyebrow: null, headline: "Then the details", caption: null },

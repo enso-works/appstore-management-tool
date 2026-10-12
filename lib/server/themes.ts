@@ -44,7 +44,13 @@ export function applyThemeToProject(project: Project, theme: string, accent: str
     throw err;
   }
   const etags = write(project, changes.config, changes.manifest);
-  return { previous, restyled: changes.restyled, recoloured: changes.recoloured, etags };
+  return {
+    previous,
+    restyled: changes.restyled,
+    recoloured: changes.recoloured,
+    panorama: changes.panorama,
+    etags,
+  };
 }
 
 /** Put back a config and manifest an editor kept from before a theme (undo). */
