@@ -1,9 +1,10 @@
 import { handle, json } from "@/lib/server/http";
+import { SUGGESTED_ACCENTS } from "@/lib/color";
 import { THEMES } from "@/lib/themes";
 
 export const dynamic = "force-dynamic";
 
-/** GET -> the starter themes, for the editors' pickers. */
+/** GET -> the starter themes and the suggested accents, for the editors' pickers. */
 export async function GET() {
   return handle(() =>
     json({
@@ -13,6 +14,7 @@ export async function GET() {
         description: t.description,
         headlineFont: t.headlineFont.family,
       })),
+      swatches: SUGGESTED_ACCENTS,
     }),
   );
 }

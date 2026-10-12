@@ -1,4 +1,4 @@
-import { accentOf } from "@/lib/accent";
+import { accentChoices } from "@/lib/accent";
 import { handle, json } from "@/lib/server/http";
 import { requireProject } from "@/lib/server/projects";
 import { applyThemeToProject, restoreTheme, themeChoice } from "@/lib/server/themes";
@@ -7,12 +7,13 @@ export const dynamic = "force-dynamic";
 
 type Ctx = { params: Promise<{ name: string }> };
 
-/** GET -> the app's own colour (what it states, else its icon's), for the theme picker. */
+/** GET -> the app's own colours (what it states, then its icon's), best guess as `accent`, for the theme picker. */
 export async function GET(_req: Request, ctx: Ctx) {
   return handle(async () => {
     const { name } = await ctx.params;
     const project = requireProject(name);
-    return json({ accent: await accentOf(project.root) });
+    const accents = await accentChoices(project.root);
+    return json({ accent: accents[0], accents });
   });
 }
 

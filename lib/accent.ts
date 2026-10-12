@@ -16,41 +16,65 @@ export interface AccentGuess {
 }
 
 export async function accentOf(root: string): Promise<AccentGuess> {
-  const stated = statedAccent(root);
-  if (stated) return stated;
-  const icon = appFacts(root).icon?.value.abs;
-  if (icon && fileExists(icon)) {
-    const hex = await iconAccent(icon).catch(() => undefined);
-    if (hex) return { hex, source: "app icon" };
-  }
-  return { hex: FALLBACK_ACCENT, source: "default" };
+  return (await accentChoices(root, 1))[0];
 }
 
-/** A colour the app states: Expo's primaryColor, splash or adaptive icon background, the asset catalog's AccentColor. */
+/**
+ * The colours an app could be drawn in, best guess first: each colour the app
+ * states, then the icon's vivid colours, without two of a hue. Ends with the
+ * neutral blue only when the app has no colour at all.
+ */
+export async function accentChoices(root: string, max = 4): Promise<AccentGuess[]> {
+  const choices: AccentGuess[] = [];
+  const add = (guess: AccentGuess) => {
+    if (choices.length < max && !choices.some((c) => sameHue(c.hex, guess.hex))) choices.push(guess);
+  };
+  statedAccents(root).forEach(add);
+  const icon = appFacts(root).icon?.value.abs;
+  if (choices.length < max && icon && fileExists(icon)) {
+    const hexes = await iconAccents(icon).catch(() => []);
+    for (const hex of hexes) add({ hex, source: "app icon" });
+  }
+  if (!choices.length) choices.push({ hex: FALLBACK_ACCENT, source: "default" });
+  return choices;
+}
+
+/** The first colour the app states. */
 export function statedAccent(root: string): AccentGuess | undefined {
+  return statedAccents(root)[0];
+}
+
+/** Colours the app states: Expo's primaryColor, splash or adaptive icon background, the asset catalog's AccentColor. */
+export function statedAccents(root: string): AccentGuess[] {
   const expo = readExpoSafely(root);
   const android = expo?.android as { adaptiveIcon?: { backgroundColor?: unknown } } | undefined;
   const candidates: [unknown, string][] = [
     [expo?.primaryColor, "app.json primaryColor"],
     [(expo?.splash as { backgroundColor?: unknown } | undefined)?.backgroundColor, "app.json splash.backgroundColor"],
     [android?.adaptiveIcon?.backgroundColor, "app.json android.adaptiveIcon.backgroundColor"],
+    [catalogAccent(root), "asset catalog AccentColor"],
   ];
+  const found: AccentGuess[] = [];
   for (const [value, source] of candidates) {
     const hex = str(value);
-    if (hex && isHexColor(hex) && colourful(hex)) return { hex: normalise(hex), source };
+    if (hex && isHexColor(hex) && colourful(hex)) found.push({ hex: normalise(hex), source });
   }
-  const catalog = catalogAccent(root);
-  if (catalog && colourful(catalog)) return { hex: catalog, source: "asset catalog AccentColor" };
-  return undefined;
+  return found;
+}
+
+/** The icon's most vivid colour (see iconAccents). */
+export async function iconAccent(file: string): Promise<string | undefined> {
+  return (await iconAccents(file))[0];
 }
 
 /**
- * The icon's most vivid colour: pixels grouped by hue, each group weighed by how
- * many pixels it has and how colourful they are (vivid counts more than many);
- * near-white, near-black and grey
- * pixels do not count. Undefined for an icon with no colour in it.
+ * The icon's vivid colours, strongest first: pixels grouped by hue, each group
+ * weighed by how many pixels it has and how colourful they are (vivid counts
+ * more than many); near-white, near-black and grey pixels do not count. A hue
+ * makes the list when it covers a little of the icon and is not a neighbour of
+ * one already in it. Empty for an icon with no colour in it.
  */
-export async function iconAccent(file: string): Promise<string | undefined> {
+export async function iconAccents(file: string): Promise<string[]> {
   const { data, info } = await sharp(file)
     .resize(48, 48, { fit: "cover" })
     .removeAlpha()
@@ -70,14 +94,18 @@ export async function iconAccent(file: string): Promise<string | undefined> {
     bin.n += 1;
   }
   // Neighbouring hues count together, so a gradient icon is one colour, not two half-colours.
-  const scored = bins.map((b, i) => ({
-    b,
-    score: b.weight + 0.5 * (bins[(i + 23) % 24].weight + bins[(i + 1) % 24].weight),
-  }));
-  const best = scored.sort((x, y) => y.score - x.score)[0];
+  const scored = bins
+    .map((b, i) => ({ b, i, score: b.weight + 0.5 * (bins[(i + 23) % 24].weight + bins[(i + 1) % 24].weight) }))
+    .sort((x, y) => y.score - x.score);
   const pixels = info.width * info.height;
-  if (!best || best.b.n < pixels * 0.005) return undefined;
-  return rgbToHex([best.b.r / best.b.n, best.b.g / best.b.n, best.b.b / best.b.n]);
+  const picked: typeof scored = [];
+  for (const s of scored) {
+    if (s.b.n < pixels * 0.005) continue;
+    const ring = (j: number) => Math.min(Math.abs(s.i - j), 24 - Math.abs(s.i - j));
+    if (picked.some((p) => ring(p.i) < 2)) continue;
+    picked.push(s);
+  }
+  return picked.map(({ b }) => rgbToHex([b.r / b.n, b.g / b.n, b.b / b.n]));
 }
 
 /** `AccentColor.colorset` in the app's asset catalog, as hex. */
@@ -118,6 +146,15 @@ function catalogAccent(root: string): string | undefined {
 function colourful(hex: string): boolean {
   const { l, c } = hexToOklch(hex);
   return c >= 0.04 && l > 0.15 && l < 0.95;
+}
+
+/** Two colours of about the same hue (within 30 degrees), or both near grey: one swatch is enough. */
+function sameHue(a: string, b: string): boolean {
+  const x = hexToOklch(a);
+  const y = hexToOklch(b);
+  if (x.c < 0.04 || y.c < 0.04) return x.c < 0.04 && y.c < 0.04;
+  const d = Math.abs(x.h - y.h) % 360;
+  return Math.min(d, 360 - d) < 30;
 }
 
 function normalise(hex: string): string {

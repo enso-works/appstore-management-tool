@@ -141,6 +141,18 @@ export interface Palette {
 
 export const FALLBACK_ACCENT = "#2F6FEB";
 
+/** Accents the theme pickers offer beside the app's own colours: one click instead of a colour wheel. */
+export const SUGGESTED_ACCENTS = [
+  "#2F6FEB",
+  "#6D4DF2",
+  "#D9408C",
+  "#E5484D",
+  "#F07A2A",
+  "#E2A512",
+  "#2E9E5B",
+  "#12999C",
+] as const;
+
 export function paletteFrom(accentHex: string): Palette {
   const base = hexToOklch(isHexColor(accentHex) ? accentHex : FALLBACK_ACCENT);
   // A grey accent keeps its greyness; anything with colour gets enough chroma to read as a brand colour.

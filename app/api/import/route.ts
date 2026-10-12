@@ -6,7 +6,7 @@ import {
   resolveAppPath,
   type ImportChoices,
 } from "@/lib/import";
-import { accentOf } from "@/lib/accent";
+import { accentChoices } from "@/lib/accent";
 import { ScaffoldError } from "@/lib/init";
 import { defaultWorkspaceRoot } from "@/lib/registry";
 import { handle, json } from "@/lib/server/http";
@@ -27,8 +27,9 @@ export async function GET(req: Request) {
       return json({ workspace, candidates: findImportCandidates(workspace) });
     }
     const proposal = guard(() => inspectApp(resolveAppPath(dir)));
-    // The colour a starter theme would draw in: what the app states, else its icon's.
-    return json({ ...proposal, accent: await accentOf(proposal.root) });
+    // The colours a starter theme could draw in: what the app states, then its icon's; the first is the guess.
+    const accents = await accentChoices(proposal.root);
+    return json({ ...proposal, accent: accents[0], accents });
   });
 }
 

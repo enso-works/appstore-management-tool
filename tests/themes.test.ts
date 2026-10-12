@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { accentOf, iconAccent, statedAccent } from "../lib/accent";
+import { accentChoices, accentOf, iconAccent, iconAccents, statedAccent } from "../lib/accent";
 import { orientationOf, themeChanges } from "../lib/apply-theme";
 import { contrast, FALLBACK_ACCENT, hexToOklch, oklchToHex, paletteFrom } from "../lib/color";
 import { loadProject } from "../lib/config";
@@ -98,6 +98,54 @@ describe("accent of an app", () => {
     const guess = await accentOf(root);
     expect(guess.source).toBe("app icon");
     expect(guess.hex).toBe("#E5484D");
+  });
+});
+
+describe("accent choices", () => {
+  let root: string;
+  beforeEach(() => (root = fs.mkdtempSync(path.join(os.tmpdir(), "store-shots-accents-"))));
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  const twoColourIcon = async (file: string, a: string, b: string) => {
+    const half = await sharp({ create: { width: 512, height: 1024, channels: 3, background: b } })
+      .png()
+      .toBuffer();
+    await sharp({ create: { width: 1024, height: 1024, channels: 3, background: a } })
+      .composite([{ input: half, left: 512, top: 0 }])
+      .png()
+      .toFile(file);
+  };
+
+  it("lists each colour of the icon once, the more vivid first", async () => {
+    const icon = path.join(root, "icon.png");
+    await twoColourIcon(icon, "#4C86A8", "#E5484D");
+    const hexes = await iconAccents(icon);
+    expect(hexes).toHaveLength(2);
+    expect(hexes[0]).toBe("#E5484D");
+    expect(await iconAccent(icon)).toBe("#E5484D");
+  });
+
+  it("puts what the app states first, then the icon's colours, without two of a hue", async () => {
+    writeJson(path.join(root, "app.json"), {
+      expo: { name: "A", icon: "./icon.png", primaryColor: "#E0434A", splash: { backgroundColor: "#2F6FEB" } },
+    });
+    await twoColourIcon(path.join(root, "icon.png"), "#E5484D", "#2E9E5B");
+    const choices = await accentChoices(root);
+    expect(choices.slice(0, 2)).toEqual([
+      { hex: "#E0434A", source: "app.json primaryColor" },
+      { hex: "#2F6FEB", source: "app.json splash.backgroundColor" },
+    ]);
+    // The icon's red is the stated red; its green is new.
+    expect(choices).toHaveLength(3);
+    expect(choices[2].source).toBe("app icon");
+    expect(Math.abs(hexToOklch(choices[2].hex).h - hexToOklch("#2E9E5B").h)).toBeLessThan(5);
+    expect(await accentOf(root)).toEqual(choices[0]);
+    expect(await accentChoices(root, 2)).toHaveLength(2);
+  });
+
+  it("is the neutral blue alone for an app with no colour", async () => {
+    writeJson(path.join(root, "app.json"), { expo: { name: "A" } });
+    expect(await accentChoices(root)).toEqual([{ hex: FALLBACK_ACCENT, source: "default" }]);
   });
 });
 
