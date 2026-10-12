@@ -21,7 +21,7 @@ struct ImportSheet: View {
   @State private var busy = false
   @State private var theme: String? = "aurora"
   @State private var accent = Color.accentColor
-  @State private var accentSource = ""
+  @State private var appAccents: [AccentChoice] = []
 
   struct Candidate: Hashable {
     let root: String
@@ -69,7 +69,7 @@ struct ImportSheet: View {
             Section {
               ThemePicker(
                 api: api, selection: $theme, accent: $accent, orientation: orientation, allowPlain: true,
-                accentSource: accentSource)
+                appAccents: appAccents)
             } header: {
               Text("Look")
             } footer: {
@@ -134,7 +134,7 @@ struct ImportSheet: View {
       ipad = p["ipad"]?.bool ?? false
       play = p["play"]?.bool ?? false
       if let hex = p["accent"]?["hex"]?.string, let color = CSSColor.color(hex) { accent = color }
-      accentSource = p["accent"]?["source"]?.string ?? ""
+      appAccents = AccentChoice.list(p)
       error = nil
     } catch {
       self.error = error.localizedDescription

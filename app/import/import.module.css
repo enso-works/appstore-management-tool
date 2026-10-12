@@ -239,3 +239,30 @@
   background: var(--card);
   border-radius: var(--radius);
 }
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.swatch {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid rgb(0 0 0 / 0.15);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* The app's own colours come first, set apart from the suggestions by a little space. */
+.swatch[data-app] + .swatch:not([data-app]) {
+  margin-left: 10px;
+}
+
+.swatch[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--panel),
+    0 0 0 4px var(--accent);
+}

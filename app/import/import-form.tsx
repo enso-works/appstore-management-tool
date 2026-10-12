@@ -6,11 +6,15 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { AppProposal, ImportCandidate, ImportResult } from "@/lib/import";
 import { APP_STORE_LOCALES } from "@/lib/locales";
 import { getTarget, targetsFor, type Orientation } from "@/lib/targets";
+import { SUGGESTED_ACCENTS } from "@/lib/color";
 import { THEMES } from "@/lib/themes";
 import styles from "./import.module.css";
 
-/** What GET /api/import answers: the proposal and the app's own colour. */
-type Proposal = AppProposal & { accent?: { hex: string; source: string } };
+/** A colour and where it was found ("app icon"). */
+type AccentGuess = { hex: string; source: string };
+
+/** What GET /api/import answers: the proposal and the app's own colours, best guess first. */
+type Proposal = AppProposal & { accent?: AccentGuess; accents?: AccentGuess[] };
 
 interface Choices {
   projectName: string;
@@ -278,17 +282,32 @@ export default function ImportForm({
                 </div>
               </Field>
 
-              <Field label="Look" source={proposal.accent?.source}>
+              <Field label="Look" source={proposal.accents?.find((a) => sameColour(a.hex, choices.accent))?.source}>
                 <div className={styles.stack}>
-                  <label className={styles.check}>
+                  <div className={styles.swatches}>
+                    {[...(proposal.accents ?? []).filter((a) => a.source !== "default"), ...suggested(proposal)].map(
+                      (a) => (
+                        <button
+                          key={a.hex}
+                          className={styles.swatch}
+                          style={{ background: a.hex }}
+                          data-app={a.source !== "suggested" || undefined}
+                          aria-pressed={sameColour(a.hex, choices.accent)}
+                          aria-label={a.source === "suggested" ? a.hex : `${a.hex}, from ${a.source}`}
+                          title={a.source === "suggested" ? a.hex : `${a.hex}, from ${a.source}`}
+                          onClick={() => update({ accent: a.hex })}
+                        />
+                      ),
+                    )}
                     <input
                       type="color"
                       value={choices.accent}
                       onChange={(e) => update({ accent: e.target.value })}
-                      aria-label="Colour"
-                    />{" "}
-                    Every theme is drawn in this colour
-                  </label>
+                      aria-label="Another colour"
+                      title="Another colour"
+                    />
+                  </div>
+                  <span className={styles.small}>Every theme is drawn in this colour.</span>
                   <div className={styles.themes}>
                     <button
                       className={styles.theme}
@@ -368,6 +387,16 @@ export default function ImportForm({
     </main>
   );
 }
+
+/** The suggested accents, less any the app already has. */
+function suggested(p: Proposal): AccentGuess[] {
+  return SUGGESTED_ACCENTS.filter((hex) => !p.accents?.some((a) => sameColour(a.hex, hex))).map((hex) => ({
+    hex,
+    source: "suggested",
+  }));
+}
+
+const sameColour = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 function Field({ label, source, children }: { label: string; source?: string; children: ReactNode }) {
   return (

@@ -8,6 +8,21 @@ struct ThemeInfo: Decodable, Identifiable, Hashable {
   let headlineFont: String
 }
 
+/// A colour an app could be drawn in, and where it was found ("app icon").
+struct AccentChoice: Decodable, Hashable {
+  let hex: String
+  let source: String
+
+  /// The app's colours from an engine answer (`accents`, else the single `accent`), less the neutral default.
+  static func list(_ body: JSONValue?) -> [AccentChoice] {
+    let items = body?["accents"]?.array ?? [body?["accent"]].compactMap { $0 }
+    return items.compactMap { item in
+      guard let hex = item["hex"]?.string, let source = item["source"]?.string, source != "default" else { return nil }
+      return AccentChoice(hex: hex, source: source)
+    }
+  }
+}
+
 /// The themes as cards, each a preview the engine renders in the chosen colour: from the
 /// app's own captures and copy when `project` names one, else as a new app starts.
 struct ThemePicker: View {
@@ -18,12 +33,13 @@ struct ThemePicker: View {
   var orientation = "portrait"
   /// Offer "Plain": one screen with the template's defaults, as importing did before themes.
   var allowPlain = false
-  /// Where the colour was found ("app.json primaryColor"), shown beside it.
-  var accentSource = ""
+  /// The app's own colours, best guess first; shown as swatches before the suggested ones.
+  var appAccents: [AccentChoice] = []
   /// The app's headline font: the theme with that font is marked as in use (each theme has its own).
   var currentHeadlineFont: String?
 
   @State private var themes: [ThemeInfo] = []
+  @State private var swatches: [String] = []
   @State private var previewAccent = ""
   @State private var error: String?
 
@@ -32,10 +48,17 @@ struct ThemePicker: View {
       HStack {
         Text("Colour")
         Spacer()
-        Text(accentSource.isEmpty ? "Every theme is drawn in it" : "From \(accentSource)")
+        Text(chosenSource.map { "From \($0)" } ?? "Every theme is drawn in it")
           .font(.callout)
           .foregroundStyle(.secondary)
-        ColorPicker("Colour", selection: $accent, supportsOpacity: false).labelsHidden()
+      }
+      HStack(spacing: 6) {
+        ForEach(appAccents, id: \.hex) { swatch($0.hex, help: "\($0.hex), from \($0.source)") }
+        if !appAccents.isEmpty { Spacer().frame(width: 8) }
+        ForEach(suggested, id: \.self) { swatch($0, help: $0) }
+        Spacer().frame(width: 8)
+        ColorPicker("Another colour", selection: $accent, supportsOpacity: false).labelsHidden()
+          .help("Another colour")
       }
       if let error { Text(error).foregroundStyle(.red).font(.callout) }
       LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 12)], spacing: 12) {
@@ -68,6 +91,35 @@ struct ThemePicker: View {
       try? await Task.sleep(for: .milliseconds(previewAccent.isEmpty ? 0 : 400))
       if !Task.isCancelled { previewAccent = CSSColor.css(accent) }
     }
+  }
+
+  /// The suggested accents the app does not already have.
+  private var suggested: [String] {
+    swatches.filter { hex in !appAccents.contains { $0.hex.lowercased() == hex.lowercased() } }
+  }
+
+  /// Where the chosen colour was found, when it is one of the app's.
+  private var chosenSource: String? {
+    let css = CSSColor.css(accent).lowercased()
+    return appAccents.first { $0.hex.lowercased() == css }?.source
+  }
+
+  private func swatch(_ hex: String, help: String) -> some View {
+    let selected = CSSColor.css(accent).lowercased() == hex.lowercased()
+    return Button {
+      if let color = CSSColor.color(hex) { accent = color }
+    } label: {
+      Circle()
+        .fill(CSSColor.color(hex) ?? .clear)
+        .overlay(Circle().strokeBorder(.black.opacity(0.15), lineWidth: 0.5))
+        .frame(width: 18, height: 18)
+        .padding(2)
+        .overlay(Circle().strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 2))
+    }
+    .buttonStyle(.plain)
+    .help(help)
+    .accessibilityLabel(help)
+    .accessibilityAddTraits(selected ? .isSelected : [])
   }
 
   private func card(
@@ -110,9 +162,14 @@ struct ThemePicker: View {
   }
 
   private func loadThemes() async {
-    struct Body: Decodable { let themes: [ThemeInfo] }
+    struct Body: Decodable {
+      let themes: [ThemeInfo]
+      let swatches: [String]?
+    }
     do {
-      themes = try await api.get(Body.self, "api/themes").themes
+      let body = try await api.get(Body.self, "api/themes")
+      themes = body.themes
+      swatches = body.swatches ?? []
     } catch {
       self.error = error.localizedDescription
     }
@@ -126,7 +183,7 @@ struct ThemeSheet: View {
   @Environment(\.dismiss) private var dismiss
   @State private var selection: String?
   @State private var accent = Color.accentColor
-  @State private var accentSource = ""
+  @State private var appAccents: [AccentChoice] = []
   @State private var busy = false
   @State private var error: String?
 
@@ -141,7 +198,7 @@ struct ThemeSheet: View {
       ScrollView {
         ThemePicker(
           api: document.api, selection: $selection, accent: $accent, project: document.name,
-          orientation: document.target?.orientation ?? "portrait", accentSource: accentSource,
+          orientation: document.target?.orientation ?? "portrait", appAccents: appAccents,
           currentHeadlineFont: document.config["brand"]?["headlineFont"]?["family"]?.string
         )
         .padding([.horizontal, .bottom], 20)
@@ -174,7 +231,7 @@ struct ThemeSheet: View {
         let hex = body["accent"]?["hex"]?.string, let color = CSSColor.color(hex)
       else { return }
       accent = color
-      accentSource = body["accent"]?["source"]?.string ?? ""
+      appAccents = AccentChoice.list(body)
     }
   }
 }
