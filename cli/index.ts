@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import { readExpoSafely, str } from "../lib/app-facts";
 import { ConfigError, loadProject, readJsonFile, resolveProjectArg, type Project } from "../lib/config";
 import { foldIssues, formatIssue, type Issue } from "../lib/issues";
 import { ImportError, inspectApp, targetsFor, type AppProposal } from "../lib/import";
@@ -68,6 +69,17 @@ function openProject(projectArg: string | undefined): Project {
     }
     throw err;
   }
+}
+
+/** What to do about screens capture --all skipped for want of a deep link. */
+function deepLinkHint(project: Project): string {
+  const scheme = str(readExpoSafely(project.root)?.scheme);
+  return [
+    "",
+    "capture --all opens each screen by its deep link: set source.deepLink on each screen in store/manifest.json",
+    `to the link that opens it in the app${scheme ? ` (${scheme}://...)` : ""}. Or open a screen in the simulator`,
+    "yourself and run: store-shots capture --screen <id>",
+  ].join("\n");
 }
 
 function printIssues(issues: Issue[]) {
@@ -712,6 +724,9 @@ program
           for (const sk of p.skipped) console.log(`  skipped ${sk.screenId}: ${sk.reason}`);
           if (!p.captured) failed++;
         }
+        if (r.perLocale.some((p) => p.skipped.some((sk) => sk.reason.startsWith("no source.deepLink")))) {
+          console.log(deepLinkHint(project));
+        }
         process.exit(failed === r.perLocale.length ? 1 : 0);
       }
       if (opts.all) {
@@ -725,6 +740,7 @@ program
         });
         console.log(`\n${r.captured.length} captured, ${r.skipped.length} skipped`);
         for (const sk of r.skipped) console.log(`  skipped ${sk.screenId}: ${sk.reason}`);
+        if (r.skipped.some((sk) => sk.reason.startsWith("no source.deepLink"))) console.log(deepLinkHint(project));
         process.exit(r.captured.length === 0 && r.skipped.length > 0 ? 1 : 0);
       }
       if (!opts.screen) {
