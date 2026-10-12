@@ -2,7 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { ConfigError, loadProject, readJsonFile, resolveProjectArg, type Project } from "../lib/config";
-import { formatIssue, type Issue } from "../lib/issues";
+import { foldIssues, formatIssue, type Issue } from "../lib/issues";
 import { ImportError, inspectApp, targetsFor, type AppProposal } from "../lib/import";
 import { initProject } from "../lib/init";
 import { accentOf } from "../lib/accent";
@@ -71,7 +71,7 @@ function openProject(projectArg: string | undefined): Project {
 }
 
 function printIssues(issues: Issue[]) {
-  for (const i of issues) console.log(formatIssue(i));
+  for (const i of foldIssues(issues)) console.log(formatIssue(i));
 }
 
 program
