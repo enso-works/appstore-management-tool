@@ -236,7 +236,59 @@ const card: Theme = {
   }),
 };
 
-export const THEMES: Theme[] = [aurora, bold, paper, swing, split, card];
+// Clean: white, a near-black sans headline, the accent only in the small type; the look of most top listings.
+const clean: Theme = {
+  id: "clean",
+  name: "Clean",
+  description: "White, a near-black headline, your colour only in the small type",
+  headlineFont: { family: "Inter Tight", weights: [700, 800] },
+  brand: (p) => ({
+    primary: "#FFFFFF",
+    onPrimary: p.ink,
+    accent: p.accentDark,
+    background: { background: "#FFFFFF", backgroundImage: "none" },
+  }),
+  screen: ({ palette: p, orientation }) => ({
+    template: "hero-top",
+    overrides: {
+      background: "#FFFFFF",
+      backgroundImage: "none",
+      textColor: p.ink,
+      accentColor: p.accentDark,
+      textAlign: "center",
+      shell: "dark",
+      ...(orientation === "portrait" ? { screenshotScale: 0.84 } : {}),
+    },
+  }),
+};
+
+// Night: flat near-black, the headline aligned to the start, a thin line of the accent along the top.
+const night: Theme = {
+  id: "night",
+  name: "Night",
+  description: "Flat near-black, a white headline from the left, a thin line of your colour along the top",
+  headlineFont: { family: "Sora", weights: [600, 700] },
+  brand: (p) => ({
+    primary: p.night,
+    onPrimary: "#FFFFFF",
+    accent: p.accentLight,
+    background: { background: p.night, backgroundImage: "none" },
+  }),
+  screen: ({ palette: p, orientation }) => ({
+    template: "hero-top",
+    overrides: {
+      background: `linear-gradient(180deg, ${p.accent} 0%, ${p.accent} 0.6%, ${p.night} 0.6%, ${p.night} 100%)`,
+      backgroundImage: "none",
+      textColor: "#FFFFFF",
+      accentColor: p.accentLight,
+      textAlign: "start",
+      shell: "dark",
+      ...(orientation === "portrait" ? { screenshotScale: 0.8 } : {}),
+    },
+  }),
+};
+
+export const THEMES: Theme[] = [aurora, bold, paper, clean, night, swing, split, card];
 
 export function getTheme(id: string): Theme | undefined {
   return THEMES.find((t) => t.id === id);

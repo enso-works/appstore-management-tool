@@ -34,6 +34,25 @@
       "license": "instrument-serif/LICENSE.txt"
     },
     {
+      "family": "Inter Tight",
+      "source": "google",
+      "files": [
+        {
+          "path": "inter-tight/inter-tight-700.ttf",
+          "weight": 700,
+          "style": "normal",
+          "sha256": "98272f3512338c52940816f5db61966ca1cdbc3cdb3c0d981da22612723da59e"
+        },
+        {
+          "path": "inter-tight/inter-tight-800.ttf",
+          "weight": 800,
+          "style": "normal",
+          "sha256": "a6906a10c53fe29b0d05a73ce2404f3dfdd6b87cda063daf7e628c5ea207a805"
+        }
+      ],
+      "license": "inter-tight/LICENSE.txt"
+    },
+    {
       "family": "Manrope",
       "source": "google",
       "files": [
@@ -89,6 +108,25 @@
         }
       ],
       "license": "poppins/LICENSE.txt"
+    },
+    {
+      "family": "Sora",
+      "source": "google",
+      "files": [
+        {
+          "path": "sora/sora-600.ttf",
+          "weight": 600,
+          "style": "normal",
+          "sha256": "4e79171a1720d04b72eb68bd7604f85888c31c05bb6b432147d4524e9439af30"
+        },
+        {
+          "path": "sora/sora-700.ttf",
+          "weight": 700,
+          "style": "normal",
+          "sha256": "a50f5d254fc0fb83125fceffb72a95d036b8ce964a77fb8cc42ecb9ce16b0427"
+        }
+      ],
+      "license": "sora/LICENSE.txt"
     },
     {
       "family": "Space Grotesk",
