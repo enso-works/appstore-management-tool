@@ -190,7 +190,7 @@ function checkPlaceholders(project: Project): ReadinessCheck {
     const prompts = starterFields(file);
     if (prompts.length) f.fail(`${displayRelative(project.root, file)}: starter copy in ${prompts.join(", ")}`);
   }
-  return f.check("placeholders", "No template placeholders left", "see starter-template/NEW-APP.md section 2");
+  return f.check("placeholders", "No template placeholders left", "see app-template/NEW-APP.md section 2");
 }
 
 /** `screen.field` of every field still holding a theme's starter prompt. */
