@@ -4,6 +4,11 @@ import { repoUrl } from "@/lib/shared";
 const sections = [
   { title: "Design", text: "Every screen on a canvas that is the exact render the store gets.", href: "/docs/design" },
   {
+    title: "Themes",
+    text: "Nine finished looks drawn in your app's own colour, picked when you import or any time after.",
+    href: "/docs/design/themes",
+  },
+  {
     title: "Pages",
     text: "The default page, custom product pages, optimization tests, header and search images, iPhone Duo.",
     href: "/docs/pages",
@@ -18,6 +23,11 @@ const sections = [
     text: "Readiness checks with the fix for each, fastlane uploads, drafts in App Store Connect.",
     href: "/docs/ship",
   },
+  {
+    title: "Agents",
+    text: "Everything runs headless for Claude Code or Codex: previews to look at, JSON answers, exit codes.",
+    href: "/docs/agents",
+  },
 ];
 
 export default function HomePage() {
@@ -28,8 +38,9 @@ export default function HomePage() {
           App Store and Google Play screenshots, built from your app&apos;s real captures.
         </h1>
         <p className="text-lg text-pretty text-fd-muted-foreground">
-          A native Mac app over an open-source engine that runs on your machine. It checks your screenshots and store
-          text against the rules that get listings rejected, while you edit and again before anything ships.
+          A native Mac app, and a command line a coding agent can drive, over an open-source engine that runs on your
+          machine. It checks your screenshots and store text against the rules that get listings rejected, while you
+          edit and again before anything ships.
         </p>
         <div className="flex flex-wrap gap-3">
           <Link
@@ -56,7 +67,7 @@ export default function HomePage() {
         className="w-full rounded-xl border"
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {sections.map((s) => (
           <Link key={s.title} href={s.href} className="rounded-xl border p-4 transition-colors hover:bg-fd-accent">
             <h2 className="font-medium">{s.title}</h2>
