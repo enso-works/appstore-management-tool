@@ -8,7 +8,7 @@ import { ConfigError, findConfigPath, loadProject, readJsonFile, resolveProjectA
 import { foldIssues, formatIssue, type Issue } from "../lib/issues";
 import { ImportError, inspectApp, targetsFor, type AppProposal } from "../lib/import";
 import { initProject } from "../lib/init";
-import { accentOf } from "../lib/accent";
+import { accentChoices, accentOf } from "../lib/accent";
 import { isHexColor } from "../lib/color";
 import { themeChanges, ThemeError } from "../lib/apply-theme";
 import { getTheme, THEMES } from "../lib/themes";
@@ -204,6 +204,8 @@ program
   .option("--theme <id>", `start with five screens in a theme: ${THEMES.map((t) => t.id).join(", ")}`)
   .option("--accent <hex>", "the theme's colour (default: the app's own colour, or its icon's)")
   .option("--force", "overwrite existing files")
+  .option("--dry-run", "show what would be set up (the proposal and the app's colours), write nothing")
+  .option("--json", "machine-readable output")
   .action(
     async (opts: {
       project?: string;
@@ -215,6 +217,8 @@ program
       theme?: string;
       accent?: string;
       force?: boolean;
+      dryRun?: boolean;
+      json?: boolean;
     }) => {
       const appRoot = path.resolve(opts.project ?? process.cwd());
 
@@ -242,6 +246,35 @@ program
         ?.split(",")
         .map((s) => s.trim())
         .filter(Boolean);
+      if (opts.dryRun) {
+        const plan = {
+          root: appRoot,
+          kind: proposal.kind,
+          hasConfig: proposal.hasConfig,
+          projectName: opts.name ?? proposal.projectName,
+          bundleId: proposal.bundleId,
+          locales: locales ?? proposal.locales,
+          defaultLocale: opts.defaultLocale ?? (locales ? locales[0] : proposal.defaultLocale),
+          orientation,
+          targets: targetsFor({ orientation, ipad: proposal.ipad, play: proposal.play }),
+          sources: proposal.sources,
+          notes: proposal.notes,
+          theme: theme ? { id: theme.id, accent: theme.accent, accentSource: theme.accentSource } : null,
+          accents: await accentChoices(appRoot),
+          themes: THEMES.map((t) => t.id),
+        };
+        if (opts.json) console.log(JSON.stringify(plan, null, 2));
+        else {
+          console.log(`${plan.projectName} (${plan.kind}${plan.bundleId ? `, ${plan.bundleId}` : ""})`);
+          console.log(`locales ${plan.locales.join(", ")} (${plan.sources.locales}), orientation ${orientation}`);
+          console.log(`sets ${plan.targets.join(", ")}`);
+          console.log(`colours ${plan.accents.map((a) => `${a.hex} (${a.source})`).join(", ")}`);
+          if (theme) console.log(`theme ${theme.id} in ${theme.accent}`);
+          for (const n of plan.notes) console.log(`note: ${n}`);
+          console.log("\nDry run: nothing written.");
+        }
+        return;
+      }
       const result = initProject({
         appRoot,
         projectName: opts.name ?? proposal.projectName,
@@ -253,6 +286,23 @@ program
         theme: theme && { id: theme.id, accent: theme.accent },
         force: opts.force,
       });
+      // Scaffolding an app and then making you register it separately is a step
+      // with no decision in it, so init does both.
+      const entry = register(appRoot, opts.name ?? result.config.projectName);
+      if (opts.json) {
+        const report = {
+          name: entry.name,
+          root: appRoot,
+          projectName: result.config.projectName,
+          locales: result.config.locales,
+          targets: result.config.targets,
+          theme: theme ? { id: theme.id, accent: theme.accent, accentSource: theme.accentSource } : null,
+          created: result.created,
+          skipped: result.skipped,
+        };
+        console.log(JSON.stringify(report, null, 2));
+        return;
+      }
       if (theme) console.log(`theme ${theme.id} in ${theme.accent} (${theme.accentSource})`);
       const { sources } = proposal;
       console.log(`name ${sources.projectName}, locales ${sources.locales}, orientation ${sources.orientation},`);
@@ -260,16 +310,12 @@ program
       for (const f of result.created) console.log(`created  ${f}`);
       for (const f of result.skipped) console.log(`skipped  ${f} (exists)`);
 
-      // Scaffolding an app and then making you register it separately is a step
-      // with no decision in it, so init does both.
-      const entry = register(appRoot, opts.name ?? result.config.projectName);
-
       console.log(`\nProject "${result.config.projectName}" with locales ${result.config.locales.join(", ")}.`);
       console.log(`Added to your list as "${entry.name}" (${registryPath()}).`);
       console.log("\nNext:");
-      console.log("  1. add raw captures under store/raw/<device>/<locale>/");
-      console.log("  2. store-shots validate");
-      console.log("  3. store-shots open");
+      console.log("  1. write the copy in store/content/<locale>.json, and look at it: store-shots preview");
+      console.log("  2. add captures under store/raw/<device>/<locale>/ (store-shots capture)");
+      console.log("  3. store-shots check, then store-shots generate (or store-shots open, for the Mac app)");
     },
   );
 
@@ -802,8 +848,10 @@ program
   .option("--force", "overwrite an existing capture")
   .option("--list", "list booted simulators and exit")
   .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--json", "machine-readable output")
   .action(
     async (opts: {
+      json?: boolean;
       screen?: string;
       all?: boolean;
       locales?: string;
@@ -818,8 +866,11 @@ program
       list?: boolean;
       project?: string;
     }) => {
+      const json = (value: unknown) => console.log(JSON.stringify(value, null, 2));
+      const log = opts.json ? undefined : (l: string) => console.log(l);
       if (opts.list) {
         const sims = listBootedSimulators();
+        if (opts.json) return json(sims);
         if (!sims.length) console.log("No booted simulators.");
         for (const s of sims) console.log(`${s.udid}  ${s.family.padEnd(6)} ${s.name} (${s.runtime})`);
         return;
@@ -847,8 +898,13 @@ program
           settleSeconds: opts.settle ? Number(opts.settle) : undefined,
           noSeed: opts.seed === false,
           keepLanguage: opts.keepLanguage,
-          log: (l) => console.log(l),
+          log,
         });
+        const allFailed = r.perLocale.every((p) => !p.captured);
+        if (opts.json) {
+          json(r);
+          process.exit(allFailed ? 1 : 0);
+        }
         console.log("");
         let failed = 0;
         for (const p of r.perLocale) {
@@ -868,12 +924,17 @@ program
           udid: opts.udid,
           cleanStatusBar: opts.cleanStatusBar,
           settleSeconds: opts.settle ? Number(opts.settle) : undefined,
-          log: (l) => console.log(l),
+          log,
         });
+        const nothing = r.captured.length === 0 && r.skipped.length > 0;
+        if (opts.json) {
+          json(r);
+          process.exit(nothing ? 1 : 0);
+        }
         console.log(`\n${r.captured.length} captured, ${r.skipped.length} skipped`);
         for (const sk of r.skipped) console.log(`  skipped ${sk.screenId}: ${sk.reason}`);
         if (r.skipped.some((sk) => sk.reason.startsWith("no source.deepLink"))) console.log(deepLinkHint(project));
-        process.exit(r.captured.length === 0 && r.skipped.length > 0 ? 1 : 0);
+        process.exit(nothing ? 1 : 0);
       }
       if (!opts.screen) {
         console.error("--screen <id> is required (or --all / --list)");
@@ -888,6 +949,7 @@ program
           cleanStatusBar: opts.cleanStatusBar,
           force: opts.force,
         });
+        if (opts.json) return json(r);
         console.log(`captured ${displayRelative(project.root, r.file)}  (${r.width}x${r.height}, ${r.simulator.name})`);
         if (r.aspectWarning) console.log(`WARN  ${r.aspectWarning}`);
         if (locale !== project.config.defaultLocale) {
@@ -983,45 +1045,58 @@ asc
     "store-shots",
   )
   .option("--traffic <percent>", "treatments: share of traffic for a new experiment", "50")
-  .action(async (setId: string, opts: { project?: string; yes?: boolean; experiment: string; traffic: string }) => {
-    const project = openProject(opts.project);
-    const v = validateProject(project);
-    const blocking = pushBlockers(v.issues.items, setId);
-    if (!v.manifest || blocking.length) {
-      printIssues(blocking);
-      console.error("Fix these before uploading.");
-      process.exit(1);
-    }
-    try {
-      const r = await pushPage(project, new AscClient(tokenSource(project)), v.manifest, v.content, setId, {
-        apply: !!opts.yes,
-        experimentName: opts.experiment,
-        trafficProportion: Number(opts.traffic),
-        log: (l) => console.log(l),
-      });
-      if (!opts.yes) {
-        for (const s of r.steps) console.log(`${s.action.padEnd(6)} ${s.what}`);
-        const changes = r.steps.filter((s) => s.action !== "keep" && s.action !== "skip").length;
-        console.log(
-          changes ? `\n${changes} change(s). Run again with --yes to make them.` : "\nApp Store Connect is up to date.",
-        );
-      } else {
-        console.log(
-          setId === DEFAULT_PAGE
-            ? r.libraryOnly
-              ? "\nDone. The images are drafts in the Asset Library: submit them for review there (App Store Connect > Asset Library), then choose them on the live page under Browse Assets."
-              : "\nDone. The version's media are in App Store Connect; submit the version there when ready."
-            : `\nDone. "${setId}" is a draft in App Store Connect${r.ascId ? ` (${r.ascId})` : ""}; submit it there when ready.`,
-        );
+  .option("--json", "machine-readable output: the plan, or what was done")
+  .action(
+    async (
+      setId: string,
+      opts: { project?: string; yes?: boolean; experiment: string; traffic: string; json?: boolean },
+    ) => {
+      const project = openProject(opts.project);
+      const v = validateProject(project);
+      const blocking = pushBlockers(v.issues.items, setId);
+      if (!v.manifest || blocking.length) {
+        if (opts.json) console.log(JSON.stringify({ set: setId, blocking }, null, 2));
+        else {
+          printIssues(blocking);
+          console.error("Fix these before uploading.");
+        }
+        process.exit(1);
       }
-    } catch (err) {
-      if (err instanceof AscAuthError || err instanceof AscPushError || err instanceof AscApiError) {
-        console.error(err.message);
-        process.exit(err instanceof AscAuthError ? 2 : 1);
+      try {
+        const r = await pushPage(project, new AscClient(tokenSource(project)), v.manifest, v.content, setId, {
+          apply: !!opts.yes,
+          experimentName: opts.experiment,
+          trafficProportion: Number(opts.traffic),
+          log: opts.json ? undefined : (l) => console.log(l),
+        });
+        if (opts.json) {
+          console.log(JSON.stringify(r, null, 2));
+        } else if (!opts.yes) {
+          for (const s of r.steps) console.log(`${s.action.padEnd(6)} ${s.what}`);
+          const changes = r.steps.filter((s) => s.action !== "keep" && s.action !== "skip").length;
+          console.log(
+            changes
+              ? `\n${changes} change(s). Run again with --yes to make them.`
+              : "\nApp Store Connect is up to date.",
+          );
+        } else {
+          console.log(
+            setId === DEFAULT_PAGE
+              ? r.libraryOnly
+                ? "\nDone. The images are drafts in the Asset Library: submit them for review there (App Store Connect > Asset Library), then choose them on the live page under Browse Assets."
+                : "\nDone. The version's media are in App Store Connect; submit the version there when ready."
+              : `\nDone. "${setId}" is a draft in App Store Connect${r.ascId ? ` (${r.ascId})` : ""}; submit it there when ready.`,
+          );
+        }
+      } catch (err) {
+        if (err instanceof AscAuthError || err instanceof AscPushError || err instanceof AscApiError) {
+          console.error(err.message);
+          process.exit(err instanceof AscAuthError ? 2 : 1);
+        }
+        throw err;
       }
-      throw err;
-    }
-  });
+    },
+  );
 
 asc
   .command("submit <page>")
