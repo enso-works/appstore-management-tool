@@ -262,14 +262,17 @@ it, and skips anything whose inputs have not changed.
 
 ## Command line
 
-Everything the app does runs from a terminal too, for CI or for working without the window.
+Everything the app does runs from a terminal too, for CI, for coding agents (Claude Code,
+Codex) and for working without the window; it does not need the Mac app or the engine running.
 `--project` takes an app folder or its config; without it, the CLI looks upward from the
-current folder, so inside an app you can leave it off.
+current folder, so inside an app you can leave it off. Most commands take `--json`. For agents,
+see [Use with Claude Code or Codex](https://store-shots.bavrk.com/docs/agents).
 
 ```sh
 npx store-shots open      [name|dir]          # the app in the Store Shots Mac app
-npx store-shots init      [--project <app>] [--landscape|--portrait] [--theme <id>] [--accent <hex>]
-npx store-shots theme     list | apply <id> [--accent <hex>] [--dry-run]
+npx store-shots init      [--project <app>] [--landscape|--portrait] [--theme <id>] [--accent <hex>] [--dry-run]
+npx store-shots theme     list | preview <id> | apply <id> [--accent <hex>] [--dry-run]
+npx store-shots preview   [--screen <id>] [--locale <l>] [--target <id>] [--out <dir>]   # PNGs to look at
 npx store-shots add       [dir]               # add an app that already has a config
 npx store-shots projects | remove <name> | prune
 npx store-shots validate  [--project <app>] [--dry-run] [--json]
@@ -288,7 +291,8 @@ npx store-shots asc       status | push <page> [--yes] | submit default [--yes]
 npx store-shots clean     [--project <app>]   # removes only files the tool wrote
 ```
 
-Exit codes: `0` ok, `1` validation or readiness failed, `2` usage or config error.
+Exit codes: `0` ok, `1` it ran and found problems (a failed check, a render error, nothing
+captured), `2` it could not run (usage, config, no App Store Connect key).
 
 ## Files in your app
 

@@ -1,0 +1,116 @@
+---
+title: Use with Claude Code or Codex
+description: Everything the Mac app does runs headless from the command line, with JSON output and exit codes a coding agent can act on.
+---
+
+The Mac app is for working by eye. A coding agent (Claude Code, Codex or anything else that runs
+commands and reads files) uses the command line instead: every command works without the Mac
+app or the engine running, most take `--json`, and `store-shots preview` renders screens to
+PNG files the agent can look at.
+
+## Setup
+
+```sh
+git clone https://github.com/enso-works/appstore-management-tool.git store-shots
+cd store-shots && npm ci && npm link    # `store-shots` on the PATH
+npx playwright install chromium         # the browser that renders, once
+```
+
+Capturing from a simulator needs Xcode.
+
+## The loop
+
+Run these inside the app's folder (or pass `--project <dir>`).
+
+**1. Start the app in a theme.** See what the tool reads from the app, pick a theme by looking
+at it, then write the setup:
+
+```sh
+store-shots init --dry-run --json          # name, languages, devices, the app's colours
+store-shots theme list --json
+store-shots theme preview clean --json     # one PNG of the theme on this app; read "file"
+store-shots init --theme clean             # five screens: hero, feature-1 to feature-4
+```
+
+**2. Write the copy.** Each language's copy is `store/content/<locale>.json`, one entry per
+screen id from `store/manifest.json`:
+
+```json
+{ "screens": { "hero": { "eyebrow": null, "headline": "Plan meals in minutes", "caption": "..." } } }
+```
+
+A theme starts every field with a prompt to replace; `validate` lists the ones left.
+
+**3. Look at it.** Render the screens and read the PNGs:
+
+```sh
+store-shots preview --json                 # the iPhone set in the default language
+store-shots preview --screen hero --locale de-DE --json
+```
+
+Each shot in the answer has its `file` (absolute path), whether the capture was still the sketch,
+and its `issues`: `render.overflow` means the copy is too long for its box (shorten that field),
+`render.text-overlaps-device` that text covers the phone. Previews go to
+`store/generated/preview/` (ignored by git), never to `fastlane/screenshots`.
+
+**4. Captures.** With the app running in a booted simulator, on the right screen:
+
+```sh
+store-shots capture --list --json          # booted simulators
+store-shots capture --screen hero --json
+```
+
+`capture --all` opens each screen by its `source.deepLink` in `store/manifest.json` and captures
+them in order, so an agent can redo every capture once the links are set.
+
+**5. Check and generate.**
+
+```sh
+store-shots check --json                   # validation, readiness and store text in one answer
+store-shots generate --json                # the store's files, at their exact sizes
+```
+
+**6. Store text** is `fastlane/metadata/<locale>/*.txt` (name, subtitle, keywords, description
+and the rest); `store-shots metadata validate --json` checks it against the store's limits.
+
+**7. App Store Connect.** Read-only, and plans by default:
+
+```sh
+store-shots asc status --json
+store-shots asc push default --json        # the plan; nothing changes without --yes
+```
+
+## Exit codes
+
+| Code | Meaning                                                                        |
+| ---- | ------------------------------------------------------------------------------ |
+| `0`  | Done, nothing blocking                                                         |
+| `1`  | It ran and found problems: a failed check, a render error, nothing captured    |
+| `2`  | It could not run: unknown app or theme, a bad option, no App Store Connect key |
+
+## What an agent may change
+
+- `store-shots.config.json`, `store/manifest.json`, `store/content/*.json` and
+  `fastlane/metadata/`. Each JSON file links its schema (`$schema`), so keys and their meaning
+  are checked and described; the [file reference](/docs/reference/files) lists every key.
+- Generated files are the tool's: `generate` writes `fastlane/screenshots/`, and
+  `store-shots clean` removes what it wrote.
+
+The tool never submits an app version, a custom product page or a test for review. `asc push`
+uploads drafts and only with `--yes`; `asc submit` sends only header and search images, and only
+with `--yes`. Leave `--yes` to the person whose account it is.
+
+## For the app's AGENTS.md
+
+Paste this into an app's `AGENTS.md` or `CLAUDE.md` so an agent working in it knows the tool:
+
+```md
+## Store screenshots (store-shots)
+
+- Copy: store/content/<locale>.json; screens and layout: store/manifest.json; store text:
+  fastlane/metadata/<locale>/*.txt. Docs: https://store-shots.bavrk.com/docs/agents
+- Look before you say it is done: `store-shots preview --json`, then read the PNGs. Fix any
+  render.overflow by shortening that field.
+- `store-shots check --json` must exit 0 before `store-shots generate`.
+- Never run `store-shots asc push --yes` or `asc submit --yes` unless asked to.
+```
