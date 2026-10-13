@@ -21,6 +21,7 @@ import { describeJob } from "../lib/render-plan";
 import { validateProject } from "../lib/validate";
 import { displayRelative } from "../lib/paths";
 import { generateProject, type GenerationSummary } from "../lib/generate";
+import { previewShots } from "../lib/preview-shots";
 import { ExportRenderer } from "../lib/render/export";
 import { themePreview } from "../lib/theme-preview";
 import { cleanGenerated } from "../lib/generated-manifest";
@@ -426,6 +427,54 @@ function printSummary(s: GenerationSummary, dryRun: boolean) {
     `${s.project}: ${s.planned} planned, ${s.rendered} rendered, ${s.unchanged} unchanged, ${s.failed} failed, ${s.skipped} skipped, ${s.filesWritten.length} file(s) written in ${(s.durationMs / 1000).toFixed(1)} s`,
   );
 }
+
+program
+  .command("preview")
+  .description(
+    "Render screens to PNGs to look at, without captures (a sketch stands in) and without touching fastlane/screenshots; reports text that overflows or covers the phone",
+  )
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--screen <list>", "only these screen ids (default: all on the page)")
+  .option("--target <list>", "these target ids (default: the app's iPhone set, else its first)")
+  .option("--locale <list>", "these locales (default: the default locale)")
+  .option("--set <list>", "named sets (custom product pages, PPO treatments) instead of the default page")
+  .option("--out <dir>", "where the PNGs go (default: store/generated/preview/, emptied first)")
+  .option("--height <px>", "scale each PNG to this height (default: full size)")
+  .option("--json", "machine-readable output")
+  .action(
+    async (opts: {
+      project?: string;
+      screen?: string;
+      target?: string;
+      locale?: string;
+      set?: string;
+      out?: string;
+      height?: string;
+      json?: boolean;
+    }) => {
+      const project = openProject(opts.project);
+      const result = await previewShots(project, {
+        screens: splitList(opts.screen),
+        targets: splitList(opts.target),
+        locales: splitList(opts.locale),
+        sets: splitList(opts.set),
+        outDir: opts.out,
+        height: opts.height ? Number(opts.height) : undefined,
+      });
+      const failed = result.shots.some((s) => s.issues.some((i) => i.level === "error"));
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        printIssues(result.issues.filter((i) => i.level !== "info"));
+        for (const s of result.shots) {
+          console.log(`${s.file}${s.placeholder ? "  (no capture yet: sketch)" : ""}`);
+          printIssues(s.issues.filter((i) => i.level !== "info"));
+        }
+        console.log(`\n${result.shots.length} preview(s) in ${result.outDir}`);
+      }
+      process.exit(failed ? 1 : 0);
+    },
+  );
 
 program
   .command("clean")
