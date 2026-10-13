@@ -6,9 +6,18 @@ const sections = [
   {
     title: "Pages",
     text: "The default page, custom product pages, optimization tests, header and search images, iPhone Duo.",
+    href: "/docs/pages",
   },
-  { title: "Listing", text: "Name, subtitle, keywords and the rest of the store text, with the store's limits." },
-  { title: "Ship", text: "Readiness checks with the fix for each, fastlane uploads, drafts in App Store Connect." },
+  {
+    title: "Listing",
+    text: "Name, subtitle, keywords and the rest of the store text, with the store's limits.",
+    href: "/docs/listing",
+  },
+  {
+    title: "Ship",
+    text: "Readiness checks with the fix for each, fastlane uploads, drafts in App Store Connect.",
+    href: "/docs/ship",
+  },
 ];
 
 export default function HomePage() {
@@ -48,23 +57,12 @@ export default function HomePage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {sections.map((s) => {
-          const body = (
-            <>
-              <h2 className="font-medium">{s.title}</h2>
-              <p className="mt-1 text-sm text-fd-muted-foreground">{s.text}</p>
-            </>
-          );
-          return s.href ? (
-            <Link key={s.title} href={s.href} className="rounded-xl border p-4 transition-colors hover:bg-fd-accent">
-              {body}
-            </Link>
-          ) : (
-            <div key={s.title} className="rounded-xl border p-4">
-              {body}
-            </div>
-          );
-        })}
+        {sections.map((s) => (
+          <Link key={s.title} href={s.href} className="rounded-xl border p-4 transition-colors hover:bg-fd-accent">
+            <h2 className="font-medium">{s.title}</h2>
+            <p className="mt-1 text-sm text-fd-muted-foreground">{s.text}</p>
+          </Link>
+        ))}
       </div>
     </main>
   );
