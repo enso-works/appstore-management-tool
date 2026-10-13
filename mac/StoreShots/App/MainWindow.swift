@@ -24,6 +24,16 @@ struct MainWindow: View {
       // Documents keep their drafts while the engine is away and save once it is back.
       if let base { workspace.rebase(base) }
     }
+    .onOpenURL { url in
+      // storeshots://open?app=<name> from `store-shots open`; without an app, the list of apps.
+      guard url.scheme == "storeshots", url.host() == "open" else { return }
+      restoredLast = true
+      let name = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "app" }?.value
+      Task {
+        await server.refreshProjects()
+        if let name { workspace.open(name) } else { workspace.selection = .apps }
+      }
+    }
     .onChange(of: server.projects) { _, projects in
       // Reopen the app shown last time once the list is in.
       if workspace.selection == .apps, !restoredLast, !projects.isEmpty {

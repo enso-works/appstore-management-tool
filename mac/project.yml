@@ -37,6 +37,10 @@ targets:
         LSMinimumSystemVersion: "$(MACOSX_DEPLOYMENT_TARGET)"
         NSHumanReadableCopyright: MIT
         StoreShotsRoot: "$(STORE_SHOTS_ROOT)"
+        # storeshots://open?app=<name>, which `store-shots open` sends.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.bavrk.storeshots
+            CFBundleURLSchemes: [storeshots]
         # The editor is served over plain http on localhost.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true

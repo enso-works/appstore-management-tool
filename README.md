@@ -267,7 +267,7 @@ Everything the app does runs from a terminal too, for CI or for working without 
 current folder, so inside an app you can leave it off.
 
 ```sh
-npx store-shots open      [name|dir]          # the editor in a browser
+npx store-shots open      [name|dir]          # the app in the Store Shots Mac app
 npx store-shots init      [--project <app>] [--landscape|--portrait] [--theme <id>] [--accent <hex>]
 npx store-shots theme     list | apply <id> [--accent <hex>] [--dry-run]
 npx store-shots add       [dir]               # add an app that already has a config

@@ -14,7 +14,7 @@ import { writeJsonAtomic } from "../lib/server/projects";
 import { readinessReport, type ReadinessReport } from "../lib/readiness";
 import { defaultWorkspaceRoot, discoverProjects, isFallbackListing, listProjects } from "../lib/registry";
 import { listStale, pruneStale, register, registryPath, unregister } from "../lib/registered";
-import { openEditor } from "../lib/open";
+import { OpenError, openInMacApp } from "../lib/open";
 import { describeJob } from "../lib/render-plan";
 import { validateProject } from "../lib/validate";
 import { displayRelative } from "../lib/paths";
@@ -172,15 +172,16 @@ program
 
 program
   .command("open [nameOrDir]")
-  .description("Start the editor and open it in your browser (default: the app in the current directory)")
-  .option("--port <port>", "preferred port (a free one is chosen if taken)")
-  .option("--no-browser", "start the server without opening a browser")
-  .action(async (nameOrDir: string | undefined, opts: { port?: string; browser?: boolean }) => {
-    await openEditor({
-      target: nameOrDir,
-      port: opts.port ? Number(opts.port) : undefined,
-      openBrowser: opts.browser !== false,
-    });
+  .description("Open an app in the Store Shots Mac app (default: the app in the current directory)")
+  .action((nameOrDir: string | undefined) => {
+    try {
+      const name = openInMacApp(nameOrDir);
+      console.log(name ? `Opened ${name} in Store Shots` : "Opened Store Shots");
+    } catch (err) {
+      if (!(err instanceof OpenError)) throw err;
+      console.error(err.message);
+      process.exit(2);
+    }
   });
 
 program
