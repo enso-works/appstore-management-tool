@@ -9,7 +9,7 @@ import { requiredFontFamilies, resolveFontStack, sha256File } from "./fonts";
 import { readGeneratedManifest, writeGeneratedManifest } from "./generated-manifest";
 import { IssueList, type Issue } from "./issues";
 import { displayRelative, resolveWithin } from "./paths";
-import { ExportRenderer, inspectPng, slicePng } from "./render/export";
+import { ExportRenderer, inspectPng, slicePng, type ExportResult } from "./render/export";
 import { renderArtworkHtml } from "./render/html";
 import { buildRenderPlan, buildSetPlan, type PlanFilter, type RenderJob } from "./render-plan";
 import type { GeneratedManifest, LocaleContent } from "./schema";
@@ -273,57 +273,7 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
           workDir,
           canvasWidth: job.canvasWidth,
         });
-        const c = result.checks;
-        if (c.fontsFailed.length)
-          jobIssues.error("render.font-failed", `Font face(s) failed to load: ${c.fontsFailed.join(", ")}`, {
-            key: job.key,
-          });
-        if (c.missingImages.length)
-          jobIssues.error("render.missing-image", `Image(s) did not load: ${c.missingImages.join(", ")}`, {
-            key: job.key,
-          });
-        for (const f of result.fits) {
-          if (f.scale < 1 && f.fits) {
-            jobIssues.info(
-              "render.fitted",
-              `"${f.id}" shrunk to ${Math.round(f.scale * 100)}% (${f.fromPx}px -> ${f.toPx}px) to fit`,
-              { key: job.key },
-            );
-          }
-        }
-        for (const o of c.overflow) {
-          const fit = result.fits.find((f) => f.id === o.id);
-          const atMin = fit && fit.scale < 1 ? ` even at the minimum allowed size (${fit.toPx}px)` : "";
-          const msg = `"${o.id}" overflows its box${atMin} (${o.scrollWidth}x${o.scrollHeight} in ${o.clientWidth}x${o.clientHeight})`;
-          const extra = {
-            key: job.key,
-            file: displayRelative(project.root, path.join(project.paths.content, `${job.locale}.json`)),
-            hint: `shorten screens.${job.screen.id}.${o.id} for ${job.locale}`,
-          };
-          if (project.config.validation.failOnOverflow) jobIssues.error("render.overflow", msg, extra);
-          else jobIssues.warn("render.overflow", msg, extra);
-        }
-        for (const id of c.textOverlapsDevice) {
-          const msg = `"${id}" overlaps the device shell`;
-          if (project.config.validation.failOnTextOverlap)
-            jobIssues.error("render.text-overlaps-device", msg, { key: job.key });
-          else
-            jobIssues.warn("render.text-overlaps-device", msg, {
-              key: job.key,
-              hint: "set validation.failOnTextOverlap to make this an error",
-            });
-        }
-        if (result.width !== job.canvasWidth || result.height !== job.target.height) {
-          jobIssues.error(
-            "render.size",
-            `Output is ${result.width}x${result.height}, expected ${job.canvasWidth}x${job.target.height}`,
-            { key: job.key },
-          );
-        }
-        if (result.channels !== 3)
-          jobIssues.error("render.alpha", `Output has ${result.channels} channels, expected 3 (no alpha)`, {
-            key: job.key,
-          });
+        checkRender(project, job, result, jobIssues);
 
         if (!jobIssues.hasErrors) {
           const pngs =
@@ -419,6 +369,65 @@ export async function generateProject(project: Project, opts: GenerateOptions = 
 }
 
 /** Output path relative to the app root (what the generated manifest records). */
+/**
+ * What the browser saw while rendering a job, as issues: fonts or images that did
+ * not load, text shrunk to fit or overflowing its box, text over the phone, and
+ * a wrong size or an alpha channel. Shared by generate and preview.
+ */
+export function checkRender(project: Project, job: RenderJob, result: ExportResult, jobIssues: IssueList): void {
+  const c = result.checks;
+  if (c.fontsFailed.length)
+    jobIssues.error("render.font-failed", `Font face(s) failed to load: ${c.fontsFailed.join(", ")}`, {
+      key: job.key,
+    });
+  if (c.missingImages.length)
+    jobIssues.error("render.missing-image", `Image(s) did not load: ${c.missingImages.join(", ")}`, {
+      key: job.key,
+    });
+  for (const f of result.fits) {
+    if (f.scale < 1 && f.fits) {
+      jobIssues.info(
+        "render.fitted",
+        `"${f.id}" shrunk to ${Math.round(f.scale * 100)}% (${f.fromPx}px -> ${f.toPx}px) to fit`,
+        { key: job.key },
+      );
+    }
+  }
+  for (const o of c.overflow) {
+    const fit = result.fits.find((f) => f.id === o.id);
+    const atMin = fit && fit.scale < 1 ? ` even at the minimum allowed size (${fit.toPx}px)` : "";
+    const msg = `"${o.id}" overflows its box${atMin} (${o.scrollWidth}x${o.scrollHeight} in ${o.clientWidth}x${o.clientHeight})`;
+    const extra = {
+      key: job.key,
+      file: displayRelative(project.root, path.join(project.paths.content, `${job.locale}.json`)),
+      hint: `shorten screens.${job.screen.id}.${o.id} for ${job.locale}`,
+    };
+    if (project.config.validation.failOnOverflow) jobIssues.error("render.overflow", msg, extra);
+    else jobIssues.warn("render.overflow", msg, extra);
+  }
+  for (const id of c.textOverlapsDevice) {
+    const msg = `"${id}" overlaps the device shell`;
+    if (project.config.validation.failOnTextOverlap)
+      jobIssues.error("render.text-overlaps-device", msg, { key: job.key });
+    else
+      jobIssues.warn("render.text-overlaps-device", msg, {
+        key: job.key,
+        hint: "set validation.failOnTextOverlap to make this an error",
+      });
+  }
+  if (result.width !== job.canvasWidth || result.height !== job.target.height) {
+    jobIssues.error(
+      "render.size",
+      `Output is ${result.width}x${result.height}, expected ${job.canvasWidth}x${job.target.height}`,
+      { key: job.key },
+    );
+  }
+  if (result.channels !== 3)
+    jobIssues.error("render.alpha", `Output has ${result.channels} channels, expected 3 (no alpha)`, {
+      key: job.key,
+    });
+}
+
 function relOutput(project: Project, job: RenderJob): string {
   return path.relative(project.root, job.outputPath).split(path.sep).join("/");
 }
