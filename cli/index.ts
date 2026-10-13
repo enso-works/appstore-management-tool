@@ -1,8 +1,10 @@
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { readExpoSafely, str } from "../lib/app-facts";
-import { ConfigError, loadProject, readJsonFile, resolveProjectArg, type Project } from "../lib/config";
+import { ConfigError, findConfigPath, loadProject, readJsonFile, resolveProjectArg, type Project } from "../lib/config";
 import { foldIssues, formatIssue, type Issue } from "../lib/issues";
 import { ImportError, inspectApp, targetsFor, type AppProposal } from "../lib/import";
 import { initProject } from "../lib/init";
@@ -19,6 +21,8 @@ import { describeJob } from "../lib/render-plan";
 import { validateProject } from "../lib/validate";
 import { displayRelative } from "../lib/paths";
 import { generateProject, type GenerationSummary } from "../lib/generate";
+import { ExportRenderer } from "../lib/render/export";
+import { themePreview } from "../lib/theme-preview";
 import { cleanGenerated } from "../lib/generated-manifest";
 import { addGoogleFont, appFontsDir, checkFont, listFonts, resolveFont } from "../lib/fonts";
 import { listMetadataLocales, readMetadataLocale } from "../lib/metadata";
@@ -470,9 +474,68 @@ const theme = program
 theme
   .command("list")
   .description("List the themes")
-  .action(() => {
-    for (const t of THEMES) console.log(`${t.id.padEnd(8)} ${t.description} (headlines in ${t.headlineFont.family})`);
+  .option("--json", "machine-readable output")
+  .action((opts: { json?: boolean }) => {
+    if (opts.json) {
+      const list = THEMES.map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        headlineFont: t.headlineFont.family,
+        ...(t.heroPanorama ? { heroPanorama: t.heroPanorama } : {}),
+      }));
+      console.log(JSON.stringify(list, null, 2));
+      return;
+    }
+    for (const t of THEMES) console.log(`${t.id.padEnd(9)} ${t.description} (headlines in ${t.headlineFont.family})`);
   });
+
+theme
+  .command("preview <id>")
+  .description(
+    "Render a theme's first screens side by side into one PNG, from the app's captures and copy (or a sample app outside one); writes nothing to the app",
+  )
+  .option("--project <dir>", "app directory or config path (default: the app you are in, else a sample)")
+  .option("--accent <hex>", "the theme's colour (default: the app's own colour, or its icon's)")
+  .option("--landscape", "for the sample: landscape screens")
+  .option("--out <file>", "where the PNG goes (default: theme-<id>.png in a temporary folder)")
+  .option("--height <px>", "height of each screen in the PNG", "900")
+  .option("--json", "machine-readable output")
+  .action(
+    async (
+      id: string,
+      opts: { project?: string; accent?: string; landscape?: boolean; out?: string; height: string; json?: boolean },
+    ) => {
+      const configPath = opts.project ? opts.project : findConfigPath(process.cwd());
+      const project = configPath ? openProject(configPath) : undefined;
+      const chosen = await themeOption(project?.root ?? process.cwd(), id, opts.accent);
+      if (!chosen) return;
+      const out = path.resolve(
+        opts.out ?? path.join(fs.mkdtempSync(path.join(os.tmpdir(), "store-shots-theme-")), `theme-${chosen.id}.png`),
+      );
+      const renderer = new ExportRenderer();
+      try {
+        const png = await themePreview(renderer, {
+          theme: chosen.id,
+          accent: chosen.accent,
+          project,
+          orientation: opts.landscape ? "landscape" : "portrait",
+          height: Number(opts.height),
+        });
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        fs.writeFileSync(out, png);
+      } finally {
+        await renderer.close();
+      }
+      const from = project ? project.config.projectName : "a sample app";
+      if (opts.json) {
+        const report = { theme: chosen.id, accent: chosen.accent, accentSource: chosen.accentSource, from, file: out };
+        console.log(JSON.stringify(report, null, 2));
+      } else {
+        console.log(`${chosen.id} in ${chosen.accent} (${chosen.accentSource}), on ${from}: ${out}`);
+      }
+    },
+  );
 
 theme
   .command("apply <id>")
@@ -482,7 +545,8 @@ theme
   .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
   .option("--accent <hex>", "the theme's colour (default: the app's own colour, or its icon's)")
   .option("--dry-run", "show what would change, write nothing")
-  .action(async (id: string, opts: { project?: string; accent?: string; dryRun?: boolean }) => {
+  .option("--json", "machine-readable output")
+  .action(async (id: string, opts: { project?: string; accent?: string; dryRun?: boolean; json?: boolean }) => {
     const project = openProject(opts.project);
     const chosen = await themeOption(project.root, id, opts.accent);
     if (!chosen) return;
@@ -500,6 +564,24 @@ theme
       process.exit(2);
     }
     const t = getTheme(chosen.id)!;
+    if (opts.json) {
+      if (!opts.dryRun) {
+        writeJsonAtomic(project.configPath, changes.config);
+        writeJsonAtomic(project.paths.manifest, changes.manifest);
+      }
+      const report = {
+        theme: t.id,
+        accent: chosen.accent,
+        accentSource: chosen.accentSource,
+        headlineFont: t.headlineFont.family,
+        restyled: changes.restyled,
+        recoloured: changes.recoloured,
+        ...(changes.panorama ? { panorama: changes.panorama } : {}),
+        written: opts.dryRun ? [] : [project.configPath, project.paths.manifest],
+      };
+      console.log(JSON.stringify(report, null, 2));
+      return;
+    }
     console.log(`${t.name} in ${chosen.accent} (${chosen.accentSource}), headlines in ${t.headlineFont.family}`);
     console.log(`restyled: ${changes.restyled.join(", ") || "none"}`);
     if (changes.recoloured.length) console.log(`colours only: ${changes.recoloured.join(", ")}`);
