@@ -221,7 +221,7 @@ program
         process.exit(2);
       }
 
-      // Same proposal the editor's Import page shows; flags override it.
+      // Same proposal the Mac app's Import App shows; flags override it.
       let proposal: AppProposal;
       try {
         proposal = inspectApp(appRoot, { allowUnknown: true });

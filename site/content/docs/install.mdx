@@ -22,8 +22,8 @@ from. You can point it at another one in **Settings**.
 The Mac app's controls are native; the canvas and everything behind it (templates, rendering,
 checks, App Store Connect, fastlane) are the engine, a Node app in the same checkout.
 
-- If an engine is already running on ports 3000 to 3009 (`store-shots open` or `npm run dev`),
-  the app uses it and leaves it running when you quit.
+- If an engine is already running on ports 3000 to 3009 (`npm run dev` in the checkout), the
+  app uses it and leaves it running when you quit.
 - Otherwise the app starts one from the checkout and stops it on quit.
 - **Engine > Show Engine Log** (Shift-Command-L) shows its output. The log is also in
   `~/Library/Logs/Store Shots/editor.log`.
@@ -44,16 +44,6 @@ npx store-shots --help
 npm link
 store-shots projects
 ```
-
-## The browser editor
-
-```sh
-store-shots open          # the app in the current folder
-store-shots open Rallo    # or one from your list, by name
-```
-
-This starts the engine and opens the editor in your browser. It has the same canvas as the
-Mac app, with fewer conveniences around it.
 
 ## Fonts
 

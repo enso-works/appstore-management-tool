@@ -150,13 +150,6 @@ struct AppCommands: Commands {
       }
       Button("Show Engine Log") { openWindow(id: "log") }
         .keyboardShortcut("l", modifiers: [.command, .shift])
-      Button("Open in Browser") {
-        guard let base = server.baseURL else { return }
-        let path = workspace.selection?.appName.map { "projects/\($0)" } ?? ""
-        NSWorkspace.shared.open(base.appending(path: path))
-      }
-      .keyboardShortcut("b", modifiers: [.command, .shift])
-      .disabled(server.baseURL == nil)
     }
   }
 

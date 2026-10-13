@@ -5,9 +5,9 @@ import Observation
 /// (manifest and copy per locale, as ordered JSON), what is shown, and saving.
 ///
 /// Every edit goes through `edit(_:)`, which records one undo step and marks
-/// the documents dirty; an autosave follows a moment after the last edit. As in
-/// the web editor, a save marks clean only what it sent, so an edit made while
-/// it runs is saved by the next one.
+/// the documents dirty; an autosave follows a moment after the last edit. A save
+/// marks clean only what it sent, so an edit made while it runs is saved by the
+/// next one.
 @MainActor
 @Observable
 final class ProjectDocument {

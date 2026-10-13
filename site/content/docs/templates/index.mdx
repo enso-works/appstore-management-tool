@@ -44,10 +44,9 @@ render pipeline pick it up from there.
 ## Overrides
 
 Extend `commonOverridesSchema` with `.extend({...})` for template-specific keys and list
-them in `descriptor.overrideKeys`. The editors show controls for the keys they know: the Mac
-app's **Layout** tab (`mac/StoreShots/Design/InspectorView.swift`) and the browser editor
-(`OVERRIDE_CONTROLS` in `app/projects/[name]/editor.tsx`). Add a control in both for a new key;
-until then it can still be set in `store/manifest.json`.
+them in `descriptor.overrideKeys`. The Mac app shows controls for the keys it knows, in the
+**Layout** tab (`mac/StoreShots/Design/InspectorView.swift`). Add a control there for a new
+key; until then it can still be set in `store/manifest.json`.
 
 `stackLayout()` in `shared.tsx` computes the text column and device boxes for the
 "text + phone" family of templates, honouring all positional overrides (`textWidth`,

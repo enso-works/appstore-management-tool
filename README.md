@@ -46,8 +46,8 @@ about itself and proposes a setup you can change before anything is written:
 - Google Play sets when `fastlane/metadata/android` exists
 
 Importing writes `store-shots.config.json` and a `store/` folder into the app, never overwrites
-anything, and adds the app to the sidebar. Not on a Mac? Everything below the window works from
-the [command line](#command-line), and `npx store-shots open` runs the same editor in a browser.
+anything, and adds the app to the sidebar. Not on a Mac, or working through a coding agent?
+Everything below the window works from the [command line](#command-line).
 
 ![All apps: each app with its first screens and what is left to fix](docs/images/app-apps.png)
 
@@ -313,7 +313,7 @@ list of apps you added lives in `~/.store-shots/projects.json`.
 
 ```text
 mac/          the Mac app (SwiftUI, XcodeGen); see mac/README.md for shortcuts
-app/          the engine's web side: API, the canvas the Mac app embeds, the browser editor
+app/          the engine's web side: the API and the canvas the Mac app embeds
 cli/          the CLI
 lib/          config, schemas, devices, import, validation, readiness, rendering, App Store Connect
 templates/    React templates and the device body

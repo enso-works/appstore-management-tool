@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { TargetProfile } from "@/lib/targets";
-import styles from "./editor.module.css";
+import styles from "./preview-canvas.module.css";
 
 export interface CanvasItem {
   id: string;

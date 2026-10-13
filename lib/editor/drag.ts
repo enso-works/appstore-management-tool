@@ -1,8 +1,8 @@
 import type { LocaleContent, Manifest, ScreenDefinition, ScreenSet } from "../schema";
 
 /**
- * Editing maths shared by the web editor and the canvas page the Mac app
- * embeds: what a drag, a nudge or a page means for a screen definition.
+ * Editing maths for the canvas page the Mac app embeds: what a drag, a nudge
+ * or a page means for a screen definition.
  * Pure functions; positions are fractions of the target width, the unit the
  * templates read.
  */

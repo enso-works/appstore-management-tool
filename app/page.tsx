@@ -1,51 +1,16 @@
-import Link from "next/link";
-import { listProjects } from "@/lib/registry";
-import { readinessReport } from "@/lib/readiness";
-import styles from "./page.module.css";
-
-export const dynamic = "force-dynamic";
-
+/**
+ * The engine has no browser editor: the Mac app is the editor, and the CLI runs
+ * headless (for scripts and coding agents). This page only says so, for anyone
+ * who opens the engine's port in a browser.
+ */
 export default function HomePage() {
-  const projects = listProjects();
   return (
-    <main className={styles.main}>
-      <h1>store-shots</h1>
-      <p className={styles.muted}>
-        Your apps. <Link href="/import">Import an app</Link> to add one, or run{" "}
-        <code>npx store-shots init --project &lt;app&gt;</code>.
+    <main style={{ maxWidth: 560, margin: "15vh auto", padding: "0 24px", lineHeight: 1.5 }}>
+      <h1>store-shots engine</h1>
+      <p>
+        This is the engine the Store Shots Mac app runs on. Edit in the Mac app, or run{" "}
+        <code>npx store-shots --help</code> for the command line.
       </p>
-      {projects.length === 0 && <p>No projects found.</p>}
-      <ul className={styles.list}>
-        {projects.map((p) => {
-          const report = p.project ? readinessReport(p.project) : undefined;
-          return (
-            <li key={p.root} className={styles.card}>
-              <div className={styles.row}>
-                <strong>{p.project?.config.projectName ?? p.name}</strong>
-                <span className={styles.muted}>{p.name}</span>
-                {report && <span className={`${styles.badge} ${styles[report.status]}`}>{report.status}</span>}
-              </div>
-              {p.error && <p className={styles.fail}>{p.error}</p>}
-              {p.project && (
-                <p className={styles.muted}>
-                  {p.project.config.locales.length} locales · {p.project.config.targets.length} targets ·{" "}
-                  <Link href={`/projects/${encodeURIComponent(p.name)}`}>open</Link>
-                </p>
-              )}
-              {report && (
-                <ul className={styles.checks}>
-                  {report.checks.map((c) => (
-                    <li key={c.id}>
-                      <span className={`${styles.dot} ${styles[c.status]}`} /> {c.title}
-                      {c.details.length > 0 && <span className={styles.muted}> — {c.details.length} finding(s)</span>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          );
-        })}
-      </ul>
     </main>
   );
 }

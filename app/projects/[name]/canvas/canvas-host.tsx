@@ -18,7 +18,7 @@ import type { ScreenDefinition } from "@/lib/schema";
 import { isScreenshotSet, screenRendersFor } from "@/lib/targets";
 import { liveImageUrl } from "@/lib/live";
 import PreviewCanvas, { type CanvasControls, type CanvasItem } from "../preview-canvas";
-import editorStyles from "../editor.module.css";
+import editorStyles from "../preview-canvas.module.css";
 import styles from "./canvas.module.css";
 
 declare global {

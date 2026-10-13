@@ -55,8 +55,8 @@ written before the engine restarts or the app quits.
 
 ## Engine
 
-An engine already running on ports 3000-3009 (`store-shots open`, `npm run dev`) is attached
-to and left running on quit. Otherwise the app runs `next dev` (a git checkout) or
+An engine already running on ports 3000-3009 (`npm run dev`) is attached to and left running
+on quit. Otherwise the app runs `next dev` (a git checkout) or
 `next start` (an installed copy with a build) from the store-shots folder and stops it on
 quit. The folder defaults to the checkout the app was built from; change it in Settings.
 The log is under Engine > Show Engine Log and in `~/Library/Logs/Store Shots/editor.log`.

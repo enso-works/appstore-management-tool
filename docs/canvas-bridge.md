@@ -4,7 +4,7 @@ The Mac app draws every control natively and embeds one web view showing
 `/projects/<app>/canvas`: the screenshots, exactly as they render. The app owns
 every draft; the canvas renders what it is given and reports what the user did
 on it. Types live in `lib/editor/bridge.ts`; the editing maths the canvas uses
-is in `lib/editor/drag.ts` (shared with the web editor).
+is in `lib/editor/drag.ts`.
 
 ## App to canvas
 
