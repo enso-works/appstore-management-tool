@@ -1,6 +1,7 @@
 # Mac app: next (roadmap Mac item 4)
 
-Status: **approved 2026-10-13**; phase 1 is next. The open questions below are for phase 2.
+Status: **approved 2026-10-13**; phase 1 done 2026-10-14 (`GET /asc/versions`, `store-shots asc versions`,
+the line on the cards and in the toolbar). The open questions below are for phase 2.
 
 ## Where item 4 stands
 
