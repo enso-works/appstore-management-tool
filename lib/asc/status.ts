@@ -10,6 +10,13 @@ import { related, type AscClient, type Resource } from "./client";
  * Read-only.
  */
 
+export interface AscVersion {
+  id: string;
+  version: string;
+  state?: string;
+  platform?: string;
+}
+
 export interface AscPage {
   id: string;
   name: string;
@@ -30,7 +37,8 @@ export interface AscExperiment {
 
 export interface AscStatus {
   app: { id: string; name: string; bundleId: string };
-  versions: { id: string; version: string; state?: string; platform?: string }[];
+  /** Newest first. */
+  versions: AscVersion[];
   pages: AscPage[];
   experiments: AscExperiment[];
   /** Manifest sets App Store Connect does not have yet. */
@@ -63,17 +71,41 @@ export async function findAscApp(
   return { id: app.id, name: app.attributes?.name ?? "", bundleId };
 }
 
+/** Dotted version strings by number: 2.10.0 is newer than 2.9.1. */
+export function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  const pb = b.split(".").map((n) => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+/** The latest iOS versions, newest first. */
+export async function fetchVersions(client: AscClient, appId: string): Promise<AscVersion[]> {
+  const d = await client.get<{
+    versionString: string;
+    appVersionState?: string;
+    appStoreState?: string;
+    platform?: string;
+  }>(`/v1/apps/${appId}/appStoreVersions`, { "filter[platform]": "IOS", limit: "5" });
+  return (Array.isArray(d.data) ? d.data : [d.data])
+    .map((v) => ({
+      id: v.id,
+      version: v.attributes?.versionString ?? "",
+      state: v.attributes?.appVersionState ?? v.attributes?.appStoreState,
+      platform: v.attributes?.platform,
+    }))
+    .sort((a, b) => compareVersions(b.version, a.version));
+}
+
 export async function ascStatus(project: Project, client: AscClient, manifest?: Manifest): Promise<AscStatus> {
   const app = await findAscApp(project, client);
 
   const [versions, pages, experiments] = await Promise.all([
     // The latest few versions are enough to see what is live and what is in review.
-    client
-      .get<{ versionString: string; appVersionState?: string; appStoreState?: string; platform?: string }>(
-        `/v1/apps/${app.id}/appStoreVersions`,
-        { "filter[platform]": "IOS", limit: "5" },
-      )
-      .then((d) => ({ data: Array.isArray(d.data) ? d.data : [d.data] })),
+    fetchVersions(client, app.id),
     client.getAll<{ name: string; visible: boolean; url?: string }>(`/v1/apps/${app.id}/appCustomProductPages`, {
       include: "appCustomProductPageVersions",
     }),
@@ -126,12 +158,7 @@ export async function ascStatus(project: Project, client: AscClient, manifest?: 
   ]);
   return {
     app,
-    versions: versions.data.map((v) => ({
-      id: v.id,
-      version: v.attributes?.versionString ?? "",
-      state: v.attributes?.appVersionState ?? v.attributes?.appStoreState,
-      platform: v.attributes?.platform,
-    })),
+    versions,
     pages: outPages,
     experiments: outExperiments,
     notUploaded: sets.filter((s) => !matched.has(s.id)).map((s) => s.id),

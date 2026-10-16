@@ -36,6 +36,7 @@ import { AscAuthError, tokenSource } from "../lib/asc/auth";
 import { AscApiError, AscClient } from "../lib/asc/client";
 import { AscPushError, DEFAULT_PAGE, pushBlockers, pushPage, submitDefaultCreative } from "../lib/asc/push";
 import { ascStatus, AscStatusError } from "../lib/asc/status";
+import { ascVersions } from "../lib/asc/versions";
 import { loadManifest } from "../lib/content";
 import { expandArgs, findBlender, planScenes, renderScenes, sceneDirs, ScenesError } from "../lib/scenes";
 
@@ -1025,6 +1026,34 @@ asc
       if (s.notUploaded.length) console.log(`\nNot in App Store Connect yet: ${s.notUploaded.join(", ")}`);
     } catch (err) {
       if (err instanceof AscAuthError || err instanceof AscStatusError || err instanceof AscApiError) {
+        console.error(err.message);
+        process.exit(err instanceof AscApiError ? 1 : 2);
+      }
+      throw err;
+    }
+  });
+
+asc
+  .command("versions")
+  .description("The app's versions in App Store Connect: what is live and what is in progress (read-only)")
+  .option("--project <dir>", "app directory or config path (default: walk up from cwd)")
+  .option("--json", "machine-readable output")
+  .action(async (opts: { project?: string; json?: boolean }) => {
+    const project = openProject(opts.project);
+    try {
+      const v = await ascVersions(project, () => new AscClient(tokenSource(project)), { fresh: true });
+      if (opts.json) console.log(JSON.stringify(v, null, 2));
+      if (!v.connected) {
+        if (!opts.json) console.error(v.reason);
+        process.exit(2);
+      }
+      if (opts.json) return;
+      console.log(`${v.app.name} (${v.app.bundleId})`);
+      console.log(`  live         ${v.live?.version ?? "none"}`);
+      console.log(`  in progress  ${v.next ? `${v.next.version}  ${v.next.state ?? ""}` : "none"}`);
+      for (const x of v.versions) console.log(`  version ${x.version.padEnd(8)} ${x.state ?? ""}`);
+    } catch (err) {
+      if (err instanceof AscAuthError || err instanceof AscApiError) {
         console.error(err.message);
         process.exit(err instanceof AscApiError ? 1 : 2);
       }

@@ -6,7 +6,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { AscAuthError, findAscKey, signToken, tokenSource } from "../lib/asc/auth";
 import { AscApiError, AscClient } from "../lib/asc/client";
 import { AscPushError, pushBlockers, pushDefaultPage, pushSet, submitDefaultCreative } from "../lib/asc/push";
-import { ascStatus } from "../lib/asc/status";
+import { ascStatus, compareVersions } from "../lib/asc/status";
+import { ascVersions, clearVersionsCache, liveAndNext, VERSIONS_TTL_MS } from "../lib/asc/versions";
 import { loadProject } from "../lib/config";
 import { generateProject } from "../lib/generate";
 import { ExportRenderer } from "../lib/render/export";
@@ -289,6 +290,88 @@ describe("App Store Connect", () => {
       expect(s.notUploaded).toEqual(["new-one"]);
       // Read-only: nothing but GETs.
       expect(api.calls.every((c) => c.method === "GET")).toBe(true);
+    });
+  });
+
+  describe("versions", () => {
+    const v = (version: string, state?: string) => ({ id: version, version, state });
+    const versionsApi = (data: { version: string; state: string }[]) =>
+      fakeApi({
+        "/v1/apps": () => ({
+          body: { data: [{ type: "apps", id: "app1", attributes: { name: "Demo", bundleId: "com.example.demo" } }] },
+        }),
+        "/v1/apps/app1/appStoreVersions": () => ({
+          body: {
+            data: data.map((d) => ({
+              type: "appStoreVersions",
+              id: d.version,
+              attributes: { versionString: d.version, appVersionState: d.state },
+            })),
+          },
+        }),
+      });
+    beforeEach(() => clearVersionsCache());
+
+    it("compares versions by number", () => {
+      expect(compareVersions("2.10.0", "2.9.1")).toBeGreaterThan(0);
+      expect(compareVersions("1.0", "1.0.0")).toBe(0);
+    });
+
+    it("finds the live version and the newer one in progress", () => {
+      expect(
+        liveAndNext([
+          v("2.0.1", "REPLACED_WITH_NEW_VERSION"),
+          v("2.2.0", "PREPARE_FOR_SUBMISSION"),
+          v("2.1.0", "READY_FOR_DISTRIBUTION"),
+        ]),
+      ).toEqual({ live: v("2.1.0", "READY_FOR_DISTRIBUTION"), next: v("2.2.0", "PREPARE_FOR_SUBMISSION") });
+      // Nothing newer than live: no next. Never live: the newest is next.
+      expect(liveAndNext([v("2.1.0", "READY_FOR_SALE")]).next).toBeUndefined();
+      expect(liveAndNext([v("1.0", "WAITING_FOR_REVIEW")])).toEqual({
+        live: undefined,
+        next: v("1.0", "WAITING_FOR_REVIEW"),
+      });
+    });
+
+    it("is not connected without a key, and asks nothing", async () => {
+      const api = versionsApi([]);
+      const r = await ascVersions(load(), () => new AscClient(() => "tok", api.fetchImpl));
+      expect(r).toMatchObject({ connected: false });
+      expect(api.calls).toHaveLength(0);
+    });
+
+    it("reads the versions once per five minutes, unless asked fresh", async () => {
+      fs.writeFileSync(path.join(fastlane(), "asc_api_key.json"), "{}");
+      const api = versionsApi([
+        { version: "1.1.0", state: "WAITING_FOR_REVIEW" },
+        { version: "1.0.0", state: "READY_FOR_DISTRIBUTION" },
+      ]);
+      const client = () => new AscClient(() => "tok", api.fetchImpl);
+      const now = Date.UTC(2026, 9, 14, 10);
+      const r = await ascVersions(load(), client, { now });
+      expect(r).toMatchObject({
+        connected: true,
+        app: { id: "app1" },
+        live: { version: "1.0.0" },
+        next: { version: "1.1.0", state: "WAITING_FOR_REVIEW" },
+        readAt: new Date(now).toISOString(),
+      });
+      expect(api.calls).toHaveLength(2);
+      await ascVersions(load(), client, { now: now + VERSIONS_TTL_MS - 1 });
+      expect(api.calls).toHaveLength(2);
+      // The app's id is kept: a fresh read is one call.
+      await ascVersions(load(), client, { now: now + 1, fresh: true });
+      expect(api.calls).toHaveLength(3);
+      await ascVersions(load(), client, { now: now + VERSIONS_TTL_MS + 1 });
+      expect(api.calls).toHaveLength(4);
+      expect(api.calls.every((c) => c.method === "GET")).toBe(true);
+    });
+
+    it("is not connected when App Store Connect has no record of the app", async () => {
+      fs.writeFileSync(path.join(fastlane(), "asc_api_key.json"), "{}");
+      const api = fakeApi({ "/v1/apps": () => ({ body: { data: [] } }) });
+      const r = await ascVersions(load(), () => new AscClient(() => "tok", api.fetchImpl));
+      expect(r).toMatchObject({ connected: false, reason: expect.stringContaining("com.example.demo") });
     });
   });
 });
