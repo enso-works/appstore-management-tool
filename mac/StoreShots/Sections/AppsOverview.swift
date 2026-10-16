@@ -40,11 +40,18 @@ struct AppsOverview: View {
       }
       ToolbarItem {
         Button {
-          Task { await server.refreshProjects() }
+          Task {
+            await server.refreshProjects()
+            await withTaskGroup(of: Void.self) { group in
+              for p in server.projects where p.error == nil {
+                group.addTask { await AscVersionsStore.shared.load(p.name, api: api, fresh: true) }
+              }
+            }
+          }
         } label: {
           Label("Refresh", systemImage: "arrow.clockwise")
         }
-        .help("Check every app again")
+        .help("Check every app again, and read App Store Connect again")
       }
     }
   }
@@ -56,6 +63,7 @@ struct AppCard: View {
   let project: ProjectSummary
   @Environment(Workspace.self) private var workspace
   @State private var preview: CardPreview?
+  private let versions = AscVersionsStore.shared
 
   struct CardPreview {
     var bodies: [(key: String, body: JSONValue, size: CGSize)]
@@ -70,6 +78,12 @@ struct AppCard: View {
         if let v = preview?.version { Text(v).foregroundStyle(.secondary) }
         Spacer()
         status
+      }
+      if let info = versions.byApp[project.name], let line = info.line {
+        Label(line, systemImage: "app.badge")
+          .font(.callout)
+          .foregroundStyle(.secondary)
+          .help(AscVersionsStore.readNote(info))
       }
       HStack(spacing: 8) {
         ForEach(preview?.bodies ?? [], id: \.key) { b in
@@ -127,6 +141,10 @@ struct AppCard: View {
     .background(.background, in: RoundedRectangle(cornerRadius: 14))
     .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.separator))
     .task(id: project.name) { await load() }
+    .task(id: project.name) {
+      guard project.error == nil else { return }
+      await versions.load(project.name, api: api)
+    }
   }
 
   @ViewBuilder

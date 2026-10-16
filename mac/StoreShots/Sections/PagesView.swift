@@ -32,25 +32,6 @@ struct AscStatus: Decodable, Sendable {
   let experiments: [Experiment]
 }
 
-/// Apple's states in plain words.
-enum AscState {
-  static func words(_ s: String?) -> String {
-    switch s {
-    case "PREPARE_FOR_SUBMISSION": "Draft"
-    case "READY_FOR_REVIEW": "Ready to submit"
-    case "WAITING_FOR_REVIEW": "Waiting for review"
-    case "IN_REVIEW": "In review"
-    case "ACCEPTED", "APPROVED": "Approved"
-    case "READY_FOR_DISTRIBUTION", "READY_FOR_SALE": "Live"
-    case "REJECTED", "DEVELOPER_REJECTED", "METADATA_REJECTED": "Rejected"
-    case "COMPLETED", "COMPLETE": "Finished"
-    case "STOPPED": "Stopped"
-    case nil: "Not uploaded"
-    default: s!.replacingOccurrences(of: "_", with: " ").capitalized
-    }
-  }
-}
-
 /// Pages: the default product page, custom pages and optimization tests.
 struct PagesView: View {
   @Bindable var document: ProjectDocument

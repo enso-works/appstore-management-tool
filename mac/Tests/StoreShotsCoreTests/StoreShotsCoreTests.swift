@@ -176,3 +176,23 @@ private let snapshot = #"""
     #expect(d.targetId == "iphone-6.9-1320x2868")
   }
 }
+
+@Suite struct AscVersionsTests {
+  private func info(_ json: String) throws -> AscVersionsInfo {
+    try JSONDecoder().decode(AscVersionsInfo.self, from: Data(json.utf8))
+  }
+
+  @Test func saysWhatIsLiveAndWhatIsInProgress() throws {
+    let both = try info(
+      #"{"connected":true,"live":{"version":"2.1.0","state":"READY_FOR_DISTRIBUTION"},"next":{"version":"2.2.0","state":"PREPARE_FOR_SUBMISSION"},"readAt":"2026-10-14T10:42:00.000Z"}"#)
+    #expect(both.line == "2.1.0 Live · 2.2.0 Draft")
+    #expect(both.readDate == Date(timeIntervalSince1970: 1_791_974_520))
+    #expect(try info(#"{"connected":true,"next":{"version":"1.0","state":"WAITING_FOR_REVIEW"}}"#).line == "1.0 Waiting for review")
+    #expect(try info(#"{"connected":true,"live":{"version":"1.0","state":"READY_FOR_SALE"}}"#).line == "1.0 Live")
+  }
+
+  @Test func saysNothingWithoutAConnection() throws {
+    #expect(try info(#"{"connected":false,"reason":"No App Store Connect key for this app"}"#).line == nil)
+    #expect(try info(#"{"connected":true}"#).line == nil)
+  }
+}

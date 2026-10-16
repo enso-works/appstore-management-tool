@@ -127,6 +127,10 @@ struct SectionView: View {
       case .settings: AppSettingsView(document: document)
       }
     }
+    .toolbar {
+      ToolbarItem(placement: .navigation) { AscVersionsButton(document: document) }
+    }
+    .task(id: document.name) { await AscVersionsStore.shared.load(document.name, api: document.api) }
     .onAppear { adoptUndo(undoManager) }
     .onChange(of: undoManager) { _, m in adoptUndo(m) }
     .focusedSceneValue(\.document, document)
@@ -137,6 +141,29 @@ struct SectionView: View {
       Notifier.finished(
         "\(document.projectTitle): generated",
         g.error ?? "\(g.rendered) rendered, \(g.unchanged) unchanged\(g.failed > 0 ? ", \(g.failed) failed" : "")")
+    }
+  }
+}
+
+/// Where the app stands in App Store Connect, beside its name; a click opens Pages.
+struct AscVersionsButton: View {
+  let document: ProjectDocument
+  @Environment(Workspace.self) private var workspace
+  private let versions = AscVersionsStore.shared
+
+  var body: some View {
+    if let info = versions.byApp[document.name], let line = info.line {
+      Button {
+        workspace.open(document.name, section: .pages)
+      } label: {
+        Label(
+          info.readDate.map { "\(line) · \($0.formatted(date: .omitted, time: .shortened))" } ?? line,
+          systemImage: "app.badge"
+        )
+        .labelStyle(.titleAndIcon)
+        .foregroundStyle(.secondary)
+      }
+      .help("\(AscVersionsStore.readNote(info)). Click for Pages.")
     }
   }
 }
